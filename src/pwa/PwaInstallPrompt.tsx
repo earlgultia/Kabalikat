@@ -55,7 +55,7 @@ export function PwaInstallPrompt() {
   if (dismissed || (!installEvent && !isAppleMobile)) return null
 
   return <aside className="pwa-install-prompt" role="region" aria-label="Install KABALIKAT">
-    <img src="/icons/kabalikat-heart-192.png" alt="" width="48" height="48" />
+    <img src="/icons/kabalikat-heart-v3-192.png" alt="" width="48" height="48" />
     <div className="pwa-install-copy">
       <strong>Use KABALIKAT as an app</strong>
       <p>{isAppleMobile && !installEvent ? 'In Safari, tap Share, then Add to Home Screen.' : 'Install it for quick access from your home screen.'}</p>

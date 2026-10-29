@@ -1,5 +1,5 @@
 /* global self, caches, fetch, URL, __PRECACHE_URLS__ */
-const CACHE_NAME = 'kabalikat-app-v2'
+const CACHE_NAME = 'kabalikat-app-v4'
 const PRECACHE_URLS = __PRECACHE_URLS__
 
 self.addEventListener('install', (event) => {
@@ -38,7 +38,7 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  if (requestUrl.pathname.startsWith('/assets/') || requestUrl.pathname.startsWith('/icons/') || requestUrl.pathname === '/manifest.webmanifest') {
+  if (requestUrl.pathname.startsWith('/assets/') || requestUrl.pathname.startsWith('/icons/') || requestUrl.pathname === '/kabalikat-manifest-v4.webmanifest') {
     event.respondWith((async () => {
       const cached = await caches.match(request)
       if (cached) return cached
