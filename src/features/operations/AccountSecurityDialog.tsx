@@ -59,9 +59,9 @@ export function AccountSecurityDialog({ email, userId, tenantId, onClose }: { em
     else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
   }
 
-  return <div className="tool-finder-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose() }}>
+  return <div className="tool-finder-backdrop account-security-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose() }}>
     <section className="account-security-dialog" role="dialog" aria-modal="true" aria-labelledby="account-security-title" onKeyDown={(event) => { trapFocus(event); if (event.key === 'Escape' && !busy) onClose() }}>
-      <header><span className="account-security-icon"><KeyRound size={20} /></span><div><h2 id="account-security-title">Account security</h2><p>Change the password for {email}</p></div><button type="button" className="icon-button" aria-label="Close account security" onClick={onClose} disabled={busy}><X size={18} /></button></header>
+      <header><span className="account-security-icon"><KeyRound size={20} /></span><div><h2 id="account-security-title">Account security</h2><p>Change the password for {email}</p></div><button autoFocus type="button" className="icon-button" aria-label="Close account security" onClick={onClose} disabled={busy}><X size={18} /></button></header>
       <section className="notification-preferences" aria-labelledby="notification-preferences-title">
         <div className="notification-preferences-heading"><Bell size={17} /><div><h3 id="notification-preferences-title">In-app notifications</h3><p>Choose which new updates appear in your inbox for this barangay.</p></div></div>
         {!tenantId && <p className="field-hint">Join an active barangay workspace to manage notification preferences.</p>}
@@ -80,7 +80,7 @@ export function AccountSecurityDialog({ email, userId, tenantId, onClose }: { em
         <p className="field-hint">These settings apply only to announcements and disaster advisories. Profile correction, document status, and feedback response alerts stay enabled so you can track your requests. No email or SMS is sent.</p>
       </section>
       <form className="account-security-form" onSubmit={(event) => void changePassword(event)}>
-        <label>New password<input name="password" type="password" autoComplete="new-password" minLength={12} maxLength={128} required autoFocus /><span className="field-hint">At least 12 characters, with uppercase, lowercase, and a number.</span></label>
+        <label>New password<input name="password" type="password" autoComplete="new-password" minLength={12} maxLength={128} required /><span className="field-hint">At least 12 characters, with uppercase, lowercase, and a number.</span></label>
         <label>Confirm new password<input name="confirmation" type="password" autoComplete="new-password" minLength={12} maxLength={128} required /></label>
         {error && <p className="account-security-error" role="alert">{error}</p>}{message && <p className="account-security-success" role="status"><ShieldCheck size={16} />{message}</p>}
         <div className="account-security-actions"><button type="button" className="button outline" onClick={onClose} disabled={busy}>Close</button><button type="submit" className="button primary" disabled={busy}>{busy ? 'Updating…' : 'Update password'}</button></div>

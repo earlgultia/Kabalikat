@@ -558,3 +558,32 @@ body { color: var(--ink); background: var(--canvas); font-size: 16px; line-heigh
   html:focus-within { scroll-behavior: auto; }
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; }
 }
+
+.account-security-backdrop { align-items: center; justify-content: center; overflow-y: auto; padding: max(16px,env(safe-area-inset-top)) 16px max(16px,env(safe-area-inset-bottom)); }
+.account-security-dialog { max-height: min(90vh,800px); max-height: min(90dvh,800px); overscroll-behavior: contain; width: min(520px,100%); }
+.account-security-dialog > header { gap: 14px; }
+.account-security-dialog > header > button { flex: none; }
+.account-security-icon { flex: 0 0 40px; height: 40px; width: 40px; }
+.notification-preferences-heading { gap: 12px; }
+.notification-preferences-heading > svg { flex: none; margin-top: 2px; }
+.notification-preference { align-items: flex-start; gap: 16px; padding: 12px 0; }
+.notification-preference > span { flex: 1; min-width: 0; }
+.notification-preference small { display: block; line-height: 1.45; margin-top: 2px; }
+.notification-preference input { flex: none; margin: 1px 0 0; }
+.account-security-form { gap: 17px; }
+.account-security-form label { line-height: 1.4; min-width: 0; }
+.account-security-form input { font-size: 16px; min-width: 0; width: 100%; }
+.account-security-actions { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.account-security-actions .button { min-height: 44px; padding-left: 12px; padding-right: 12px; }
+.account-security-error, .account-security-success { line-height: 1.5; overflow-wrap: anywhere; }
+.account-security-success svg, .account-security-note svg { flex: none; }
+.account-security-note { align-items: flex-start; }
+@media(max-width:650px) {
+  .account-security-backdrop { padding: max(12px,env(safe-area-inset-top)) 12px max(12px,env(safe-area-inset-bottom)); }
+  .account-security-dialog { border-radius: 12px; max-height: min(92vh,850px); max-height: min(92dvh,850px); }
+  .account-security-dialog > header { padding: 15px; }
+  .notification-preferences { padding: 15px; }
+  .account-security-form { padding: 16px 15px; }
+  .account-security-note { padding: 12px 15px; }
+  .account-security-actions { gap: 9px; }
+}
