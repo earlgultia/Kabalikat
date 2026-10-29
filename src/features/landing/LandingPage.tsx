@@ -61,6 +61,6 @@ export function LandingPage() {
 
       <section className="landing-final-cta"><div><span className="landing-eyebrow">KABALIKAT · BY ARKBYTE TECHNOLOGIES</span><h2>Let’s make community service more connected.</h2><p>Already have an account or invitation? Continue to your workspace.</p></div><Link className="landing-primary" to="/sign-in">Sign in to KABALIKAT <ArrowRight size={17} /></Link></section>
     </main>
-    <footer className="landing-footer"><a className="landing-brand" href="#home"><span className="landing-brand-mark"><HeartHandshake size={19} /></span><span><strong>KABALIKAT</strong><small>BY ARKBYTE TECHNOLOGIES</small></span></a><span>Community and operations in one place.</span><nav aria-label="Footer navigation"><a href="#features">Platform</a><a href="#plans">Plans</a><a href="#privacy">Data privacy</a><Link to="/sign-in">Sign in</Link></nav><small>© {new Date().getFullYear()} ArkByte Technologies</small></footer>
+    <footer className="landing-footer"><a className="landing-brand" href="#home"><span className="landing-brand-mark"><HeartHandshake size={19} /></span><span><strong>KABALIKAT</strong><small>BY ARKBYTE TECHNOLOGIES</small></span></a><span>Community and operations in one place.</span><nav aria-label="Footer navigation"><a href="#features">Platform</a><a href="#plans">Plans</a><a href="#privacy">Data privacy</a><Link to="/verify-document">Verify a document</Link><Link to="/sign-in">Sign in</Link></nav><small>© {new Date().getFullYear()} ArkByte Technologies</small></footer>
   </div>
 }

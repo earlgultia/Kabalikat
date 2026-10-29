@@ -4,12 +4,13 @@ import { z } from 'zod'
 import { CheckCircle2, FileCheck2, FolderKanban } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import { hasPermission } from './data'
-import { addSkProjectUpdate, listSkProjectUpdates, listSkProjects, reviewSkProject, submitSkProject, updateSkProjectStatus } from './sk-data'
+import { addSkProjectUpdate, listSkAccomplishments, listSkProjectActivity, listSkProjectUpdates, listSkProjects, reviewSkAccomplishment, reviewSkProject, submitSkAccomplishment, submitSkProject, updateSkProjectStatus } from './sk-data'
 import { ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 import { formatDateTime } from './format'
 
 const projectSchema = z.object({ title: z.string().trim().min(3).max(180), description: z.string().trim().min(3).max(4000), budget: z.coerce.number().min(0).max(999999999999.99), start: z.string(), end: z.string() })
 const updateSchema = z.object({ type: z.enum(['milestone','progress']), title: z.string().trim().min(3).max(180), details: z.string().trim().max(3000) })
+const accomplishmentSchema = z.object({ title: z.string().trim().min(3).max(180), summary: z.string().trim().min(20).max(2000) })
 const currency = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' })
 
 export function SkProjectsPage() {
@@ -21,8 +22,11 @@ export function SkProjectsPage() {
   const enabled = Boolean(tenantId && (canManage.data || canReview.data))
   const projects = useQuery({ queryKey: ['sk-projects', tenantId], queryFn: () => listSkProjects(tenantId), enabled })
   const updates = useQuery({ queryKey: ['sk-project-updates', tenantId], queryFn: () => listSkProjectUpdates(tenantId), enabled })
+  const accomplishments = useQuery({ queryKey: ['sk-accomplishments', tenantId], queryFn: () => listSkAccomplishments(tenantId), enabled })
+  const activity = useQuery({ queryKey: ['sk-project-activity', tenantId], queryFn: () => listSkProjectActivity(tenantId), enabled })
   const [showForm, setShowForm] = useState(false)
   const [updateProject, setUpdateProject] = useState('')
+  const [summaryProject, setSummaryProject] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
@@ -31,6 +35,8 @@ export function SkProjectsPage() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['sk-projects', tenantId] }),
       queryClient.invalidateQueries({ queryKey: ['sk-project-updates', tenantId] }),
+      queryClient.invalidateQueries({ queryKey: ['sk-accomplishments', tenantId] }),
+      queryClient.invalidateQueries({ queryKey: ['sk-project-activity', tenantId] }),
     ])
   }
 
@@ -73,6 +79,26 @@ export function SkProjectsPage() {
     finally { setBusy(false) }
   }
 
+  async function submitAccomplishment(projectId: string, event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); const form = event.currentTarget
+    const parsed = accomplishmentSchema.safeParse(Object.fromEntries(new FormData(form).entries()))
+    if (!parsed.success) { setError(parsed.error.issues[0]?.message ?? 'Review the accomplishment summary.'); return }
+    setBusy(true); setError(''); setMessage('')
+    try { await submitSkAccomplishment(tenantId, projectId, parsed.data.title, parsed.data.summary); await refresh(); form.reset(); setSummaryProject(''); setMessage('Accomplishment summary submitted to the Captain for publication review.') }
+    catch (err) { setError(err instanceof Error ? err.message : 'Unable to submit this summary.') }
+    finally { setBusy(false) }
+  }
+
+  async function reviewAccomplishment(id: string, publish: boolean) {
+    const note = publish ? null : window.prompt('Why is this summary being returned? (3–1000 characters):')?.trim() ?? ''
+    if (!publish && (!note || note.length < 3 || note.length > 1000)) return
+    if (publish && !window.confirm('Publish this accomplishment summary to active barangay members?')) return
+    setBusy(true); setError(''); setMessage('')
+    try { await reviewSkAccomplishment(id, publish, note); await refresh(); setMessage(publish ? 'Accomplishment published to the barangay workspace.' : 'Summary returned to the SK Chairperson with a reason.') }
+    catch (err) { setError(err instanceof Error ? err.message : 'Unable to review this summary.') }
+    finally { setBusy(false) }
+  }
+
   return <section className="operation-page">
     <PageHeading title="SK projects" description="Submit youth project proposals, review approvals, and record milestones and progress.">
       {canManage.data && <button className="button primary" onClick={() => setShowForm((visible) => !visible)}>New proposal</button>}
@@ -88,6 +114,16 @@ export function SkProjectsPage() {
         <div className="sk-project-header"><div><StatusPill status={project.status} /><h2>{project.title}</h2><p>{project.description}</p></div><strong className="sk-project-budget">{currency.format(Number(project.proposed_budget))}<small> proposed</small></strong></div>
         <div className="sk-project-meta"><span>Submitted {formatDateTime(project.created_at)}</span>{project.planned_start && <span>Start {new Date(`${project.planned_start}T00:00:00`).toLocaleDateString()}</span>}{project.planned_end && <span>End {new Date(`${project.planned_end}T00:00:00`).toLocaleDateString()}</span>}</div>
         {project.review_note && <p className="finance-review-note">Review note: {project.review_note}</p>}
+        {(canManage.data || canReview.data) && <details className="sk-event-audit"><summary>Project activity history</summary>{activity.isPending && <p className="field-hint" role="status">Loading activity…</p>}{activity.error && <p className="account-security-error" role="alert">Project activity could not be loaded.</p>}{activity.data && <ol>{activity.data.filter((entry) => entry.project_id === project.id).map((entry) => <li key={`${entry.project_id}-${entry.action}-${entry.created_at}`}><span><strong>{entry.action.replace('project_', '').replaceAll('_', ' ')}</strong><time dateTime={entry.created_at}>{formatDateTime(entry.created_at)}</time></span><small>{entry.actor_name}{entry.details ? ` · ${entry.details}` : ''}</small></li>)}{activity.data.every((entry) => entry.project_id !== project.id) && <li><small>No activity is available in the recent history.</small></li>}</ol>}</details>}
+        {(() => {
+          const summary = accomplishments.data?.find((item) => item.project_id === project.id)
+          const canResubmit = summary?.status === 'returned' && summary.created_by === user?.id
+          return <section className="sk-project-updates sk-accomplishment-editor"><h3>Public accomplishment summary</h3>
+            {summary && <><StatusPill status={summary.status} />{summary.review_note && <p className="finance-review-note">Captain’s note: {summary.review_note}</p>}{summary.status === 'published' && <p className="field-hint">This curated summary is visible to active barangay members.</p>}</>}
+            {canReview.data && summary?.status === 'submitted' && summary.created_by !== user?.id && <div className="finance-review-actions"><button className="button outline danger-action" disabled={busy} onClick={() => void reviewAccomplishment(summary.id, false)}>Return with reason</button><button className="button primary" disabled={busy} onClick={() => void reviewAccomplishment(summary.id, true)}>Publish summary</button></div>}
+            {canManage.data && project.status === 'completed' && (!summary || canResubmit) && (summaryProject === project.id ? <form className="sk-update-form" onSubmit={(event) => void submitAccomplishment(project.id, event)}><label>Public title<input name="title" minLength={3} maxLength={180} defaultValue={summary?.title ?? project.title} required /></label><label>Accomplishment summary<textarea name="summary" minLength={20} maxLength={2000} required defaultValue={summary?.summary ?? ''} /><span className="field-hint">Include results suitable for public sharing only. Exclude participant names, personal details, and private financial information.</span></label><div className="finance-review-actions"><button type="button" className="button outline" onClick={() => setSummaryProject('')}>Cancel</button><button className="button primary" disabled={busy}>Submit for Captain review</button></div></form> : <button className="button outline" disabled={busy} onClick={() => setSummaryProject(project.id)}>{canResubmit ? 'Revise returned summary' : 'Prepare public summary'}</button>)}
+          </section>
+        })()}
         {canReview.data && project.status === 'submitted' && project.created_by !== user?.id && <div className="finance-review-actions"><button className="button outline danger-action" disabled={busy} onClick={() => void review(project.id, false)}>Reject with reason</button><button className="button primary" disabled={busy} onClick={() => void review(project.id, true)}>Approve proposal</button></div>}
         {canManage.data && project.status === 'approved' && <button className="button primary" disabled={busy} onClick={() => void advance(project.id, 'active')}>Start project</button>}
         {canManage.data && project.status === 'active' && <button className="button outline" disabled={busy} onClick={() => void advance(project.id, 'completed')}>Mark complete</button>}

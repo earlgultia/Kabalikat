@@ -8,6 +8,8 @@ export type SkProjectRow = {
 export type SkProjectUpdateRow = {
   id: string; project_id: string; update_type: 'milestone' | 'progress'; title: string; details: string; created_at: string
 }
+export type SkAccomplishment = { id: string; project_id: string; title: string; summary: string; status: 'submitted' | 'published' | 'returned'; created_by: string | null; created_at: string; published_at: string | null; review_note: string | null }
+export type SkProjectActivity = { project_id: string; action: string; details: string; actor_name: string; created_at: string }
 
 function client() {
   if (!supabase) throw new Error('Supabase is not configured.')
@@ -36,6 +38,26 @@ export function listSkProjects(tenantId: string) {
 export function listSkProjectUpdates(tenantId: string) {
   return rows<SkProjectUpdateRow>(client().from('sk_project_updates')
     .select('id,project_id,update_type,title,details,created_at').eq('barangay_id', tenantId).order('created_at', { ascending: false }))
+}
+
+export async function listSkAccomplishments(tenantId: string): Promise<SkAccomplishment[]> {
+  const { data, error } = await client().rpc('list_sk_accomplishments', { p_barangay_id: tenantId })
+  if (error) throw new Error(error.message)
+  return (data ?? []) as SkAccomplishment[]
+}
+
+export async function listSkProjectActivity(tenantId: string): Promise<SkProjectActivity[]> {
+  const { data, error } = await client().rpc('list_sk_project_activity', { p_barangay_id: tenantId })
+  if (error) throw new Error(error.message)
+  return (data ?? []) as SkProjectActivity[]
+}
+
+export function submitSkAccomplishment(tenantId: string, projectId: string, title: string, summary: string) {
+  return rpc<string>('submit_sk_accomplishment', { p_barangay_id: tenantId, p_project_id: projectId, p_title: title, p_summary: summary })
+}
+
+export function reviewSkAccomplishment(id: string, publish: boolean, note: string | null) {
+  return rpc<void>('review_sk_accomplishment', { p_accomplishment_id: id, p_publish: publish, p_note: note })
 }
 
 export function submitSkProject(input: { tenantId: string; title: string; description: string; budget: number; start: string; end: string }) {

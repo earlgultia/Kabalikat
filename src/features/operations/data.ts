@@ -11,19 +11,46 @@ export type ResidentRow = {
   household: { household_code: string; address_line: string; purok: string | null } | null
 }
 export type ResidencyVerificationRow = { resident_id: string; status: string; reason: string | null; created_at: string }
+export type ResidentProfileChangeRequest = {
+  id: string; resident_id: string; proposed_first_name: string | null; proposed_last_name: string | null
+  proposed_phone: string | null; request_note: string | null; status: 'pending' | 'approved' | 'rejected' | 'cancelled'
+  review_reason: string | null; created_at: string; reviewed_at: string | null
+  resident: { first_name: string; last_name: string } | null
+}
+export type ResidentPersonalDataExport = {
+  export_version: 1
+  exported_at: string
+  profile: {
+    first_name: string; middle_name: string | null; last_name: string; suffix: string | null
+    birth_date: string | null; phone: string | null; record_status: string
+  }
+  household: { household_code: string; address_line: string; purok: string | null } | null
+  residency_checks: Array<{ status: string; created_at: string }>
+  document_requests: Array<{
+    reference_number: string; document_type: string | null; purpose: string; status: string; submitted_at: string
+    issued_document: { issuance_number: string; issued_at: string; expires_at: string | null; status: string } | null
+  }>
+}
 export type HouseholdRow = { id: string; household_code: string; address_line: string; purok: string | null }
 
 export type InvitationRow = { id: string; invited_email: string; status: string; expires_at: string; created_at: string }
-export type DocumentTypeRow = { id: string; code: string; name: string; description: string }
+export type DocumentTypeRow = { id: string; code: string; name: string; description: string; requirements: string[]; public_request_enabled: boolean }
+export type DocumentTypeActivityRow = {
+  activity_id: string; document_type_id: string; document_type_name: string; action: 'created' | 'updated'
+  actor_name: string; previous_values: Record<string, unknown> | null; new_values: Record<string, unknown>; created_at: string
+}
 export type DocumentRequestRow = {
   id: string; reference_number: string; purpose: string; status: string; submitted_at: string; rejection_reason: string | null
   document_type: { name: string } | null
   resident: { first_name: string; last_name: string; user_id: string | null } | null
+  issued: { issuance_number: string; issued_at: string; expires_at: string | null; verification_status: string; events: Array<{ id: string; action: string; reason: string; created_at: string }> } | null
 }
+export type DocumentRequestActivityRow = { request_id: string; from_status: string | null; to_status: string; reason: string | null; actor_name: string; created_at: string }
 export type AnnouncementRow = {
-  id: string; title: string; body: string; audience: 'public' | 'residents' | 'officials'
+  id: string; title: string; body: string; audience: 'public' | 'residents' | 'officials' | 'role'; audience_role_id: string | null
   status: 'draft' | 'published' | 'archived'; published_at: string | null; expires_at: string | null; created_at: string
 }
+export type AnnouncementAudienceRole = { id: string; key: string; label: string }
 export type MeetingRow = {
   id: string; title: string; location: string; starts_at: string; ends_at: string | null
   agenda: string; status: 'draft' | 'scheduled' | 'completed' | 'cancelled'
@@ -99,6 +126,49 @@ export function listResidents(tenantId: string) {
     .eq('barangay_id', tenantId).order('last_name'))
 }
 
+export async function getOwnResidentDataExport(tenantId: string): Promise<ResidentPersonalDataExport> {
+  const supabaseClient = client()
+  const { data: userData, error: userError } = await supabaseClient.auth.getUser()
+  if (userError || !userData.user) throw new Error('Sign in again to download your data.')
+  const { data: resident, error: residentError } = await supabaseClient.from('residents')
+    .select('id,first_name,middle_name,last_name,suffix,birth_date,phone,record_status,household:households(household_code,address_line,purok)')
+    .eq('barangay_id', tenantId).eq('user_id', userData.user.id).maybeSingle()
+  if (residentError) throw new Error(residentError.message)
+  if (!resident) throw new Error('No resident profile is linked to this account in the selected barangay.')
+
+  const { data: ownedVerifications, error: ownVerificationError } = await supabaseClient.from('residency_verifications')
+    .select('status,created_at').eq('barangay_id', tenantId).eq('resident_id', resident.id)
+  if (ownVerificationError) throw new Error(ownVerificationError.message)
+  const { data: ownedRequests, error: ownRequestsError } = await supabaseClient.from('document_requests')
+    .select('reference_number,purpose,status,submitted_at,document_type:document_types(name),issued:issued_documents(issuance_number,issued_at,expires_at,verification_status)')
+    .eq('barangay_id', tenantId).eq('resident_id', resident.id).order('submitted_at', { ascending: false })
+  if (ownRequestsError) throw new Error(ownRequestsError.message)
+
+  const household = Array.isArray(resident.household) ? resident.household[0] : resident.household
+  return {
+    export_version: 1,
+    exported_at: new Date().toISOString(),
+    profile: {
+      first_name: resident.first_name, middle_name: resident.middle_name, last_name: resident.last_name,
+      suffix: resident.suffix, birth_date: resident.birth_date, phone: resident.phone, record_status: resident.record_status,
+    },
+    household: household ?? null,
+    residency_checks: (ownedVerifications ?? []).map((entry) => ({ status: entry.status, created_at: entry.created_at })),
+    document_requests: (ownedRequests ?? []).map((request) => {
+      const documentType = Array.isArray(request.document_type) ? request.document_type[0] : request.document_type
+      const issued = Array.isArray(request.issued) ? request.issued[0] : request.issued
+      return {
+        reference_number: request.reference_number, document_type: documentType?.name ?? null,
+        purpose: request.purpose, status: request.status, submitted_at: request.submitted_at,
+        issued_document: issued ? {
+          issuance_number: issued.issuance_number, issued_at: issued.issued_at, expires_at: issued.expires_at,
+          status: issued.verification_status,
+        } : null,
+      }
+    }),
+  }
+}
+
 export function listHouseholds(tenantId: string) {
   return rows<HouseholdRow>(client().from('households')
     .select('id,household_code,address_line,purok').eq('barangay_id', tenantId).order('household_code'))
@@ -122,6 +192,29 @@ export function registerResident(input: {
 
 export function verifyResident(residentId: string, status: 'verified' | 'rejected', reason: string) {
   return rpc<string>('verify_residency', { p_resident_id: residentId, p_status: status, p_reason: reason || null })
+}
+
+export function listResidentProfileChangeRequests(tenantId: string) {
+  return rows<ResidentProfileChangeRequest>(client().from('resident_profile_change_requests')
+    .select('id,resident_id,proposed_first_name,proposed_last_name,proposed_phone,request_note,status,review_reason,created_at,reviewed_at,resident:residents(first_name,last_name)')
+    .eq('barangay_id', tenantId).order('created_at', { ascending: false }))
+}
+
+export function submitResidentProfileChange(input: {
+  residentId: string; firstName: string | null; lastName: string | null; phone: string | null; note: string
+}) {
+  return rpc<string>('submit_resident_profile_change', {
+    p_resident_id: input.residentId, p_first_name: input.firstName, p_last_name: input.lastName,
+    p_phone: input.phone, p_note: input.note || null,
+  })
+}
+
+export function reviewResidentProfileChange(requestId: string, decision: 'approved' | 'rejected', reason: string) {
+  return rpc<void>('review_resident_profile_change', { p_request_id: requestId, p_decision: decision, p_reason: reason || null })
+}
+
+export function cancelResidentProfileChange(requestId: string) {
+  return rpc<void>('cancel_resident_profile_change', { p_request_id: requestId })
 }
 
 export function listResidencyVerifications(tenantId: string) {
@@ -152,13 +245,42 @@ export function acceptInvitation(token: string) {
 
 export function listDocumentTypes(tenantId: string) {
   return rows<DocumentTypeRow>(client().from('document_types')
-    .select('id,code,name,description').eq('barangay_id', tenantId).eq('public_request_enabled', true).order('name'))
+    .select('id,code,name,description,requirements,public_request_enabled').eq('barangay_id', tenantId).order('name'))
+}
+
+export function listDocumentTypeActivity(tenantId: string) {
+  return rpc<DocumentTypeActivityRow[]>('list_document_type_activity', { p_barangay_id: tenantId })
+}
+
+export function createDocumentType(input: {
+  tenantId: string; code: string; name: string; description: string; requirements: string[]; publicRequestEnabled: boolean
+}) {
+  return rpc<string>('create_document_type', {
+    p_barangay_id: input.tenantId, p_code: input.code, p_name: input.name,
+    p_description: input.description, p_requirements: input.requirements,
+    p_public_request_enabled: input.publicRequestEnabled,
+  })
+}
+
+export function updateDocumentType(input: {
+  typeId: string; name: string; description: string; requirements: string[]; publicRequestEnabled: boolean
+}) {
+  return rpc<void>('update_document_type', {
+    p_document_type_id: input.typeId, p_name: input.name, p_description: input.description,
+    p_requirements: input.requirements, p_public_request_enabled: input.publicRequestEnabled,
+  })
 }
 
 export function listDocumentRequests(tenantId: string) {
   return rows<DocumentRequestRow>(client().from('document_requests')
-    .select('id,reference_number,purpose,status,submitted_at,rejection_reason,document_type:document_types(name),resident:residents(first_name,last_name,user_id)')
+    .select('id,reference_number,purpose,status,submitted_at,rejection_reason,document_type:document_types(name),resident:residents(first_name,last_name,user_id),issued:issued_documents(issuance_number,issued_at,expires_at,verification_status,events:issued_document_events(id,action,reason,created_at))')
     .eq('barangay_id', tenantId).order('submitted_at', { ascending: false }))
+}
+
+export async function listDocumentRequestActivity(tenantId: string): Promise<DocumentRequestActivityRow[]> {
+  const { data, error } = await client().rpc('list_document_request_activity', { p_barangay_id: tenantId })
+  if (error) throw new Error(error.message)
+  return (data ?? []) as DocumentRequestActivityRow[]
 }
 
 export async function createDocumentRequest(tenantId: string, residentId: string, typeId: string, purpose: string) {
@@ -173,23 +295,32 @@ export function transitionDocumentRequest(requestId: string, status: string, rea
   return rpc<void>('transition_document_request', { p_request_id: requestId, p_next_status: status, p_reason: reason || null })
 }
 
+export function revokeIssuedDocument(requestId: string, reason: string) {
+  return rpc<void>('revoke_issued_document', { p_request_id: requestId, p_reason: reason })
+}
+
 export function resubmitDocumentRequest(requestId: string, purpose: string) {
   return rpc<void>('resubmit_document_request', { p_request_id: requestId, p_purpose: purpose })
 }
 
 export function listAnnouncements(tenantId: string) {
   return rows<AnnouncementRow>(client().from('announcements')
-    .select('id,title,body,audience,status,published_at,expires_at,created_at')
+    .select('id,title,body,audience,audience_role_id,status,published_at,expires_at,created_at')
     .eq('barangay_id', tenantId).order('created_at', { ascending: false }))
 }
 
+export function listAnnouncementAudienceRoles() {
+  return rows<AnnouncementAudienceRole>(client().from('role_definitions').select('id,key,label')
+    .eq('scope', 'barangay').order('label'))
+}
+
 export function createAnnouncement(input: {
-  tenantId: string; authorId: string; title: string; body: string; audience: string; publish: boolean
+  tenantId: string; authorId: string; title: string; body: string; audience: string; audienceRoleId: string | null; publish: boolean
 }) {
   const now = input.publish ? new Date().toISOString() : null
   return client().from('announcements').insert({
     barangay_id: input.tenantId, created_by: input.authorId, title: input.title, body: input.body,
-    audience: input.audience, status: input.publish ? 'published' : 'draft', published_at: now,
+    audience: input.audience, audience_role_id: input.audienceRoleId, status: input.publish ? 'published' : 'draft', published_at: now,
   }).then(({ error }) => { if (error) throw new Error(error.message) })
 }
 

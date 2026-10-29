@@ -10,7 +10,11 @@ const ArchivePage = lazy(() => import('./ArchivePage').then((module) => ({ defau
 const FinancePage = lazy(() => import('./FinancePage').then((module) => ({ default: module.FinancePage })))
 const CommitteesPage = lazy(() => import('./CommitteesPage').then((module) => ({ default: module.CommitteesPage })))
 const SkProjectsPage = lazy(() => import('./SkProjectsPage').then((module) => ({ default: module.SkProjectsPage })))
+const SkTransparencyPage = lazy(() => import('./SkTransparencyPage').then((module) => ({ default: module.SkTransparencyPage })))
 const ProjectsPage = lazy(() => import('./ProjectsPage').then((module) => ({ default: module.ProjectsPage })))
+const ReferralsPage = lazy(() => import('./ReferralsPage').then((module) => ({ default: module.ReferralsPage })))
+const HealthOutreachPage = lazy(() => import('./HealthOutreachPage').then((module) => ({ default: module.HealthOutreachPage })))
+const SkEventsPage = lazy(() => import('./SkEventsPage').then((module) => ({ default: module.SkEventsPage })))
 const IncidentsPage = lazy(() => import('./IncidentsPage').then((module) => ({ default: module.IncidentsPage })))
 const PatrolPage = lazy(() => import('./PatrolPage').then((module) => ({ default: module.PatrolPage })))
 const DisasterAdvisoriesPage = lazy(() => import('./DisasterAdvisoriesPage').then((module) => ({ default: module.DisasterAdvisoriesPage })))
@@ -21,7 +25,7 @@ function page(component: ComponentType) {
   return <Suspense fallback={<div className="ops-loading" role="status">Loading workspace…</div>}><Page /></Suspense>
 }
 
-export type OperationSection = 'residents' | 'invitations' | 'documents' | 'announcements' | 'meetings' | 'archive' | 'finance' | 'committees' | 'projects' | 'sk-projects' | 'incidents' | 'patrols' | 'advisories' | 'support'
+export type OperationSection = 'residents' | 'invitations' | 'documents' | 'announcements' | 'meetings' | 'archive' | 'finance' | 'committees' | 'projects' | 'referrals' | 'health-outreach' | 'sk-events' | 'sk-projects' | 'sk-accomplishments' | 'incidents' | 'patrols' | 'advisories' | 'support'
 
 export function OperationsSection({ section }: { section: OperationSection }) {
   switch (section) {
@@ -34,7 +38,11 @@ export function OperationsSection({ section }: { section: OperationSection }) {
     case 'finance': return page(FinancePage)
     case 'committees': return page(CommitteesPage)
     case 'sk-projects': return page(SkProjectsPage)
+    case 'sk-accomplishments': return page(SkTransparencyPage)
     case 'projects': return page(ProjectsPage)
+    case 'referrals': return page(ReferralsPage)
+    case 'health-outreach': return page(HealthOutreachPage)
+    case 'sk-events': return page(SkEventsPage)
     case 'incidents': return page(IncidentsPage)
     case 'patrols': return page(PatrolPage)
     case 'advisories': return page(DisasterAdvisoriesPage)
