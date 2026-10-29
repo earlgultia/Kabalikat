@@ -25,3 +25,4 @@ Phase 2 includes resident and household records, residency verification, announc
 Phase 6 also includes an internal support portal with requester-owned tickets, public replies, administrator-only notes, and audited status changes. The platform console has a plan catalog and admin-managed trial/status records; there is no payment processing, and entitlements do not gate access yet.
 
 See [docs/SETUP.md](docs/SETUP.md), [docs/SECURITY.md](docs/SECURITY.md), and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+# Kabalikat
