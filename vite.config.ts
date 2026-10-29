@@ -1,9 +1,32 @@
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import { fileURLToPath, URL } from 'node:url'
+import { readFileSync } from 'node:fs'
+import type { Plugin } from 'vite'
+
+function pwaAssetsPlugin(): Plugin {
+  return {
+    name: 'kabalikat-pwa-assets',
+    apply: 'build',
+    generateBundle(_options, bundle) {
+      const precacheUrls = [
+        '/', '/index.html', '/offline.html', '/manifest.webmanifest',
+        '/icons/kabalikat-192.png', '/icons/kabalikat-512.png',
+        '/icons/kabalikat-maskable-512.png', '/icons/apple-touch-icon.png',
+        ...Object.keys(bundle).filter((fileName) => fileName !== 'sw.js' && !fileName.endsWith('.map')).map((fileName) => `/${fileName}`),
+      ]
+      const template = readFileSync(new URL('./src/pwa/sw-template.js', import.meta.url), 'utf8')
+      this.emitFile({
+        type: 'asset',
+        fileName: 'sw.js',
+        source: template.replace('const PRECACHE_URLS = __PRECACHE_URLS__', `const PRECACHE_URLS = ${JSON.stringify([...new Set(precacheUrls)])}`),
+      })
+    },
+  }
+}
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), pwaAssetsPlugin()],
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   build: { rollupOptions: { output: { manualChunks(id) {
     if (!id.includes('node_modules')) return

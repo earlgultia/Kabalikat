@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b --pretty",
     "lint": "eslint .",
+    "icons:pwa": "node scripts/generate-pwa-icons.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },

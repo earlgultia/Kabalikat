@@ -587,3 +587,19 @@ body { color: var(--ink); background: var(--canvas); font-size: 16px; line-heigh
   .account-security-note { padding: 12px 15px; }
   .account-security-actions { gap: 9px; }
 }
+
+.pwa-install-prompt { align-items: center; background: #fffefa; border: 1px solid #d9e2de; border-radius: 14px; bottom: 20px; box-shadow: 0 14px 40px #10251f26; display: flex; gap: 12px; max-width: min(480px,calc(100vw - 32px)); padding: 12px; position: fixed; right: 20px; z-index: 15; }
+.pwa-install-prompt > img { border-radius: 11px; flex: none; height: 48px; width: 48px; }
+.pwa-install-copy { flex: 1; min-width: 0; }
+.pwa-install-copy strong { color: #203c39; display: block; font-size: 13px; line-height: 1.35; }
+.pwa-install-copy p { color: #5d6d70; font-size: 11px; line-height: 1.45; margin: 3px 0 0; }
+.pwa-install-actions { align-items: center; display: flex; flex: none; gap: 7px; }
+.pwa-install-actions .button { min-height: 40px; padding: 7px 11px; }
+.pwa-install-dismiss { background: transparent; border: 0; border-radius: 7px; color: #53696a; font-size: 12px; min-height: 40px; padding: 8px; }
+.pwa-install-dismiss:hover, .pwa-install-dismiss:focus-visible { background: #edf3ef; outline: none; }
+@media(max-width:650px) {
+  .pwa-install-prompt { bottom: calc(76px + env(safe-area-inset-bottom)); gap: 9px; left: 10px; max-width: none; padding: 10px; right: 10px; }
+  .pwa-install-prompt > img { height: 42px; width: 42px; }
+  .pwa-install-actions { flex-direction: column; gap: 3px; }
+  .pwa-install-actions .button, .pwa-install-dismiss { min-height: 36px; }
+}

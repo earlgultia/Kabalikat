@@ -1,0 +1,18 @@
+{
+  "id": "/",
+  "name": "KABALIKAT — Barangay Services",
+  "short_name": "KABALIKAT",
+  "description": "One Barangay. One Connected Community.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#f7f5ef",
+  "theme_color": "#0d473c",
+  "icons": [
+    { "src": "/icons/kabalikat-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/kabalikat-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/kabalikat-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
