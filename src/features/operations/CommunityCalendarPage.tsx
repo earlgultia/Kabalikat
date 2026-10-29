@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { CalendarDays, CalendarHeart, Download, MapPin, Search, ShieldAlert } from 'lucide-react'
+import { CalendarDays, CalendarHeart, Download, MapPin, RefreshCw, Search, ShieldAlert } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import { listUpcomingCommunityEvents, type CommunityCalendarItem } from './community-calendar-data'
-import { ErrorNotice, LoadingNotice, PageHeading } from './shared'
+import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading } from './shared'
 import { formatDateTime } from './format'
 
 export function CommunityCalendarPage() {
@@ -74,8 +74,11 @@ export function CommunityCalendarPage() {
   }
 
   return <section className="operation-page">
-    <PageHeading title="Community calendar" description="See upcoming, Captain-approved SK programs and health outreach in one place." />
+    <PageHeading title="Community calendar" description="See upcoming, Captain-approved SK programs and health outreach in one place.">
+      <button className="button outline" type="button" disabled={!barangayId || events.isFetching} onClick={() => void events.refetch()}><RefreshCw size={15} className={events.isFetching ? 'spin' : undefined} />{events.isFetching ? 'Refreshing…' : 'Refresh calendar'}</button>
+    </PageHeading>
     <div className="ops-panel referral-privacy-notice"><ShieldAlert size={18} /><p><strong>Published schedules only.</strong> Drafts, participant registration, attendance lists, and patient information are not shown in this calendar.</p></div>
+    {!barangayId && <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to view published community schedules." />}
     {!!events.data?.length && <div className="community-calendar-filters">
       <label className="community-calendar-search"><Search size={16} /><input type="search" aria-label="Search community events" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by event or location" /></label>
       <label>Event type<select value={source} onChange={(event) => setSource(event.target.value as typeof source)}><option value="all">All community events</option><option value="sk">SK programs</option><option value="health">Health outreach</option></select></label>

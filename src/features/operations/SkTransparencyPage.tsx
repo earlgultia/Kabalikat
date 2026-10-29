@@ -6,6 +6,7 @@ import { hasPermission } from './data'
 import { listSkAccomplishments } from './sk-data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 import { formatDateTime } from './format'
+import { encodeCsv } from './csv'
 
 export function SkTransparencyPage() {
   const { membership } = useAuth()
@@ -19,15 +20,10 @@ export function SkTransparencyPage() {
   const reviewQueue = (items.data ?? []).filter((item) => item.status !== 'published' && (canManage.data || canReview.data))
 
   function exportCsv() {
-    const cell = (value: string) => {
-      const normalized = value.replace(/\r\n?/g, '\n')
-      const safe = /^\s*[=+\-@]/.test(normalized) ? `'${normalized}` : normalized
-      return `"${safe.replaceAll('"', '""')}"`
-    }
     const rows = [['Published', 'Title', 'Summary'], ...published.map((item) => [
       item.published_at ? new Date(item.published_at).toLocaleDateString() : '', item.title, item.summary,
     ])]
-    const blob = new Blob(['\uFEFF', rows.map((row) => row.map(cell).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' })
+    const blob = new Blob([encodeCsv(rows)], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const anchor = document.createElement('a')
     anchor.href = url

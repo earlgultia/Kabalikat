@@ -21,6 +21,38 @@ For password recovery, configure the Supabase Auth email provider and allow the 
 
 Invitation links are copied and delivered manually by an authorized operator. A recipient can sign in or create an account from the invitation page. Creating an account alone grants no tenant membership; the database requires the valid invitation token and matching account email. Configure Supabase Auth email confirmation and its redirect URL allowlist for `/accept-invitation`. The app does not send invitation email or SMS.
 
+## Provision the first platform administrator
+
+The application intentionally has no public Super Admin registration. Provision the first platform administrator through the Supabase Dashboard and SQL Editor after migrations `0001_foundation.sql` through `0057_scope_role_announcement_delivery.sql` have been applied.
+
+1. In the Supabase Dashboard for the intended project, open **Authentication → Users** and invite the administrator's individually controlled email address. The administrator should set their own password from the invitation flow. Do not use a shared/default password.
+2. After the account appears in the Auth users list, open **SQL Editor** for the same project and run the following. Replace the sample email with the exact invited account email:
+
+   ```sql
+   do $bootstrap$
+   declare
+     v_user_id uuid;
+   begin
+     select id into v_user_id
+     from auth.users
+     where lower(email) = lower('admin@example.com');
+
+     if v_user_id is null then
+       raise exception 'No Supabase Auth user found for the supplied administrator email';
+     end if;
+
+     insert into public.platform_administrators (user_id)
+     values (v_user_id)
+     on conflict (user_id) do nothing;
+   end;
+   $bootstrap$;
+   ```
+
+3. Sign in to KABALIKAT with that account. The protected administrator registry grants access to `/platform`; no barangay membership is created by this step.
+4. Confirm the account can open the platform workspace, then enable and enforce the deployment's approved authentication safeguards, including MFA where available. Keep this SQL out of migrations and source control; run it only in the intended project using an authorized operator account.
+
+The platform administrator can then create barangay workspaces and initial Captain invitations. Platform access does not grant access to private resident, health, document, meeting, or financial records.
+
 ## Checks
 
 ```sh

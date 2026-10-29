@@ -15,13 +15,15 @@ function client() {
   return supabase
 }
 
-export async function listUpcomingCommunityEvents(barangayId: string): Promise<CommunityCalendarItem[]> {
+export async function listUpcomingCommunityEvents(barangayId: string, limitPerSource?: number): Promise<CommunityCalendarItem[]> {
   const now = new Date().toISOString()
+  const skQuery = client().from('sk_events').select('id,title,description,location,starts_at,ends_at')
+    .eq('barangay_id', barangayId).eq('status', 'published').gte('ends_at', now).order('starts_at')
+  const healthQuery = client().from('health_outreach_campaigns').select('id,title,description,location,starts_at,ends_at')
+    .eq('barangay_id', barangayId).eq('status', 'published').gte('ends_at', now).order('starts_at')
   const [skResult, healthResult] = await Promise.all([
-    client().from('sk_events').select('id,title,description,location,starts_at,ends_at')
-      .eq('barangay_id', barangayId).eq('status', 'published').gte('ends_at', now).order('starts_at'),
-    client().from('health_outreach_campaigns').select('id,title,description,location,starts_at,ends_at')
-      .eq('barangay_id', barangayId).eq('status', 'published').gte('ends_at', now).order('starts_at'),
+    limitPerSource === undefined ? skQuery : skQuery.limit(Math.max(1, Math.floor(limitPerSource))),
+    limitPerSource === undefined ? healthQuery : healthQuery.limit(Math.max(1, Math.floor(limitPerSource))),
   ])
   if (skResult.error) throw new Error(skResult.error.message)
   if (healthResult.error) throw new Error(healthResult.error.message)

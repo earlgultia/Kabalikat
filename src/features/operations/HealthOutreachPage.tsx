@@ -23,7 +23,7 @@ export function HealthOutreachPage() {
   const [message, setMessage] = useState('')
   const canAccess = canManage.data || canReview.data
 
-  async function refresh() { await queryClient.invalidateQueries({ queryKey: ['health-outreach-campaigns', tenantId] }) }
+  async function refresh() { await Promise.all([queryClient.invalidateQueries({ queryKey: ['health-outreach-campaigns', tenantId] }), queryClient.invalidateQueries({ queryKey: ['community-calendar', tenantId] }), queryClient.invalidateQueries({ queryKey: ['community-calendar-preview', tenantId] })]) }
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const form = event.currentTarget

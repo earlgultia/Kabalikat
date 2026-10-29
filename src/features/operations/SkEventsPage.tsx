@@ -23,7 +23,7 @@ export function SkEventsPage() {
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
 
-  async function refresh() { await Promise.all([queryClient.invalidateQueries({ queryKey: ['sk-events', tenantId] }), queryClient.invalidateQueries({ queryKey: ['sk-event-audit', tenantId] })]) }
+  async function refresh() { await Promise.all([queryClient.invalidateQueries({ queryKey: ['sk-events', tenantId] }), queryClient.invalidateQueries({ queryKey: ['sk-event-audit', tenantId] }), queryClient.invalidateQueries({ queryKey: ['community-calendar', tenantId] }), queryClient.invalidateQueries({ queryKey: ['community-calendar-preview', tenantId] })]) }
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); const form = event.currentTarget
     const parsed = eventSchema.safeParse(Object.fromEntries(new FormData(form).entries()))

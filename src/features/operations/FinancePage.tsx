@@ -10,6 +10,7 @@ import {
 } from './data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 import { formatDateTime } from './format'
+import { encodeCsv } from './csv'
 
 const budgetSchema = z.object({ fiscalYear: z.coerce.number().int().min(2000).max(2200), name: z.string().trim().min(3).max(120), amount: z.coerce.number().positive().finite().max(999999999999.99) })
 const transactionSchema = z.object({ budgetId: z.string().uuid(), type: z.enum(['income', 'expense']), category: z.string().trim().min(2).max(80), description: z.string().trim().min(3).max(1000), amount: z.coerce.number().positive().finite().max(999999999999.99), date: z.string().date() })
@@ -183,12 +184,7 @@ export function FinancePage() {
     setBusy(true); setError(''); setMessage('')
     try {
       await recordFinanceReportExport(tenantId, reportFrom, reportTo, rowCount)
-      const quote = (value: string | number, isNumeric = false) => {
-        const text = String(value)
-        const safeText = !isNumeric && /^\s*[=+\-@]/.test(text) ? `'${text}` : text
-        return `"${safeText.replaceAll('"', '""')}"`
-      }
-      const csv = [
+      const csv = encodeCsv([
         ['Date', 'Budget', 'Type', 'Category', 'Description', 'Amount PHP', 'Status', 'Submitted by', 'Reviewed by', 'Review note', 'Void reason'],
         ...transactionRows.map((item) => [item.transaction_date, item.budget?.name ?? '', item.transaction_type, item.category,
           item.description, Number(item.amount).toFixed(2), item.status, item.submitted_by, item.reviewed_by ?? '',
@@ -197,8 +193,8 @@ export function FinancePage() {
           item.budget?.name ?? '', `${item.transaction_type} adjustment`, item.category, `${item.description} (adjustment: ${adjustment.reason})`,
           Number(adjustment.amount_change).toFixed(2), adjustment.status, adjustment.requested_by, adjustment.reviewed_by ?? '',
           adjustment.review_note ?? '', ''] }),
-      ].map((row, rowIndex) => row.map((value, columnIndex) => quote(value, rowIndex > 0 && columnIndex === 5)).join(',')).join('\r\n')
-      const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' }))
+      ])
+      const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
       const link = document.createElement('a'); link.href = url; link.download = `kabalikat-finance-${reportFrom}-to-${reportTo}.csv`; link.click()
       window.setTimeout(() => URL.revokeObjectURL(url), 1000)
       setMessage(`Finance report exported. ${rowCount} transaction and adjustment rows were included and the export was logged.`)
