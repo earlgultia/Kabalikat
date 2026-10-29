@@ -4,7 +4,7 @@ import { Award, Download, ShieldAlert } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import { hasPermission } from './data'
 import { listSkAccomplishments } from './sk-data'
-import { ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
+import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 import { formatDateTime } from './format'
 
 export function SkTransparencyPage() {
@@ -41,6 +41,9 @@ export function SkTransparencyPage() {
       <button className="button outline" onClick={exportCsv} disabled={!published.length}><Download size={16} />Export published summaries</button>
     </PageHeading>
     <div className="ops-panel referral-privacy-notice"><ShieldAlert size={18} /><p><strong>Reviewed before publication.</strong> Only the submitted title and summary are shown here. Do not include personal details, participant names, or private financial information.</p></div>
+    {!tenantId && <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to view published SK accomplishments." />}
+    {Boolean(tenantId) && (canManage.isPending || canReview.isPending) && <LoadingNotice compact />}
+    {(canManage.error || canReview.error) && <ErrorNotice message="SK review access could not be checked. Published summaries remain available; internal review items are hidden until access can be verified." />}
     {items.isPending && tenantId && <LoadingNotice />}{items.error && <ErrorNotice message="Unable to load SK accomplishment summaries." />}
     {items.data && <div className="ops-filter-row"><label>Publication year<select aria-label="Filter accomplishments by publication year" value={year} onChange={(event) => setYear(event.target.value)}><option value="all">All years</option>{years.map((itemYear) => <option key={itemYear} value={itemYear}>{itemYear}</option>)}</select></label><span className="field-hint">CSV export contains only the published summaries shown here.</span></div>}
     {published.length === 0 && !items.isPending && <div className="ops-empty"><Award size={22} /><strong>No published accomplishments for this period</strong><p>Approved summaries will appear here after independent Captain review.</p></div>}

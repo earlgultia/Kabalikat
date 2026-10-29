@@ -5,7 +5,7 @@ import { CalendarHeart, CheckCircle2, MapPin, ShieldAlert } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import { hasPermission } from './data'
 import { completeHealthCampaign, createHealthCampaign, listHealthCampaigns, reviewHealthCampaign, type HealthCampaign } from './health-outreach-data'
-import { ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
+import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 import { formatDateTime } from './format'
 
 const campaignSchema = z.object({ title: z.string().trim().min(3).max(180), description: z.string().trim().max(2000), location: z.string().trim().min(2).max(240), starts: z.string().min(1), ends: z.string().min(1) })
@@ -58,8 +58,11 @@ export function HealthOutreachPage() {
       {canManage.data && <button className="button primary" onClick={() => setShowForm((visible) => !visible)}><CalendarHeart size={16} />Plan outreach</button>}
     </PageHeading>
     <div className="ops-panel referral-privacy-notice"><ShieldAlert size={18} /><p><strong>Scheduling only.</strong> This page does not store patient records, register participants, provide medical advice, or contact emergency services. Do not enter personal health information.</p></div>
+    {!tenantId && <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to view published outreach schedules." />}
+    {Boolean(tenantId) && (canManage.isPending || canReview.isPending) && <LoadingNotice compact />}
+    {(canManage.error || canReview.error) && <ErrorNotice message="Outreach management or review access could not be checked. Published schedules remain available; staff controls are hidden until access can be verified." />}
     {message && <div className="ops-success" role="status"><CheckCircle2 size={16} />{message}</div>}{error && <ErrorNotice message={error} />}
-    {!canAccess && !canManage.isPending && !canReview.isPending && <div className="ops-panel archive-access"><CalendarHeart size={20} /><div><strong>Outreach schedule access</strong><p>Residents and other active members can view published schedules. BHWs can propose schedules; Captains review them.</p></div></div>}
+    {Boolean(tenantId) && !canAccess && !canManage.isPending && !canReview.isPending && !canManage.error && !canReview.error && <div className="ops-panel archive-access"><CalendarHeart size={20} /><div><strong>Outreach schedule access</strong><p>Residents and other active members can view published schedules. BHWs can propose schedules; Captains review them.</p></div></div>}
     {showForm && canManage.data && <form className="ops-panel ops-form" onSubmit={(event) => void create(event)}><div className="ops-panel-heading"><div><h2>Plan a community outreach event</h2><p>New schedules stay private until reviewed by a Captain.</p></div><CalendarHeart size={19} /></div>
       <div className="ops-form-grid"><label>Event title<input name="title" minLength={3} maxLength={180} required placeholder="Community health outreach" /></label><label>Location<input name="location" minLength={2} maxLength={240} required placeholder="Venue or meeting point" /></label><label>Starts<input name="starts" type="datetime-local" required /></label><label>Ends<input name="ends" type="datetime-local" required /></label><label className="span-two">Public event details<textarea name="description" maxLength={2000} placeholder="Share logistics and general event information. Do not include participant or patient information." /></label></div>
       <div className="ops-form-actions"><button className="button primary" disabled={busy}>Submit for review</button></div>

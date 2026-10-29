@@ -5,7 +5,7 @@ import { CheckCircle2, FileCheck2, FolderKanban } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import { hasPermission } from './data'
 import { addSkProjectUpdate, listSkAccomplishments, listSkProjectActivity, listSkProjectUpdates, listSkProjects, reviewSkAccomplishment, reviewSkProject, submitSkAccomplishment, submitSkProject, updateSkProjectStatus } from './sk-data'
-import { ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
+import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 import { formatDateTime } from './format'
 
 const projectSchema = z.object({ title: z.string().trim().min(3).max(180), description: z.string().trim().min(3).max(4000), budget: z.coerce.number().min(0).max(999999999999.99), start: z.string(), end: z.string() })
@@ -103,8 +103,11 @@ export function SkProjectsPage() {
     <PageHeading title="SK projects" description="Submit youth project proposals, review approvals, and record milestones and progress.">
       {canManage.data && <button className="button primary" onClick={() => setShowForm((visible) => !visible)}>New proposal</button>}
     </PageHeading>
+    {!tenantId && <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to view SK projects." />}
+    {Boolean(tenantId) && (canManage.isPending || canReview.isPending) && <LoadingNotice compact />}
+    {(canManage.error || canReview.error) && <ErrorNotice message="Your SK project access could not be checked. Refresh the page or contact your barangay administrator." />}
     {message && <div className="ops-success"><CheckCircle2 size={16} />{message}</div>}{error && <ErrorNotice message={error} />}
-    {!canManage.data && !canReview.data && !canManage.isPending && !canReview.isPending && <div className="ops-panel archive-access"><FolderKanban size={20} /><div><strong>SK project access is restricted</strong><p>Access is limited to the SK Chairperson and authorized Captain reviewers.</p></div></div>}
+    {Boolean(tenantId) && !canManage.data && !canReview.data && !canManage.isPending && !canReview.isPending && !canManage.error && !canReview.error && <EmptyNotice title="SK project access is restricted" detail="Access is limited to the SK Chairperson and authorized Captain reviewers. Contact your barangay administrator if you need access." />}
     {showForm && canManage.data && <form className="ops-panel ops-form" onSubmit={(event) => void createProject(event)}><div className="ops-panel-heading"><div><h2>Submit an SK project proposal</h2><p>The barangay Captain must review proposals independently.</p></div><FileCheck2 size={19} /></div><div className="ops-form-grid"><label>Project title<input name="title" maxLength={180} required /></label><label>Proposed budget (PHP)<input name="budget" type="number" min="0" max="999999999999.99" step="0.01" defaultValue="0" required /><span className="field-hint">Proposal only; this does not approve or post a financial transaction.</span></label><label>Planned start<input name="start" type="date" /></label><label>Planned end<input name="end" type="date" /></label><label className="span-two">Project description<textarea name="description" minLength={3} maxLength={4000} required /></label></div><div className="ops-form-actions"><button className="button primary" disabled={busy}>Submit for review</button></div></form>}
     {projects.isPending && enabled && <LoadingNotice />}{projects.error && <ErrorNotice message={projects.error.message} />}
     {projects.data?.length === 0 && <div className="ops-empty"><FolderKanban size={22} /><strong>No SK projects yet</strong><p>Submitted proposals and their review status will appear here.</p></div>}

@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
-import { BadgeCheck, CreditCard, RefreshCw, ShieldAlert } from 'lucide-react'
+import { BadgeCheck, CreditCard, Download, RefreshCw, Search, ShieldAlert } from 'lucide-react'
 import { ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 import { formatDateTime } from './format'
 import { listSubscriptionEvents, listSubscriptionOverview, listSubscriptionPlans, setSubscription } from './subscriptions-data'
@@ -14,6 +14,8 @@ export function SubscriptionsPage() {
   const plans = useQuery({ queryKey: ['subscription-plans'], queryFn: listSubscriptionPlans })
   const subscriptions = useQuery({ queryKey: ['platform-subscriptions'], queryFn: listSubscriptionOverview })
   const [selectedId, setSelectedId] = useState('')
+  const [subscriptionSearch, setSubscriptionSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
@@ -28,9 +30,39 @@ export function SubscriptionsPage() {
       suspended: subscriptions.data?.filter((row) => row.status === 'suspended').length ?? 0,
     }
   }, [subscriptions.data])
+  const filteredSubscriptions = useMemo(() => {
+    const now = Date.now()
+    const query = subscriptionSearch.trim().toLocaleLowerCase()
+    return (subscriptions.data ?? []).filter((row) => {
+      const matchesSearch = `${row.barangay_name} ${row.barangay_code} ${row.plan_name}`.toLocaleLowerCase().includes(query)
+      const needsReview = row.status === 'suspended'
+        || (row.status === 'trial' && row.trial_ends_at && new Date(row.trial_ends_at).getTime() <= now)
+        || (row.status === 'past_due' && row.grace_ends_at && new Date(row.grace_ends_at).getTime() <= now)
+      return matchesSearch && (statusFilter === 'all' || (statusFilter === 'needs_review' ? needsReview : row.status === statusFilter))
+    })
+  }, [subscriptions.data, subscriptionSearch, statusFilter])
 
   async function refresh() {
     await Promise.all([queryClient.invalidateQueries({ queryKey: ['platform-subscriptions'] }), queryClient.invalidateQueries({ queryKey: ['platform-barangays'] })])
+  }
+
+  function exportSubscriptions() {
+    const csvCell = (value: string | null) => {
+      const text = value ?? ''
+      const safeText = /^[\s]*[=+\-@]/.test(text) ? `'${text}` : text
+      return `"${safeText.replaceAll('"', '""')}"`
+    }
+    const rows = [
+      ['Barangay', 'Barangay code', 'Plan', 'Admin-managed status', 'Trial end', 'Grace end', 'Last updated'],
+      ...filteredSubscriptions.map((row) => [row.barangay_name, row.barangay_code, row.plan_name, statusLabels[row.status] ?? row.status, row.trial_ends_at, row.grace_ends_at, row.updated_at]),
+    ]
+    const csv = `\uFEFF${rows.map((row) => row.map(csvCell).join(',')).join('\r\n')}`
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = 'kabalikat-subscription-review.csv'
+    anchor.click()
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -54,19 +86,19 @@ export function SubscriptionsPage() {
     </PageHeading>
     <div className="ops-panel subscription-notice"><ShieldAlert size={19} /><p><strong>Billing is not connected.</strong> Status changes here are manual administrative records; they do not process payments or restrict workspace access. Plan entitlements are catalog metadata and are not enforced yet.</p></div>
     {message && <div className="ops-success"><BadgeCheck size={16} />{message}</div>}{error && <ErrorNotice message={error} />}
-    <div className="subscription-summary"><div><strong>{subscriptions.data?.length ?? 0}</strong><span>Barangays</span></div><div><strong>{counts.trial}</strong><span>Trials in period</span></div><div><strong>{counts.trialElapsed}</strong><span>Trial elapsed · review</span></div><div><strong>{counts.suspended}</strong><span>Manually suspended</span></div></div>
+    <div className="subscription-summary"><div><strong>{subscriptions.data?.length ?? 0}</strong><span>Barangays</span></div><div><strong>{counts.trial}</strong><span>Trials in period</span></div><div><strong>{counts.trialElapsed}</strong><span>Trial elapsed Â· review</span></div><div><strong>{counts.pastDue}</strong><span>Past due · manual</span></div><div><strong>{counts.suspended}</strong><span>Manually suspended</span></div></div>
     {plans.isPending && <LoadingNotice />}{plans.error && <ErrorNotice message="Unable to load subscription plans." />}
     {plans.data && <section className="subscription-plan-section"><div className="ops-panel-heading"><div><h2>Plan catalog</h2><p>No prices or feature package has been configured.</p></div><CreditCard size={18} /></div><div className="subscription-plan-list">{plans.data.map((plan) => {
       const entitlementKeys = Object.entries(plan.entitlements ?? {}).filter(([, value]) => Boolean(value)).map(([key]) => key)
       return <article className="ops-panel subscription-plan" key={plan.id}><header><h3>{plan.name}</h3><span className={`status-pill ${plan.active ? 'status-active' : 'status-archived'}`}>{plan.active ? 'Available' : 'Inactive'}</span></header><p>{plan.description}</p><small>Plan key: {plan.key}</small><div className="subscription-entitlements"><strong>Configured entitlements</strong>{entitlementKeys.length ? <ul>{entitlementKeys.map((key) => <li key={key}>{key.replaceAll('_',' ')}</li>)}</ul> : <span>Not configured</span>}</div></article>
     })}</div></section>}
     {subscriptions.isPending && <LoadingNotice />}{subscriptions.error && <ErrorNotice message="Unable to load subscription records." />}
-    {subscriptions.data && <div className="ops-table-wrap"><table className="ops-table subscription-table"><thead><tr><th>Barangay</th><th>Plan</th><th>Admin-managed status</th><th>Trial end</th><th>Grace end</th><th>Updated</th><th /></tr></thead><tbody>{subscriptions.data.map((row) => {
+    {subscriptions.data && <div className="subscription-table-section"><div className="platform-directory-controls subscription-table-controls"><label className="archive-search"><Search size={17} /><input aria-label="Search subscriptions" placeholder="Search barangay, code, or plan" value={subscriptionSearch} onChange={(event) => setSubscriptionSearch(event.target.value)} /></label><label className="archive-folder-select">Status<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="all">All statuses</option><option value="needs_review">Needs review</option>{Object.entries(statusLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label><span className="field-hint" aria-live="polite">Showing {filteredSubscriptions.length} of {subscriptions.data.length} barangays</span><button type="button" className="button outline" disabled={!filteredSubscriptions.length} onClick={exportSubscriptions}><Download size={15} />Export visible rows</button></div>{filteredSubscriptions.length ? <div className="ops-table-wrap"><table className="ops-table subscription-table"><thead><tr><th>Barangay</th><th>Plan</th><th>Admin-managed status</th><th>Trial end</th><th>Grace end</th><th>Updated</th><th /></tr></thead><tbody>{filteredSubscriptions.map((row) => {
       const trialElapsed = row.status === 'trial' && row.trial_ends_at && new Date(row.trial_ends_at).getTime() <= Date.now()
       const graceElapsed = row.status === 'past_due' && row.grace_ends_at && new Date(row.grace_ends_at).getTime() <= Date.now()
-      return <tr key={row.barangay_id}><td><strong>{row.barangay_name}</strong><small>{row.barangay_code}</small></td><td>{row.plan_name}</td><td><StatusPill status={row.status} /><small>{trialElapsed ? 'Trial elapsed · manual review required' : graceElapsed ? 'Grace elapsed · manual review required' : statusLabels[row.status]}</small></td><td>{row.trial_ends_at ? formatDateTime(row.trial_ends_at) : '—'}</td><td>{row.grace_ends_at ? formatDateTime(row.grace_ends_at) : '—'}</td><td>{formatDateTime(row.updated_at)}</td><td><button className="button outline" onClick={() => { setSelectedId(row.barangay_id); setError(''); setMessage('') }}>Manage</button></td></tr>
-    })}</tbody></table></div>}
+      return <tr key={row.barangay_id}><td><strong>{row.barangay_name}</strong><small>{row.barangay_code}</small></td><td>{row.plan_name}</td><td><StatusPill status={row.status} /><small>{trialElapsed ? 'Trial elapsed Â· manual review required' : graceElapsed ? 'Grace elapsed Â· manual review required' : statusLabels[row.status]}</small></td><td>{row.trial_ends_at ? formatDateTime(row.trial_ends_at) : 'â€”'}</td><td>{row.grace_ends_at ? formatDateTime(row.grace_ends_at) : 'â€”'}</td><td>{formatDateTime(row.updated_at)}</td><td><button className="button outline" onClick={() => { setSelectedId(row.barangay_id); setError(''); setMessage('') }}>Manage</button></td></tr>
+    })}</tbody></table></div> : <div className="ops-empty"><strong>No matching subscriptions</strong><p>Try a different search term or status filter.</p></div>}</div>}
     {subscriptions.data?.length === 0 && <div className="ops-empty"><CreditCard size={21} /><strong>No subscription records</strong><p>Newly onboarded barangays receive a Free plan record.</p></div>}
-    {selected && <><form className="ops-panel ops-form subscription-editor" onSubmit={(event) => void submit(event)}><div className="ops-panel-heading"><div><h2>Manage {selected.barangay_name}</h2><p>Every update requires an audit note. This does not activate payment processing.</p></div><CreditCard size={18} /></div><div className="ops-form-grid"><label>Plan<select name="planKey" defaultValue={selected.plan_key}>{plans.data?.filter((plan) => plan.active).map((plan) => <option key={plan.id} value={plan.key}>{plan.name}</option>)}</select></label><label>Status<select name="status" defaultValue={selected.status}>{Object.entries(statusLabels).map(([key,label]) => <option key={key} value={key}>{label}</option>)}</select></label><label>Trial duration in days<input type="number" name="trialDays" min="1" max="90" defaultValue="14" /></label><label>Grace period in days<input type="number" name="graceDays" min="0" max="30" defaultValue="7" /></label><label className="span-two">Administrative reason / note<textarea name="note" minLength={3} maxLength={1000} required defaultValue={selected.admin_note} /></label></div><div className="ops-form-actions"><button type="button" className="button outline" onClick={() => setSelectedId('')}>Cancel</button><button className="button primary" disabled={busy}>Save subscription record</button></div></form><section className="ops-panel subscription-history" aria-labelledby="subscription-history-title"><div className="ops-panel-heading"><div><h2 id="subscription-history-title">Change history</h2><p>Most recent administrative updates for {selected.barangay_name}.</p></div></div>{history.isPending && <LoadingNotice />}{history.error && <ErrorNotice message="Unable to load subscription history." />}{history.data?.length === 0 && !history.isPending && <p className="field-hint">No subscription changes have been recorded yet.</p>}{history.data && history.data.length > 0 && <ol className="subscription-history-list">{history.data.map((event) => <li key={event.id}><div><strong>{event.action === 'subscription_created' ? 'Subscription recorded' : 'Subscription updated'}</strong><time dateTime={event.created_at}>{formatDateTime(event.created_at)}</time></div><p>{event.from_plan ? `${event.from_plan} · ${event.from_status} → ${event.to_plan} · ${event.to_status}` : `${event.to_plan} · ${event.to_status}`}</p><small>{event.note}</small></li>)}</ol>}</section></>}
+    {selected && <><form className="ops-panel ops-form subscription-editor" onSubmit={(event) => void submit(event)}><div className="ops-panel-heading"><div><h2>Manage {selected.barangay_name}</h2><p>Every update requires an audit note. This does not activate payment processing.</p></div><CreditCard size={18} /></div><div className="ops-form-grid"><label>Plan<select name="planKey" defaultValue={selected.plan_key}>{plans.data?.filter((plan) => plan.active).map((plan) => <option key={plan.id} value={plan.key}>{plan.name}</option>)}</select></label><label>Status<select name="status" defaultValue={selected.status}>{Object.entries(statusLabels).map(([key,label]) => <option key={key} value={key}>{label}</option>)}</select></label><label>Trial duration in days<input type="number" name="trialDays" min="1" max="90" defaultValue="14" /></label><label>Grace period in days<input type="number" name="graceDays" min="0" max="30" defaultValue="7" /></label><label className="span-two">Administrative reason / note<textarea name="note" minLength={3} maxLength={1000} required defaultValue={selected.admin_note} /></label></div><div className="ops-form-actions"><button type="button" className="button outline" onClick={() => setSelectedId('')}>Cancel</button><button className="button primary" disabled={busy}>Save subscription record</button></div></form><section className="ops-panel subscription-history" aria-labelledby="subscription-history-title"><div className="ops-panel-heading"><div><h2 id="subscription-history-title">Change history</h2><p>Most recent administrative updates for {selected.barangay_name}.</p></div></div>{history.isPending && <LoadingNotice />}{history.error && <ErrorNotice message="Unable to load subscription history." />}{history.data?.length === 0 && !history.isPending && <p className="field-hint">No subscription changes have been recorded yet.</p>}{history.data && history.data.length > 0 && <ol className="subscription-history-list">{history.data.map((event) => <li key={event.id}><div><strong>{event.action === 'subscription_created' ? 'Subscription recorded' : 'Subscription updated'}</strong><time dateTime={event.created_at}>{formatDateTime(event.created_at)}</time></div><p>{event.from_plan ? `${event.from_plan} Â· ${event.from_status} â†’ ${event.to_plan} Â· ${event.to_status}` : `${event.to_plan} Â· ${event.to_status}`}</p><small>{event.note}</small></li>)}</ol>}</section></>}
   </section>
 }

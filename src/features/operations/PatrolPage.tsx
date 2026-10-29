@@ -5,7 +5,7 @@ import { CheckCircle2, ClipboardList, MapPinned, Route } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import { hasPermission } from './data'
 import { addPatrolLog, cancelPatrolShift, completePatrolShift, createPatrolShift, listPatrolAssignees, listPatrolLogs, listPatrolShifts, startPatrolShift } from './patrol-data'
-import { ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
+import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 import { formatDateTime } from './format'
 
 const scheduleSchema = z.object({ assignee: z.string().uuid(), title: z.string().trim().min(3).max(140), area: z.string().trim().min(2).max(240), start: z.string().min(1), end: z.string().min(1) })
@@ -68,8 +68,11 @@ export function PatrolPage() {
       {canManage.data && <button className="button primary" onClick={() => setShowForm((visible) => !visible)}>Schedule patrol</button>}
     </PageHeading>
     <div className="ops-panel incident-guidance"><MapPinned size={18} /><p><strong>Manual logs only.</strong> Record a checkpoint or observation as a short note. This workspace does not track live location or contact emergency services.</p></div>
+    {!tenantId && <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to view patrol shifts and logs." />}
+    {Boolean(tenantId) && (canManage.isPending || canAccess.isPending) && <LoadingNotice compact />}
+    {(canManage.error || canAccess.error) && <ErrorNotice message="Your patrol workspace access could not be checked. Refresh the page or contact your barangay administrator." />}
     {message && <div className="ops-success"><CheckCircle2 size={16} />{message}</div>}{error && <ErrorNotice message={error} />}
-    {!canManage.data && !canAccess.data && !canManage.isPending && !canAccess.isPending && <div className="ops-panel archive-access"><Route size={20} /><div><strong>Patrol access is restricted</strong><p>Only authorized Captains and Tanods can access patrol shifts.</p></div></div>}
+    {Boolean(tenantId) && !canManage.data && !canAccess.data && !canManage.isPending && !canAccess.isPending && !canManage.error && !canAccess.error && <EmptyNotice title="Patrol access is restricted" detail="Only authorized Captains and Tanods can access patrol shifts. Contact your barangay administrator if you need access." />}
     {showForm && canManage.data && <form className="ops-panel ops-form" onSubmit={(event) => void schedule(event)}><div className="ops-panel-heading"><div><h2>Schedule a patrol shift</h2><p>Assign an active Tanod from this barangay.</p></div><ClipboardList size={19} /></div><div className="ops-form-grid">
       <label>Assigned Tanod<select name="assignee" required defaultValue=""><option value="" disabled>Select active Tanod</option>{assignees.data?.map((person) => <option key={person.user_id} value={person.user_id}>{person.display_name}</option>)}</select></label>
       <label>Shift title<input name="title" maxLength={140} required /></label>

@@ -5,7 +5,7 @@ import { CheckCircle2, UsersRound } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import { assignCommitteeMember, createCommittee, createCommitteeTask, listAssignableCommitteeMembers, listCommitteeMembers, listCommittees, listCommitteeTasks, updateCommitteeTaskStatus, type CommitteeTaskRow } from './committee-data'
 import { hasPermission } from './data'
-import { ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
+import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 
 const committeeSchema = z.object({ name: z.string().trim().min(2).max(120), description: z.string().trim().max(1000) })
 const taskSchema = z.object({ title: z.string().trim().min(3).max(180), description: z.string().trim().max(2000), assignedTo: z.string(), dueDate: z.string() })
@@ -15,9 +15,9 @@ export function CommitteesPage() {
   const tenantId = membership?.barangay_id ?? ''
   const queryClient = useQueryClient()
   const canManage = useQuery({ queryKey: ['permission', tenantId, 'committee.manage'], queryFn: () => hasPermission(tenantId, 'committee.manage'), enabled: Boolean(tenantId) })
-  const committees = useQuery({ queryKey: ['committees', tenantId], queryFn: () => listCommittees(tenantId), enabled: Boolean(tenantId && canManage.data !== undefined) })
-  const tasks = useQuery({ queryKey: ['committee-tasks', tenantId], queryFn: () => listCommitteeTasks(tenantId), enabled: Boolean(tenantId && canManage.data !== undefined) })
-  const members = useQuery({ queryKey: ['committee-members', tenantId], queryFn: () => listCommitteeMembers(tenantId), enabled: Boolean(tenantId && canManage.data !== undefined) })
+  const committees = useQuery({ queryKey: ['committees', tenantId], queryFn: () => listCommittees(tenantId), enabled: Boolean(tenantId) })
+  const tasks = useQuery({ queryKey: ['committee-tasks', tenantId], queryFn: () => listCommitteeTasks(tenantId), enabled: Boolean(tenantId) })
+  const members = useQuery({ queryKey: ['committee-members', tenantId], queryFn: () => listCommitteeMembers(tenantId), enabled: Boolean(tenantId) })
   const candidates = useQuery({ queryKey: ['committee-candidates', tenantId], queryFn: () => listAssignableCommitteeMembers(tenantId), enabled: Boolean(tenantId && canManage.data) })
   const [showCreate, setShowCreate] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -79,10 +79,13 @@ export function CommitteesPage() {
     <PageHeading title="Committee workspaces" description="Coordinate assigned members and track committee action items.">
       {canManage.data && <button className="button primary" onClick={() => setShowCreate((visible) => !visible)}>New committee</button>}
     </PageHeading>
+    {!tenantId && <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to view assigned committee workspaces." />}
+    {Boolean(tenantId) && canManage.isPending && <LoadingNotice compact />}
+    {canManage.error && <ErrorNotice message="Committee management access could not be checked. Existing assignments can still be viewed; management controls are unavailable until access can be verified." />}
     {message && <div className="ops-success"><CheckCircle2 size={16} />{message}</div>}{error && <ErrorNotice message={error} />}
-    {!canManage.isPending && !canManage.data && <div className="ops-panel archive-access"><UsersRound size={20} /><div><strong>Committee access is assignment-based</strong><p>You will see committees after an authorized administrator assigns you to one.</p></div></div>}
+    {Boolean(tenantId) && !canManage.isPending && !canManage.error && !canManage.data && <div className="ops-panel archive-access"><UsersRound size={20} /><div><strong>Committee access is assignment-based</strong><p>You will see committees after an authorized administrator assigns you to one.</p></div></div>}
     {showCreate && canManage.data && <form className="ops-panel ops-form" onSubmit={(event) => void submitCommittee(event)}><div className="ops-panel-heading"><div><h2>Create a committee</h2><p>Only authorized committee managers can configure workspaces.</p></div><UsersRound size={18} /></div><div className="ops-form-grid"><label>Committee name<input name="name" maxLength={120} required /></label><label className="span-two">Purpose / description<textarea name="description" maxLength={1000} /></label></div><div className="ops-form-actions"><button className="button primary" disabled={busy}>Create committee</button></div></form>}
-    {committees.isPending && <LoadingNotice />}{committees.error && <ErrorNotice message={committees.error.message} />}
+    {committees.isPending && tenantId && <LoadingNotice />}{committees.error && <ErrorNotice message={committees.error.message} />}
     {committees.data?.length === 0 && <div className="ops-empty"><UsersRound size={22} /><strong>No committee workspaces assigned</strong><p>Ask an authorized Captain or Secretary to create or assign a committee.</p></div>}
     <div className="committee-workspace-list">{committees.data?.map((committee) => {
       const committeeMembers = members.data?.filter((member) => member.committee_id === committee.id) ?? []

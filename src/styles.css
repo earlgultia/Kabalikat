@@ -146,6 +146,11 @@ h1, h2, strong { font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
 .form-stack input { height: 40px; border: 1px solid #dfe7e1; border-radius: 6px; padding: 0 11px; color: #34483e; outline: none; font-size: 11px; }
 .form-stack input:focus { border-color: #6c9a7b; box-shadow: 0 0 0 3px #6c9a7b1a; }
 .form-stack input::placeholder { color: #aab5ae; }
+.auth-password-field { position: relative; }
+.form-stack .auth-password-field input { width: 100%; padding-right: 46px; }
+.auth-password-toggle { position: absolute; inset: 0 2px 0 auto; display: grid; place-items: center; width: 40px; border: 0; border-radius: 6px; background: transparent; color: #60766a; cursor: pointer; }
+.auth-password-toggle:hover { color: #174b3f; background: #eff5ef; }
+.auth-password-toggle:focus-visible { outline-offset: -3px; }
 .auth-text-button { display: block; margin: 13px 0 0 auto; color: var(--brand-700); font-size: 12px; font-weight: 650; }
 .auth-text-button:hover { color: var(--brand-900); text-decoration: underline; }
 .auth-text-button:disabled { cursor: not-allowed; opacity: .55; }
@@ -165,6 +170,8 @@ h1, h2, strong { font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
 .mobile-menu, .close-menu { display: none; }
 .scrim { display: none; }
 :focus-visible { outline: 3px solid #d39a32; outline-offset: 3px; }
+.skip-link { background: #fffefa; border: 2px solid #164e4a; border-radius: 7px; color: #164e4a; font-size: 14px; font-weight: 700; left: 12px; padding: 10px 14px; position: fixed; top: 10px; transform: translateY(-160%); transition: transform .15s ease; z-index: 100; }
+.skip-link:focus-visible { transform: translateY(0); }
 .auth-back-link { display: inline-flex; align-items: center; gap: 7px; margin: 0 0 20px; color: #326451; font-size: 12px; font-weight: 650; text-decoration: none; }
 .auth-back-link:hover { color: #164e3d; text-decoration: underline; }
 
@@ -317,7 +324,7 @@ body { color: var(--ink); background: var(--canvas); font-size: 16px; line-heigh
   .lower-grid { grid-template-columns: 1fr; }.help-panel { min-height: 185px; }
 }
 @media (max-width: 650px) {
-  .sidebar { transform: translateX(-100%); transition: transform .2s ease; width: 260px; }.sidebar.open { transform: translateX(0); }
+  .sidebar { transform: translateX(-100%); transition: transform .2s ease; width: 260px; visibility: hidden; }.sidebar.open { transform: translateX(0); visibility: visible; }
   .main-area { margin-left: 0; }.topbar { height: 58px; padding: 0 14px; }.mobile-menu { display: inline-grid; margin-left: -5px; }.crumb { margin-right: auto; margin-left: 8px; }.search-control { display: none; }.search-control-mobile { display: inline-grid; }.top-actions { gap: 8px; }
   .content-wrap { padding: 25px 16px 18px; }.welcome-row { align-items: flex-start; gap: 12px; }.welcome-row h1 { font-size: 25px; }.welcome-row .button { flex: none; }.module-grid { grid-template-columns: 1fr; gap: 8px; }.module-card { min-height: 68px; }
   .setup-banner { align-items: flex-start; }.setup-banner p { line-height: 1.5; }.lower-grid { margin-top: 18px; }.panel { padding: 14px; }.help-panel { min-height: 185px; }.help-art { width: 34%; }.help-copy { padding: 21px 12px; }.help-copy h2 { font-size: 13px; }.footer { flex-direction: column; gap: 8px; margin-top: 19px; }
@@ -348,6 +355,8 @@ body { color: var(--ink); background: var(--canvas); font-size: 16px; line-heigh
 .platform-directory-controls .archive-folder-select { gap: 7px; }
 .platform-directory-controls .archive-folder-select select { min-height: 42px; }
 .platform-directory-controls .button { min-height: 42px; }
+.directory-pagination { align-items: center; display: flex; gap: 12px; justify-content: flex-end; margin-top: 12px; }
+.directory-pagination > span { color: var(--muted); font-size: 12px; }
 .platform-directory-table { min-width: 720px; }
 .platform-directory-privacy { color: #596a6d; font-size: 12px; line-height: 1.5; margin: 12px 0 0; }
 @media(max-width:650px) { .platform-directory-controls { align-items: stretch; flex-direction: column; } .platform-directory-controls .archive-folder-select { justify-content: space-between; } }
@@ -378,3 +387,8 @@ body { color: var(--ink); background: var(--canvas); font-size: 16px; line-heigh
 .public-verification-result dt { color: #63796f; font-size: 12px; }
 .public-verification-result dd { color: #293f40; font-size: 12px; font-weight: 700; margin: 0; text-align: right; }
 .public-verification-privacy { border-top: 1px solid #e1e8e3; color: #5d6d70; font-size: 11px; line-height: 1.6; margin: 20px 0 0; padding-top: 15px; }
+
+@media (prefers-reduced-motion: reduce) {
+  html:focus-within { scroll-behavior: auto; }
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; }
+}

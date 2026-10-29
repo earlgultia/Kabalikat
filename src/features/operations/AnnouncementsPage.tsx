@@ -66,6 +66,9 @@ export function AnnouncementsPage() {
     <PageHeading title="Announcements" description="Publish clear community updates to residents, officials, or a selected role.">
       {canPublish.data && <button className="button primary" onClick={() => setOpen((value) => !value)}><Megaphone size={16} />Create announcement</button>}
     </PageHeading>
+    {canPublish.isPending && <LoadingNotice compact />}
+    {canPublish.error && <ErrorNotice message="Announcement publishing access could not be checked. Refresh the page or contact your barangay administrator." />}
+    {audienceRoles.error && <ErrorNotice message="The recipient role list could not be loaded. Role-targeted announcements are unavailable until it can be checked." />}
     {message && <div className="ops-success"><Bell size={16} />{message}</div>}
     {error && <ErrorNotice message={error} />}
     {open && canPublish.data && <form className="ops-panel ops-form" onSubmit={(event) => void submit(event)}>
@@ -78,7 +81,7 @@ export function AnnouncementsPage() {
       <div className="ops-form-actions"><span className="field-hint">Keep sensitive resident or health details out of public messages.</span><button className="button primary" disabled={busy}>{busy ? 'Saving…' : 'Save announcement'}</button></div>
     </form>}
     <div className="ops-section-title"><h2>Community updates</h2><p>Published messages are visible according to their audience and tenant membership.</p></div>
-    {announcements.isPending ? <LoadingNotice /> : announcements.error ? <ErrorNotice message={announcements.error.message} /> : announcements.data?.length ?
+    {!tenantId ? <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to view local announcements." /> : announcements.isPending ? <LoadingNotice /> : announcements.error ? <ErrorNotice message={announcements.error.message} /> : announcements.data?.length ?
       <div className="ops-announcement-list">{announcements.data.map((item) => <article className="ops-panel announcement-card" key={item.id}>
         <div className="announcement-top"><div><StatusPill status={item.status} /><span className="audience-label">{item.audience === 'role' ? `Role: ${audienceRoles.data?.find((role) => role.id === item.audience_role_id)?.label ?? 'selected role'}` : item.audience}</span></div>{canPublish.data && item.status !== 'archived' && <button className="text-action" onClick={() => void setStatus(item.id, item.status === 'published' ? 'archived' : 'published')}>{item.status === 'published' ? 'Archive' : 'Publish'}</button>}</div>
         <h2>{item.title}</h2><p>{item.body}</p><small>{item.published_at ? 'Published ' + new Date(item.published_at).toLocaleString() : 'Draft'}{item.expires_at ? ' · Expires ' + new Date(item.expires_at).toLocaleDateString() : ''}</small>

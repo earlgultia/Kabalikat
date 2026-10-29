@@ -183,7 +183,11 @@ export function FinancePage() {
     setBusy(true); setError(''); setMessage('')
     try {
       await recordFinanceReportExport(tenantId, reportFrom, reportTo, rowCount)
-      const quote = (value: string | number) => `"${String(value).replaceAll('"', '""')}"`
+      const quote = (value: string | number, isNumeric = false) => {
+        const text = String(value)
+        const safeText = !isNumeric && /^\s*[=+\-@]/.test(text) ? `'${text}` : text
+        return `"${safeText.replaceAll('"', '""')}"`
+      }
       const csv = [
         ['Date', 'Budget', 'Type', 'Category', 'Description', 'Amount PHP', 'Status', 'Submitted by', 'Reviewed by', 'Review note', 'Void reason'],
         ...transactionRows.map((item) => [item.transaction_date, item.budget?.name ?? '', item.transaction_type, item.category,
@@ -193,10 +197,10 @@ export function FinancePage() {
           item.budget?.name ?? '', `${item.transaction_type} adjustment`, item.category, `${item.description} (adjustment: ${adjustment.reason})`,
           Number(adjustment.amount_change).toFixed(2), adjustment.status, adjustment.requested_by, adjustment.reviewed_by ?? '',
           adjustment.review_note ?? '', ''] }),
-      ].map((row) => row.map(quote).join(',')).join('\r\n')
+      ].map((row, rowIndex) => row.map((value, columnIndex) => quote(value, rowIndex > 0 && columnIndex === 5)).join(',')).join('\r\n')
       const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' }))
       const link = document.createElement('a'); link.href = url; link.download = `kabalikat-finance-${reportFrom}-to-${reportTo}.csv`; link.click()
-      URL.revokeObjectURL(url)
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000)
       setMessage(`Finance report exported. ${rowCount} transaction and adjustment rows were included and the export was logged.`)
     } catch (err) { setError(err instanceof Error ? err.message : 'Unable to export the finance report.') }
     finally { setBusy(false) }
@@ -213,8 +217,11 @@ export function FinancePage() {
       {canManage.data && <><button className="button outline" onClick={() => setBudgetForm((open) => !open)}>New budget</button><button className="button primary" disabled={!approvedBudgets.length} onClick={() => setTransactionForm((open) => !open)}><ReceiptText size={16} />Add transaction</button></>}
     </PageHeading>
     {message && <div className="ops-success"><CheckCircle2 size={16} />{message}</div>}{error && <ErrorNotice message={error} />}
-    {!canRead.isPending && !canRead.data && <div className="ops-panel archive-access"><ShieldCheck size={20} /><div><strong>Financial records are restricted</strong><p>Your current role cannot read this barangay’s budgets or transactions.</p></div></div>}
-    {canRead.isPending && <LoadingNotice />}
+    {!tenantId && <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to view budgets and financial records." />}
+    {Boolean(tenantId) && canRead.isPending && <LoadingNotice compact />}
+    {canRead.error && <ErrorNotice message="Your finance access could not be checked. Refresh the page or contact your barangay administrator." />}
+    {(canManage.error || canApprove.error) && <ErrorNotice message="Budget management or approval permissions could not be checked. Related financial controls are unavailable until access can be verified." />}
+    {Boolean(tenantId) && !canRead.isPending && !canRead.error && !canRead.data && <div className="ops-panel archive-access"><ShieldCheck size={20} /><div><strong>Financial records are restricted</strong><p>Your current role cannot read this barangay’s budgets or transactions. Contact your barangay administrator if you need access.</p></div></div>}
     {canRead.data && <>
       <section className="ops-panel finance-report" aria-labelledby="finance-report-title">
         <div><h2 id="finance-report-title">Financial report</h2><p>Export transactions for a date range. Each export is recorded for audit.</p></div>

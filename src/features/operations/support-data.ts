@@ -9,10 +9,13 @@ function client() {
   return supabase
 }
 
-export async function listSupportTickets(tenantId?: string): Promise<SupportTicket[]> {
+export async function listSupportTickets(tenantId?: string, page = 0, status = 'all', search = ''): Promise<SupportTicket[]> {
   let query = client().from('support_tickets').select('id,barangay_id,requester_id,category,subject,description,status,created_at,updated_at').order('updated_at', { ascending: false })
   if (tenantId) query = query.eq('barangay_id', tenantId)
-  const { data, error } = await query
+  if (status !== 'all') query = query.eq('status', status)
+  const term = search.trim()
+  if (term) query = query.ilike('subject', `%${term.replace(/[\\%_]/g, '\\$&')}%`)
+  const { data, error } = await query.range(page * 50, (page + 1) * 50 - 1)
   if (error) throw new Error(error.message)
   return (data ?? []) as SupportTicket[]
 }

@@ -5,7 +5,7 @@ import { ArrowLeftRight, CheckCircle2, ShieldAlert } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import { hasPermission } from './data'
 import { acknowledgeReferral, closeReferral, createInterbarangayReferral, declineReferral, listInterbarangayReferralActivity, listInterbarangayReferrals, listReferralDestinations, respondReferral, type InterbarangayReferral } from './referrals-data'
-import { ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
+import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 import { formatDateTime } from './format'
 
 const referralSchema = z.object({ destination: z.string().uuid(), purpose: z.string().trim().min(3).max(180), basis: z.string().trim().min(3).max(500), information: z.string().trim().min(3).max(2000), incident: z.string().trim().optional(), confirmed: z.literal('yes') })
@@ -18,7 +18,7 @@ export function ReferralsPage() {
   const canCreate = useQuery({ queryKey: ['permission', tenantId, 'referrals.create'], queryFn: () => hasPermission(tenantId, 'referrals.create'), enabled: Boolean(tenantId) })
   const canReview = useQuery({ queryKey: ['permission', tenantId, 'referrals.review'], queryFn: () => hasPermission(tenantId, 'referrals.review'), enabled: Boolean(tenantId) })
   const destinations = useQuery({ queryKey: ['referral-destinations', tenantId], queryFn: () => listReferralDestinations(tenantId), enabled: Boolean(tenantId && canCreate.data) })
-  const referrals = useQuery({ queryKey: ['interbarangay-referrals'], queryFn: listInterbarangayReferrals, enabled: Boolean(tenantId) })
+  const referrals = useQuery({ queryKey: ['interbarangay-referrals'], queryFn: listInterbarangayReferrals, enabled: Boolean(tenantId && (canCreate.data || canReview.data)) })
   const activity = useQuery({ queryKey: ['interbarangay-referral-activity'], queryFn: listInterbarangayReferralActivity, enabled: Boolean(tenantId && (canCreate.data || canReview.data) && referrals.isSuccess) })
   const [showForm, setShowForm] = useState(false)
   const [replyId, setReplyId] = useState('')
@@ -88,15 +88,18 @@ export function ReferralsPage() {
       {canCreate.data && <button className="button primary" onClick={() => setShowForm((visible) => !visible)}><ArrowLeftRight size={15} />New referral</button>}
     </PageHeading>
     <div className="ops-panel referral-privacy-notice"><ShieldAlert size={18} /><p><strong>Share only what is necessary.</strong> Use this workflow only when your barangay has an approved disclosure basis and policy. Do not include unrelated resident records, medical details, or information about family members. This feature does not contact emergency services.</p></div>
+    {!tenantId && <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to review inter-barangay referrals." />}
+    {Boolean(tenantId) && (canCreate.isPending || canReview.isPending) && <LoadingNotice compact />}
+    {(canCreate.error || canReview.error) && <ErrorNotice message="Your referral access could not be checked. Refresh the page or contact your barangay administrator." />}
     {message && <div className="ops-success" role="status"><CheckCircle2 size={16} />{message}</div>}{error && <ErrorNotice message={error} />}
-    {!canAccess && !canCreate.isPending && !canReview.isPending && <div className="ops-panel archive-access"><ArrowLeftRight size={20} /><div><strong>Referral access is restricted</strong><p>Only designated Captains and Secretaries can create or review inter-barangay referrals.</p></div></div>}
+    {Boolean(tenantId) && !canAccess && !canCreate.isPending && !canReview.isPending && !canCreate.error && !canReview.error && <EmptyNotice title="Referral access is restricted" detail="Only designated Captains and Secretaries can create or review inter-barangay referrals. Contact your barangay administrator if you need access." />}
     {showForm && canCreate.data && <form className="ops-panel ops-form" onSubmit={(event) => void create(event)}><div className="ops-panel-heading"><div><h2>Create a referral</h2><p>The receiving barangay will see only the information included in this referral.</p></div><ArrowLeftRight size={19} /></div>
       {destinations.isPending && <LoadingNotice compact />}{destinations.error && <ErrorNotice message="Unable to load destination barangays." />}
       <div className="ops-form-grid"><label>Receiving barangay<select name="destination" required defaultValue=""><option value="" disabled>Select a barangay</option>{destinations.data?.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.municipality}, {item.province}</option>)}</select></label><label>Referral purpose<input name="purpose" minLength={3} maxLength={180} required placeholder="Why is this referral needed?" /></label><label className="span-two">Disclosure basis / authorization<input name="basis" minLength={3} maxLength={500} required placeholder="State the approved policy or authority for this disclosure" /></label><label className="span-two">Minimum necessary information<textarea name="information" minLength={3} maxLength={2000} required placeholder="Share only details needed by the receiving barangay to act on this referral." /><span className="field-hint">Do not paste full resident records, medical details, or unrelated sensitive information.</span></label><label>Related incident reference (optional)<input name="incident" placeholder="Incident record ID" /><span className="field-hint">Use an incident from this barangay that you are authorized to manage.</span></label><label className="referral-confirm"><input type="checkbox" name="confirmed" value="yes" required /><span>I confirm this disclosure follows our approved policy and contains only necessary information.</span></label></div>
       <div className="ops-form-actions"><button className="button primary" disabled={busy || !destinations.data?.length}>Send referral</button></div>
     </form>}
     {destinations.data?.length === 0 && canCreate.data && <div className="ops-empty"><strong>No destination barangays available</strong><p>Referrals can be sent to active barangay workspaces only.</p></div>}
-    {referrals.isPending && tenantId && <LoadingNotice />}{referrals.error && <ErrorNotice message="Unable to load referrals." />}
+    {referrals.isPending && tenantId && canAccess && <LoadingNotice />}{referrals.error && <ErrorNotice message="Unable to load referrals." />}
     {referrals.data?.length === 0 && <div className="ops-empty"><ArrowLeftRight size={22} /><strong>No referrals yet</strong><p>Referrals created by or sent to this barangay will appear here.</p></div>}
     <div className="referral-list">{referrals.data?.map((referral) => {
       const receiving = referral.viewer_side === 'receiving'

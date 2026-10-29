@@ -5,7 +5,7 @@ import { CalendarDays, CheckCircle2, MapPin, ShieldAlert } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import { hasPermission } from './data'
 import { completeSkEvent, createSkEvent, listSkEventAudit, listSkEvents, reviewSkEvent, type SkEvent } from './sk-events-data'
-import { ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
+import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 import { formatDateTime } from './format'
 
 const eventSchema = z.object({ title: z.string().trim().min(3).max(180), description: z.string().trim().max(2000), location: z.string().trim().min(2).max(240), starts: z.string().min(1), ends: z.string().min(1) })
@@ -55,6 +55,9 @@ export function SkEventsPage() {
       {canManage.data && <button className="button primary" onClick={() => setShowForm((visible) => !visible)}><CalendarDays size={16} />Plan an event</button>}
     </PageHeading>
     <div className="ops-panel referral-privacy-notice"><ShieldAlert size={18} /><p><strong>Event schedules only.</strong> This page does not register youth or participants, collect attendance, or store information about minors. Keep private details out of event descriptions.</p></div>
+    {!tenantId && <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to view published SK events." />}
+    {Boolean(tenantId) && (canManage.isPending || canReview.isPending) && <LoadingNotice compact />}
+    {(canManage.error || canReview.error) && <ErrorNotice message="SK event management or review access could not be checked. Published events remain available; staff controls are hidden until access can be verified." />}
     {message && <div className="ops-success" role="status"><CheckCircle2 size={16} />{message}</div>}{error && <ErrorNotice message={error} />}
     {showForm && canManage.data && <form className="ops-panel ops-form" onSubmit={(event) => void create(event)}><div className="ops-panel-heading"><div><h2>Plan an SK program or event</h2><p>Schedules remain private until a Captain publishes them.</p></div><CalendarDays size={19} /></div>
       <div className="ops-form-grid"><label>Event title<input name="title" minLength={3} maxLength={180} required placeholder="Youth community clean-up" /></label><label>Location<input name="location" minLength={2} maxLength={240} required placeholder="Venue or meeting point" /></label><label>Starts<input name="starts" type="datetime-local" required /></label><label>Ends<input name="ends" type="datetime-local" required /></label><label className="span-two">Public event details<textarea name="description" maxLength={2000} placeholder="General schedule and logistics only. Do not include names or personal details." /></label></div>

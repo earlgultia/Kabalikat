@@ -77,7 +77,7 @@ export function AccountSecurityDialog({ email, userId, tenantId, onClose }: { em
           })}
         </div>}
         {preferenceError && <p className="account-security-error" role="alert">{preferenceError}</p>}
-        <p className="field-hint">These settings control community update notices only. Important service decisions remain enabled; no email/SMS is sent.</p>
+        <p className="field-hint">These settings apply only to announcements and disaster advisories. Profile correction, document status, and feedback response alerts stay enabled so you can track your requests. No email or SMS is sent.</p>
       </section>
       <form className="account-security-form" onSubmit={(event) => void changePassword(event)}>
         <label>New password<input name="password" type="password" autoComplete="new-password" minLength={12} maxLength={128} required autoFocus /><span className="field-hint">At least 12 characters, with uppercase, lowercase, and a number.</span></label>

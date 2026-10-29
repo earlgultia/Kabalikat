@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
-import { Check, Download, Home, UserPlus, UserRoundPen } from 'lucide-react'
+import { Check, Download, Home, Search, UserPlus, UserRoundPen } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import { cancelResidentProfileChange, getOwnResidentDataExport, hasPermission, listHouseholds, listResidents, listResidencyVerifications, listResidentProfileChangeRequests, registerResident, reviewResidentProfileChange, submitResidentProfileChange, verifyResident } from './data'
 import { ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
@@ -26,6 +26,8 @@ export function ResidentsPage() {
   const [errorMessage, setErrorMessage] = useState('')
   const [busy, setBusy] = useState(false)
   const [exportBusy, setExportBusy] = useState(false)
+  const [residentSearch, setResidentSearch] = useState('')
+  const [residencyFilter, setResidencyFilter] = useState('all')
   const residents = useQuery({ queryKey: ['residents', tenantId], queryFn: () => listResidents(tenantId), enabled: Boolean(tenantId) })
   const households = useQuery({ queryKey: ['households', tenantId], queryFn: () => listHouseholds(tenantId), enabled: Boolean(tenantId) })
   const verifications = useQuery({ queryKey: ['residency-verifications', tenantId], queryFn: () => listResidencyVerifications(tenantId), enabled: Boolean(tenantId) })
@@ -35,6 +37,19 @@ export function ResidentsPage() {
   const profileChanges = useQuery({ queryKey: ['resident-profile-changes', tenantId], queryFn: () => listResidentProfileChangeRequests(tenantId), enabled: Boolean(tenantId) && (role === 'resident' || canReviewChanges.data === true) })
   const canSelfRegister = role === 'resident' && residents.data?.length === 0
   const ownResident = role === 'resident' ? residents.data?.[0] : undefined
+  const filteredResidents = (residents.data ?? []).filter((resident) => {
+    const verificationStatus = verifications.data?.find((item) => item.resident_id === resident.id)?.status ?? 'pending'
+    const query = residentSearch.trim().toLocaleLowerCase()
+    const matchesSearch = !query || [
+      resident.first_name,
+      resident.last_name,
+      resident.phone,
+      resident.household?.household_code,
+      resident.household?.address_line,
+      resident.household?.purok,
+    ].some((value) => value?.toLocaleLowerCase().includes(query))
+    return matchesSearch && (residencyFilter === 'all' || verificationStatus === residencyFilter)
+  })
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setMessage(''); setErrorMessage('')
@@ -177,12 +192,19 @@ export function ResidentsPage() {
     </form>}
     {residents.isPending ? <LoadingNotice /> : residents.error ? <ErrorNotice message={residents.error.message} /> : !residents.data?.length ?
       <div className="ops-empty"><Home size={22} /><strong>No resident records available</strong><p>Records appear here when they are registered for this barangay.</p></div> :
-      <div className="ops-table-wrap"><table className="ops-table"><thead><tr><th>Resident</th><th>Household</th><th>Contact</th><th>Residency</th><th>Record</th></tr></thead><tbody>
-        {residents.data.map((resident) => {
+      <>
+      <div className="community-calendar-filters">
+        <label className="community-calendar-search"><Search size={16} /><input type="search" aria-label="Search resident records" value={residentSearch} onChange={(event) => setResidentSearch(event.target.value)} placeholder="Search name, phone, household, or address" /></label>
+        <label>Residency status<select value={residencyFilter} onChange={(event) => setResidencyFilter(event.target.value)}><option value="all">All statuses</option><option value="pending">Pending</option><option value="verified">Verified</option><option value="rejected">Rejected</option></select></label>
+      </div>
+      <p className="field-hint" aria-live="polite">Showing {filteredResidents.length} of {residents.data.length} resident {residents.data.length === 1 ? 'record' : 'records'}.</p>
+      {filteredResidents.length ? <div className="ops-table-wrap"><table className="ops-table"><thead><tr><th>Resident</th><th>Household</th><th>Contact</th><th>Residency</th><th>Record</th></tr></thead><tbody>
+        {filteredResidents.map((resident) => {
           const verification = verifications.data?.find((item) => item.resident_id === resident.id)
           return <tr key={resident.id}><td><strong>{resident.first_name} {resident.last_name}</strong><small>{resident.birth_date ? new Date(resident.birth_date + 'T00:00:00').toLocaleDateString() : 'Birth date not recorded'}</small></td><td>{resident.household?.household_code ?? '—'}<small>{resident.household?.purok ?? resident.household?.address_line ?? 'Address unavailable'}</small></td><td>{resident.phone ?? '—'}</td><td><StatusPill status={verification?.status ?? 'pending'} />{canVerify.data && <div className="row-actions"><button onClick={() => void verify(resident.id, 'verified')}>Verify</button><button onClick={() => void verify(resident.id, 'rejected')}>Reject</button></div>}</td><td><StatusPill status={resident.record_status} /></td></tr>
         })}
-      </tbody></table></div>}
+      </tbody></table></div> : <div className="ops-empty"><Search size={22} /><strong>No matching residents</strong><p>Try another search or choose a different residency status.</p></div>}
+      </>}
     {canCreate.isPending && <LoadingNotice compact />}
   </section>
 }

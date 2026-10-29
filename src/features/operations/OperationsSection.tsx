@@ -18,6 +18,8 @@ const SkEventsPage = lazy(() => import('./SkEventsPage').then((module) => ({ def
 const IncidentsPage = lazy(() => import('./IncidentsPage').then((module) => ({ default: module.IncidentsPage })))
 const PatrolPage = lazy(() => import('./PatrolPage').then((module) => ({ default: module.PatrolPage })))
 const DisasterAdvisoriesPage = lazy(() => import('./DisasterAdvisoriesPage').then((module) => ({ default: module.DisasterAdvisoriesPage })))
+const CommunityCalendarPage = lazy(() => import('./CommunityCalendarPage').then((module) => ({ default: module.CommunityCalendarPage })))
+const CommunityFeedbackPage = lazy(() => import('./CommunityFeedbackPage').then((module) => ({ default: module.CommunityFeedbackPage })))
 const SupportPage = lazy(() => import('./SupportPage').then((module) => ({ default: module.SupportPage })))
 
 function page(component: ComponentType) {
@@ -25,7 +27,7 @@ function page(component: ComponentType) {
   return <Suspense fallback={<div className="ops-loading" role="status">Loading workspace…</div>}><Page /></Suspense>
 }
 
-export type OperationSection = 'residents' | 'invitations' | 'documents' | 'announcements' | 'meetings' | 'archive' | 'finance' | 'committees' | 'projects' | 'referrals' | 'health-outreach' | 'sk-events' | 'sk-projects' | 'sk-accomplishments' | 'incidents' | 'patrols' | 'advisories' | 'support'
+export type OperationSection = 'residents' | 'invitations' | 'documents' | 'announcements' | 'meetings' | 'archive' | 'finance' | 'committees' | 'projects' | 'referrals' | 'health-outreach' | 'sk-events' | 'sk-projects' | 'sk-accomplishments' | 'incidents' | 'patrols' | 'advisories' | 'community-calendar' | 'feedback' | 'support'
 
 export function OperationsSection({ section }: { section: OperationSection }) {
   switch (section) {
@@ -46,6 +48,8 @@ export function OperationsSection({ section }: { section: OperationSection }) {
     case 'incidents': return page(IncidentsPage)
     case 'patrols': return page(PatrolPage)
     case 'advisories': return page(DisasterAdvisoriesPage)
+    case 'community-calendar': return page(CommunityCalendarPage)
+    case 'feedback': return page(CommunityFeedbackPage)
     case 'support': return page(SupportPage)
   }
 }

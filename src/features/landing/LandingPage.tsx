@@ -11,13 +11,14 @@ const features = [
 
 export function LandingPage() {
   return <div className="landing-page">
+    <a className="skip-link" href="#landing-main">Skip to main content</a>
     <header className="landing-nav">
       <a className="landing-brand" href="#home" aria-label="KABALIKAT home"><span className="landing-brand-mark"><HeartHandshake size={21} /></span><span><strong>KABALIKAT</strong><small>BY ARKBYTE TECHNOLOGIES</small></span></a>
       <nav aria-label="Main navigation"><a href="#features">What it does</a><a href="#plans">Plans</a><a href="#how-it-works">Getting started</a><a href="#privacy">Data privacy</a></nav>
       <Link className="landing-nav-cta" to="/sign-in">Sign in <ArrowRight size={16} /></Link>
     </header>
 
-    <main>
+    <main id="landing-main" tabIndex={-1}>
       <section className="landing-hero" id="home">
         <div className="landing-hero-copy">
           <span className="landing-eyebrow"><Building2 size={15} /> A connected workspace for barangays</span>

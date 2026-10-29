@@ -5,7 +5,7 @@ import { CheckCircle2, FolderKanban, Plus, Waypoints } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import { hasPermission } from './data'
 import { addBarangayProjectUpdate, createBarangayProject, listBarangayProjectUpdates, listBarangayProjects, updateBarangayProjectStatus, type BarangayProject, type BarangayProjectUpdate } from './projects-data'
-import { ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
+import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 import { formatDateTime } from './format'
 
 const projectSchema = z.object({ title: z.string().trim().min(3).max(180), description: z.string().trim().max(4000), start: z.string(), end: z.string() })
@@ -77,8 +77,11 @@ export function ProjectsPage() {
     <PageHeading title="Barangay projects" description="Track community projects, planned dates, status, and progress updates.">
       {canManage.data && <button className="button primary" onClick={() => setShowForm((visible) => !visible)}><Plus size={15} />New project</button>}
     </PageHeading>
+    {!tenantId && <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to view project status and progress." />}
+    {Boolean(tenantId) && canManage.isPending && <LoadingNotice compact />}
+    {canManage.error && <ErrorNotice message="Project management access could not be checked. Project records remain available under your current access; management controls are unavailable until permissions can be verified." />}
     {message && <div className="ops-success" role="status"><CheckCircle2 size={16} />{message}</div>}{error && <ErrorNotice message={error} />}
-    {!canManage.data && !canManage.isPending && <div className="ops-panel archive-access"><FolderKanban size={20} /><div><strong>Read-only project access</strong><p>Active barangay members can view project status. Creating projects and recording updates is limited to authorized officials.</p></div></div>}
+    {Boolean(tenantId) && !canManage.data && !canManage.isPending && !canManage.error && <div className="ops-panel archive-access"><FolderKanban size={20} /><div><strong>Read-only project access</strong><p>Active barangay members can view project status. Creating projects and recording updates is limited to authorized officials.</p></div></div>}
     {showForm && canManage.data && <form className="ops-panel ops-form" onSubmit={(event) => void createProject(event)}><div className="ops-panel-heading"><div><h2>New barangay project</h2><p>Project notes are separate from the official finance ledger.</p></div><FolderKanban size={19} /></div><div className="ops-form-grid"><label>Project title<input name="title" minLength={3} maxLength={180} required /></label><label>Planned start<input name="start" type="date" /></label><label>Planned end<input name="end" type="date" /></label><label className="span-two">Description<textarea name="description" maxLength={4000} /></label></div><div className="ops-form-actions"><button className="button primary" disabled={busy}>Create project</button></div></form>}
     {(projects.isPending || updates.isPending) && tenantId && <LoadingNotice />}
     {(projects.error || updates.error) && <ErrorNotice message="Unable to load project records." />}

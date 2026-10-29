@@ -5,7 +5,7 @@ import { AlertTriangle, CheckCircle2, Download, Paperclip, Siren, Upload } from 
 import { useAuth } from '../../auth/AuthProvider'
 import { hasPermission } from './data'
 import { addIncidentUpdate, assignIncident, createIncidentEvidenceDownloadUrl, escalateIncident, listIncidentAssignees, listIncidentEvents, listIncidentEvidence, listIncidents, submitIncident, transitionIncident, uploadIncidentEvidence } from './incident-data'
-import { ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
+import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 import { formatDateTime } from './format'
 
 const incidentSchema = z.object({ category: z.enum(['safety','hazard','disturbance','property','disaster','other']), severity: z.enum(['low','moderate','high','urgent']), location: z.string().trim().min(2).max(240), summary: z.string().trim().min(3).max(180), details: z.string().max(3000) })
@@ -128,6 +128,10 @@ export function IncidentsPage() {
       {canSubmit && <button className="button primary" onClick={() => setShowForm((visible) => !visible)}>Report an incident</button>}
     </PageHeading>
     <div className="ops-panel incident-guidance"><AlertTriangle size={19} /><p><strong>Immediate danger?</strong> Contact the appropriate emergency services directly. Submitting a report here does not contact responders. Avoid entering names, medical details, or other unnecessary personal information.</p></div>
+    {!tenantId && <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to view or submit incident reports." />}
+    {Boolean(tenantId) && (canCreate.isPending || canReport.isPending || canManage.isPending) && <LoadingNotice compact />}
+    {(canCreate.error || canReport.error || canManage.error) && <ErrorNotice message="Your incident workspace access could not be checked. Refresh the page or contact your barangay administrator." />}
+    {Boolean(tenantId) && !canCreate.isPending && !canReport.isPending && !canManage.isPending && !canCreate.error && !canReport.error && !canManage.error && !enabled && <EmptyNotice title="Incident workspace access is not enabled" detail="Ask your barangay administrator for incident reporting or management access if you need this workspace." />}
     {message && <div className="ops-success"><CheckCircle2 size={16} />{message}</div>}{error && <ErrorNotice message={error} />}
     {incidents.data && <div className="incident-summary" aria-label="Incident workload summary"><div><strong>{activeIncidents.length}</strong><span>Open reports</span></div><div><strong>{urgentOpen}</strong><span>High or urgent</span></div><div><strong>{canReport.data && !canCreate.data ? myOpenReports : assignedToMe}</strong><span>{canReport.data && !canCreate.data ? 'Your open reports' : 'Assigned to you'}</span></div></div>}
     {showForm && canSubmit && <form className="ops-panel ops-form" onSubmit={(event) => void create(event)}><div className="ops-panel-heading"><div><h2>New incident report</h2><p>Share only the minimum details needed to respond. Do not include names or medical information.</p></div><Siren size={19} /></div><div className="ops-form-grid">

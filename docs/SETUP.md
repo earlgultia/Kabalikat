@@ -13,7 +13,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-On Windows PowerShell, use `Copy-Item .env.example .env.local` for the copy step. Apply migrations `0001_foundation.sql` through `0031_incident_escalation_log.sql` in order to a disposable development Supabase project. The project must have Supabase Auth and Storage enabled. No seed data or privileged credentials are included.
+On Windows PowerShell, use `Copy-Item .env.example .env.local` for the copy step. Apply migrations `0001_foundation.sql` through `0057_scope_role_announcement_delivery.sql` in order to a disposable development Supabase project. The project must have Supabase Auth and Storage enabled. No seed data or privileged credentials are included.
 
 Without the environment variables the app renders a clear configuration notice and disables sign in. Apply migrations with the Supabase CLI after linking a project, or through the Supabase SQL editor. Do not point early development at a production database.
 

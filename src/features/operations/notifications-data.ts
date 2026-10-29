@@ -2,7 +2,7 @@ import { supabase } from '../../lib/supabase'
 
 export type CommunityNotification = {
   id: string
-  resource_type: 'announcement' | 'disaster_advisory' | 'resident_profile_change' | 'document_request'
+  resource_type: 'announcement' | 'disaster_advisory' | 'resident_profile_change' | 'document_request' | 'community_feedback'
   resource_id: string
   created_at: string
   read_at: string | null
@@ -24,6 +24,15 @@ export async function listCommunityNotifications(tenantId: string): Promise<Comm
     .eq('barangay_id', tenantId).order('created_at', { ascending: false }).limit(100)
   if (error) throw new Error(error.message)
   return (data ?? []) as CommunityNotification[]
+}
+
+export async function countUnreadCommunityNotifications(tenantId: string): Promise<number> {
+  const { count, error } = await client().from('community_notifications')
+    .select('id', { count: 'exact', head: true })
+    .eq('barangay_id', tenantId)
+    .is('read_at', null)
+  if (error) throw new Error(error.message)
+  return count ?? 0
 }
 
 export async function markCommunityNotificationRead(notificationId: string, tenantId: string) {

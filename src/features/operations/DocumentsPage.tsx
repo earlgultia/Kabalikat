@@ -194,6 +194,7 @@ export function DocumentsPage() {
     </PageHeading>
     {message && <div className="ops-success"><FileText size={16} />{message}</div>}
     {error && <ErrorNotice message={error} />}
+    {(canReadRequests.error || canReview.error || canIssue.error || canManageTypes.error) && <ErrorNotice message="Some document service permissions could not be checked. Related staff controls remain hidden until access can be verified; refresh the page or contact your barangay administrator." />}
     {isResident && <section className="ops-panel document-type-management" aria-labelledby="resident-document-catalog-title">
       <div className="ops-panel-heading"><div><h2 id="resident-document-catalog-title">Documents you can request</h2><p>Review the purpose and what to bring before starting an application.</p></div><ListChecks size={19} /></div>
       {types.isPending ? <LoadingNotice compact /> : types.error ? <ErrorNotice message={types.error.message} /> : enabledTypes.length ? <div className="document-type-list">{enabledTypes.map((type) => <article key={type.id}>
@@ -230,7 +231,7 @@ export function DocumentsPage() {
     {types.error && <ErrorNotice message={types.error.message} />}
     <div className="ops-section-title"><h2>Requests</h2><p>Residents see only their own private requests; authorized staff see their tenant queue.</p></div>
     {requests.data && requests.data.length > 0 && <div className="incident-filters"><label>Search requests<input type="search" value={requestSearch} onChange={(event) => setRequestSearch(event.target.value)} placeholder="Reference, resident, or document" /></label><label>Filter requests by status<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="all">All requests ({requests.data.length})</option>{[...new Set(requests.data.map((request) => request.status))].sort().map((status) => <option value={status} key={status}>{status.replaceAll('_', ' ')} ({requests.data.filter((request) => request.status === status).length})</option>)}</select></label></div>}
-    {requests.isPending ? <LoadingNotice /> : requests.error ? <ErrorNotice message={requests.error.message} /> : requests.data?.length ? visibleRequests.length ?
+    {!tenantId ? <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to view document services and requests." /> : requests.isPending ? <LoadingNotice /> : requests.error ? <ErrorNotice message={requests.error.message} /> : requests.data?.length ? visibleRequests.length ?
       <div className="ops-request-list">{visibleRequests.map((request) => {
         const isStaff = Boolean(canReview.data || canIssue.data)
         const requestEvents = activity.data?.filter((entry) => entry.request_id === request.id) ?? []

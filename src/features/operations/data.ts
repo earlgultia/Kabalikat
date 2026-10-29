@@ -26,6 +26,10 @@ export type ResidentPersonalDataExport = {
   }
   household: { household_code: string; address_line: string; purok: string | null } | null
   residency_checks: Array<{ status: string; created_at: string }>
+  profile_correction_requests: Array<{
+    requested_changes: { first_name: string | null; last_name: string | null; phone: string | null }
+    request_note: string | null; status: string; submitted_at: string; reviewed_at: string | null; decision_note: string | null
+  }>
   document_requests: Array<{
     reference_number: string; document_type: string | null; purpose: string; status: string; submitted_at: string
     issued_document: { issuance_number: string; issued_at: string; expires_at: string | null; status: string } | null
@@ -143,6 +147,10 @@ export async function getOwnResidentDataExport(tenantId: string): Promise<Reside
     .select('reference_number,purpose,status,submitted_at,document_type:document_types(name),issued:issued_documents(issuance_number,issued_at,expires_at,verification_status)')
     .eq('barangay_id', tenantId).eq('resident_id', resident.id).order('submitted_at', { ascending: false })
   if (ownRequestsError) throw new Error(ownRequestsError.message)
+  const { data: ownCorrections, error: ownCorrectionsError } = await supabaseClient.from('resident_profile_change_requests')
+    .select('proposed_first_name,proposed_last_name,proposed_phone,request_note,status,review_reason,created_at,reviewed_at')
+    .eq('barangay_id', tenantId).eq('resident_id', resident.id).order('created_at', { ascending: false })
+  if (ownCorrectionsError) throw new Error(ownCorrectionsError.message)
 
   const household = Array.isArray(resident.household) ? resident.household[0] : resident.household
   return {
@@ -154,6 +162,13 @@ export async function getOwnResidentDataExport(tenantId: string): Promise<Reside
     },
     household: household ?? null,
     residency_checks: (ownedVerifications ?? []).map((entry) => ({ status: entry.status, created_at: entry.created_at })),
+    profile_correction_requests: (ownCorrections ?? []).map((request) => ({
+      requested_changes: {
+        first_name: request.proposed_first_name, last_name: request.proposed_last_name, phone: request.proposed_phone,
+      },
+      request_note: request.request_note, status: request.status, submitted_at: request.created_at,
+      reviewed_at: request.reviewed_at, decision_note: request.review_reason,
+    })),
     document_requests: (ownedRequests ?? []).map((request) => {
       const documentType = Array.isArray(request.document_type) ? request.document_type[0] : request.document_type
       const issued = Array.isArray(request.issued) ? request.issued[0] : request.issued

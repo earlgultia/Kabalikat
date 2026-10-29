@@ -123,7 +123,11 @@ export function ArchivePage() {
     <PageHeading title="Barangay archive" description="Store and search private community files, with tenant permissions enforced on storage and metadata.">
       {canManage.data && <button className="button outline" onClick={() => void addFolder()}><FolderPlus size={16} />New folder</button>}
     </PageHeading>
-    {!canRead.isPending && !canRead.data && <div className="ops-panel archive-access"><ShieldCheck size={20} /><div><strong>Archive access is restricted</strong><p>Your current role cannot read this barangay archive.</p></div></div>}
+    {!tenantId && <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to open its private archive." />}
+    {Boolean(tenantId) && canRead.isPending && <LoadingNotice compact />}
+    {canRead.error && <ErrorNotice message="Your archive access could not be checked. Refresh the page or contact your barangay administrator." />}
+    {canManage.error && <ErrorNotice message="Archive management access could not be checked. Upload and folder controls are unavailable until it can be verified." />}
+    {Boolean(tenantId) && !canRead.isPending && !canRead.error && !canRead.data && <div className="ops-panel archive-access"><ShieldCheck size={20} /><div><strong>Archive access is restricted</strong><p>Your current role cannot read this barangay archive. Contact your barangay administrator if you need access.</p></div></div>}
     {message && <div className="ops-success"><Archive size={16} />{message}</div>}{error && <ErrorNotice message={error} />}
     {canRead.data && <>
       <div className="archive-toolbar">

@@ -1,14 +1,18 @@
 import { useState, type FormEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
-import { AlertTriangle, CheckCircle2, Megaphone } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ExternalLink, MapPin, Megaphone, Phone, Plus, Printer, ShieldCheck } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import { hasPermission } from './data'
-import { createDisasterAdvisory, listDisasterAdvisories, listDisasterAdvisoryEvents, publishDisasterAdvisory, resolveDisasterAdvisory } from './disaster-data'
-import { ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
+import { archiveDisasterEmergencyResource, createDisasterAdvisory, listDisasterAdvisories, listDisasterAdvisoryEvents, listDisasterEmergencyResourceActivity, listDisasterEmergencyResources, publishDisasterAdvisory, publishDisasterEmergencyResource, resolveDisasterAdvisory, saveDisasterEmergencyResource, type DisasterAdvisory, type DisasterEmergencyResource } from './disaster-data'
+import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 import { formatDateTime } from './format'
 
 const advisorySchema = z.object({ type: z.enum(['weather','flood','fire','earthquake','landslide','health','other']), severity: z.enum(['information','watch','warning','emergency']), title: z.string().trim().min(3).max(180), area: z.string().trim().min(2).max(240), instructions: z.string().trim().min(3).max(4000), expiry: z.string() })
+const resourceSchema = z.object({ type: z.enum(['emergency_contact','evacuation_center']), name: z.string().trim().min(2).max(120), phone: z.string().trim().max(40), address: z.string().trim().max(250), details: z.string().trim().max(1000) }).superRefine((value, context) => {
+  if (value.type === 'emergency_contact' && value.phone.length < 5) context.addIssue({ code: 'custom', path: ['phone'], message: 'Enter a phone number or hotline with at least 5 characters.' })
+  if (value.type === 'evacuation_center' && value.address.length < 3) context.addIssue({ code: 'custom', path: ['address'], message: 'Enter the evacuation center address.' })
+})
 
 export function DisasterAdvisoriesPage() {
   const { membership } = useAuth()
@@ -19,13 +23,88 @@ export function DisasterAdvisoriesPage() {
   const enabled = Boolean(tenantId && (canManage.data || canRead.data))
   const advisories = useQuery({ queryKey: ['disaster-advisories', tenantId], queryFn: () => listDisasterAdvisories(tenantId), enabled })
   const events = useQuery({ queryKey: ['disaster-advisory-events', tenantId], queryFn: () => listDisasterAdvisoryEvents(tenantId), enabled: Boolean(tenantId && canManage.data) })
+  const resources = useQuery({ queryKey: ['disaster-emergency-resources', tenantId], queryFn: () => listDisasterEmergencyResources(tenantId), enabled })
+  const resourceActivity = useQuery({ queryKey: ['disaster-emergency-resource-activity', tenantId], queryFn: () => listDisasterEmergencyResourceActivity(tenantId), enabled: Boolean(tenantId && canManage.data) })
   const [showForm, setShowForm] = useState(false)
+  const [showResourceForm, setShowResourceForm] = useState(false)
+  const [editingResource, setEditingResource] = useState<DisasterEmergencyResource | null>(null)
+  const [resourceTypeFilter, setResourceTypeFilter] = useState<'all' | DisasterEmergencyResource['resource_type']>('all')
+  const [resourceStatusFilter, setResourceStatusFilter] = useState<'all' | DisasterEmergencyResource['status']>('all')
+  const [resourceSearch, setResourceSearch] = useState('')
+  const [advisorySearch, setAdvisorySearch] = useState('')
+  const [advisorySeverityFilter, setAdvisorySeverityFilter] = useState<'all' | DisasterAdvisory['severity']>('all')
+  const [advisoryStatusFilter, setAdvisoryStatusFilter] = useState<'all' | DisasterAdvisory['status']>('all')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
 
   async function refresh() {
-    await Promise.all([queryClient.invalidateQueries({ queryKey: ['disaster-advisories', tenantId] }), queryClient.invalidateQueries({ queryKey: ['disaster-advisory-events', tenantId] })])
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['disaster-advisories', tenantId] }),
+      queryClient.invalidateQueries({ queryKey: ['disaster-advisory-events', tenantId] }),
+      queryClient.invalidateQueries({ queryKey: ['disaster-emergency-resources', tenantId] }),
+      queryClient.invalidateQueries({ queryKey: ['disaster-emergency-resource-activity', tenantId] }),
+    ])
+  }
+
+  const visibleResources = (resources.data ?? []).filter((resource) => {
+    const term = resourceSearch.trim().toLocaleLowerCase()
+    const matchesType = resourceTypeFilter === 'all' || resource.resource_type === resourceTypeFilter
+    const matchesStatus = resourceStatusFilter === 'all' || resource.status === resourceStatusFilter
+    const matchesSearch = !term || [resource.name, resource.phone, resource.address, resource.details].some((value) => value?.toLocaleLowerCase().includes(term))
+    return matchesType && matchesStatus && matchesSearch
+  })
+  const visibleAdvisories = (advisories.data ?? []).filter((advisory) => {
+    const term = advisorySearch.trim().toLocaleLowerCase()
+    const matchesSeverity = advisorySeverityFilter === 'all' || advisory.severity === advisorySeverityFilter
+    const matchesStatus = advisoryStatusFilter === 'all' || advisory.status === advisoryStatusFilter
+    const matchesSearch = !term || [advisory.title, advisory.affected_area, advisory.instructions].some((value) => value.toLocaleLowerCase().includes(term))
+    return matchesSeverity && matchesStatus && matchesSearch
+  })
+
+  async function saveResource(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const form = event.currentTarget
+    const parsed = resourceSchema.safeParse(Object.fromEntries(new FormData(form).entries()))
+    if (!parsed.success) { setError(parsed.error.issues[0]?.message ?? 'Review the emergency resource details.'); return }
+    setBusy(true); setError(''); setMessage('')
+    try {
+      await saveDisasterEmergencyResource({ tenantId, resourceId: editingResource?.id ?? null, resourceType: parsed.data.type, name: parsed.data.name, phone: parsed.data.phone, address: parsed.data.address, details: parsed.data.details })
+      await refresh(); form.reset(); setShowResourceForm(false); setEditingResource(null); setMessage(editingResource ? 'Emergency resource draft updated.' : 'Emergency resource saved as a draft. Review it before publishing.')
+    } catch (err) { setError(err instanceof Error ? err.message : 'Unable to save this emergency resource.') }
+    finally { setBusy(false) }
+  }
+
+  function editResource(resource: DisasterEmergencyResource) {
+    setEditingResource(resource)
+    setShowResourceForm(true)
+    requestAnimationFrame(() => document.getElementById('emergency-resource-editor')?.scrollIntoView({ behavior: 'auto', block: 'center' }))
+  }
+
+  function printEmergencyDirectory() {
+    const cleanup = () => document.body.classList.remove('print-emergency-directory')
+    window.addEventListener('afterprint', cleanup, { once: true })
+    document.body.classList.add('print-emergency-directory')
+    window.print()
+  }
+
+  async function publishResource(id: string) {
+    if (!window.confirm('Publish this emergency resource to barangay members? Verify the contact details and location first.')) return
+    setBusy(true); setError(''); setMessage('')
+    try { await publishDisasterEmergencyResource(id); await refresh(); setMessage('Emergency resource published.') }
+    catch (err) { setError(err instanceof Error ? err.message : 'Unable to publish this emergency resource.') }
+    finally { setBusy(false) }
+  }
+
+  async function archiveResource(id: string) {
+    if (!window.confirm('Archive this resource? It will no longer appear in the resident directory.')) return
+    const note = window.prompt('Optional reason for archiving this resource:')
+    if (note === null) return
+    if (note.trim().length > 1000) { setError('Archive note cannot exceed 1000 characters.'); return }
+    setBusy(true); setError(''); setMessage('')
+    try { await archiveDisasterEmergencyResource(id, note); await refresh(); setMessage('Emergency resource archived.') }
+    catch (err) { setError(err instanceof Error ? err.message : 'Unable to archive this resource.') }
+    finally { setBusy(false) }
   }
 
   async function create(event: FormEvent<HTMLFormElement>) {
@@ -63,7 +142,35 @@ export function DisasterAdvisoriesPage() {
       {canManage.data && <button className="button primary" onClick={() => setShowForm((visible) => !visible)}>New advisory</button>}
     </PageHeading>
     <div className="ops-panel incident-guidance"><AlertTriangle size={19} /><p><strong>Immediate danger?</strong> Contact appropriate emergency services directly. This advisory board does not send alerts or contact responders.</p></div>
+    {(canManage.isPending || canRead.isPending) && <LoadingNotice compact />}
+    {(canManage.error || canRead.error) && <ErrorNotice message="Your disaster workspace access could not be checked. Refresh the page or contact your barangay administrator." />}
+    {!canManage.isPending && !canRead.isPending && !canManage.error && !canRead.error && !enabled && <EmptyNotice title="Disaster workspace access is not enabled" detail="Ask your barangay administrator for disaster read or management access if you need to view local advisories and emergency resources." />}
     {message && <div className="ops-success"><CheckCircle2 size={16} />{message}</div>}{error && <ErrorNotice message={error} />}
+    <section className="ops-panel emergency-resource-panel">
+      <div className="ops-panel-heading"><div><h2>Emergency contacts and evacuation centers</h2><p>Use verified contact details and locations published by your barangay.</p></div><ShieldCheck size={19} /></div>
+      <button className="button outline emergency-resource-print-button" disabled={resources.isPending || !resources.data?.some((resource) => resource.status === 'published')} onClick={printEmergencyDirectory}><Printer size={15} />Print published directory</button>
+      {canManage.data && <button className="button outline" onClick={() => { setEditingResource(null); setShowResourceForm((visible) => !visible) }}><Plus size={15} />{showResourceForm && !editingResource ? 'Close form' : 'Add emergency resource'}</button>}
+      <div className="emergency-resource-filters"><label>Search resources<input value={resourceSearch} onChange={(event) => setResourceSearch(event.target.value)} placeholder="Name, phone, or address" /></label><label>Type<select value={resourceTypeFilter} onChange={(event) => setResourceTypeFilter(event.target.value as typeof resourceTypeFilter)}><option value="all">All resource types</option><option value="emergency_contact">Emergency contacts</option><option value="evacuation_center">Evacuation centers</option></select></label>{canManage.data && <label>Status<select value={resourceStatusFilter} onChange={(event) => setResourceStatusFilter(event.target.value as typeof resourceStatusFilter)}><option value="all">All statuses</option><option value="draft">Draft</option><option value="published">Published</option><option value="archived">Archived</option></select></label>}</div>
+      {showResourceForm && canManage.data && <form key={editingResource?.id ?? 'new'} id="emergency-resource-editor" aria-label={editingResource ? 'Edit emergency resource draft' : 'Add emergency resource'} className="ops-form emergency-resource-form" onSubmit={(event) => void saveResource(event)}><div className="ops-form-grid">
+        <label>Resource type<select name="type" defaultValue={editingResource?.resource_type ?? 'emergency_contact'}><option value="emergency_contact">Emergency contact</option><option value="evacuation_center">Evacuation center</option></select></label>
+        <label>Name<input name="name" required minLength={2} maxLength={120} defaultValue={editingResource?.name ?? ''} placeholder="Office, hotline, or center name" /></label>
+        <label>Phone or hotline <span className="field-hint">Required for an emergency contact</span><input name="phone" type="tel" maxLength={40} defaultValue={editingResource?.phone ?? ''} /></label>
+        <label>Address <span className="field-hint">Required for an evacuation center</span><input name="address" maxLength={250} defaultValue={editingResource?.address ?? ''} /></label>
+        <label className="span-two">Additional public details <span className="field-hint">Optional; do not include private personal information</span><textarea name="details" rows={3} maxLength={1000} defaultValue={editingResource?.details ?? ''} /></label>
+      </div><div className="ops-form-actions"><span className="field-hint">{editingResource ? 'This draft remains private until published.' : 'New entries remain private drafts until published.'}</span><button type="button" className="button outline" onClick={() => { setEditingResource(null); setShowResourceForm(false) }}>Cancel</button><button className="button primary" disabled={busy}>{busy ? 'Saving…' : editingResource ? 'Save changes' : 'Save draft'}</button></div></form>}
+      {resources.isPending && enabled && <LoadingNotice compact />}{resources.error && <ErrorNotice message={resources.error.message} />}
+      {canManage.data && resourceActivity.error && <ErrorNotice message={resourceActivity.error.message} />}
+      {!resources.isPending && !resources.error && resources.data?.length === 0 && <p className="field-hint">No emergency resources have been added yet.</p>}
+      {!resources.isPending && !resources.error && (resources.data?.length ?? 0) > 0 && visibleResources.length === 0 && <p className="field-hint">No resources match these filters. Change the type, status, or search text.</p>}
+      <div className="emergency-resource-list">{visibleResources.map((resource) => {
+        const activity = resourceActivity.data?.filter((entry) => entry.resource_id === resource.id) ?? []
+        return <article className={`emergency-resource-card emergency-resource-${resource.status}`} key={resource.id}>
+          <header><div><StatusPill status={resource.status} /><span>{resource.resource_type === 'emergency_contact' ? 'Emergency contact' : 'Evacuation center'}</span></div>{canManage.data && resource.status !== 'archived' && <div className="row-actions">{resource.status === 'draft' && <><button disabled={busy} onClick={() => editResource(resource)}>Edit draft</button><button disabled={busy} onClick={() => void publishResource(resource.id)}>Publish</button></>}<button className="danger-action" disabled={busy} onClick={() => void archiveResource(resource.id)}>Archive</button></div>}</header>
+          <h3>{resource.name}</h3>{resource.phone && <a href={`tel:${resource.phone.replace(/[^0-9+]/g, '')}`}><Phone size={14} />{resource.phone}</a>}{resource.address && <p><MapPin size={14} />{resource.address}</p>}{resource.resource_type === 'evacuation_center' && resource.address && <a className="emergency-resource-map-link" aria-label="Open this evacuation center in Google Maps (opens in a new tab)" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(resource.address)}`} target="_blank" rel="noreferrer"><ExternalLink size={14} />Open location in Google Maps</a>}{resource.details && <p className="emergency-resource-details">{resource.details}</p>}
+          {canManage.data && <details className="incident-history"><summary>Change history ({activity.length})</summary><ol>{activity.map((entry) => <li key={`${entry.action}-${entry.created_at}`}><strong>{entry.action}</strong><span>{formatDateTime(entry.created_at)} · {entry.actor_name}</span>{entry.note && <p>{entry.note}</p>}</li>)}</ol></details>}
+        </article>
+      })}</div>
+    </section>
     {showForm && canManage.data && <form className="ops-panel ops-form" onSubmit={(event) => void create(event)}><div className="ops-panel-heading"><div><h2>Draft a disaster advisory</h2><p>Verify the information and instructions before publishing.</p></div><Megaphone size={19} /></div><div className="ops-form-grid">
       <label>Type<select name="type"><option value="weather">Weather</option><option value="flood">Flood</option><option value="fire">Fire</option><option value="earthquake">Earthquake</option><option value="landslide">Landslide</option><option value="health">Public health</option><option value="other">Other</option></select></label>
       <label>Severity<select name="severity"><option value="information">Information</option><option value="watch">Watch</option><option value="warning">Warning</option><option value="emergency">Emergency</option></select></label>
@@ -74,7 +181,9 @@ export function DisasterAdvisoriesPage() {
     </div><div className="ops-form-actions"><button className="button primary" disabled={busy}>Save draft</button></div></form>}
     {advisories.isPending && enabled && <LoadingNotice />}{advisories.error && <ErrorNotice message={advisories.error.message} />}
     {advisories.data?.length === 0 && <div className="ops-empty"><Megaphone size={22} /><strong>No advisories available</strong><p>Published disaster advisories will appear here.</p></div>}
-    <div className="advisory-list">{advisories.data?.map((advisory) => {
+    {advisories.data && advisories.data.length > 0 && <div className="advisory-filters"><label>Search advisories<input value={advisorySearch} onChange={(event) => setAdvisorySearch(event.target.value)} placeholder="Title, affected area, or instructions" /></label><label>Severity<select value={advisorySeverityFilter} onChange={(event) => setAdvisorySeverityFilter(event.target.value as typeof advisorySeverityFilter)}><option value="all">All severities</option><option value="information">Information</option><option value="watch">Watch</option><option value="warning">Warning</option><option value="emergency">Emergency</option></select></label>{canManage.data && <label>Status<select value={advisoryStatusFilter} onChange={(event) => setAdvisoryStatusFilter(event.target.value as typeof advisoryStatusFilter)}><option value="all">All statuses</option><option value="draft">Draft</option><option value="published">Published</option><option value="resolved">Resolved</option></select></label>}</div>}
+    {advisories.data && advisories.data.length > 0 && visibleAdvisories.length === 0 && <p className="field-hint">No advisories match these filters. Change the search, severity, or status.</p>}
+    <div className="advisory-list">{visibleAdvisories.map((advisory) => {
       const expired = advisory.expires_at ? new Date(advisory.expires_at).getTime() <= Date.now() : false
       const advisoryEvents = events.data?.filter((item) => item.advisory_id === advisory.id) ?? []
       return <article className={`ops-panel advisory-card advisory-${advisory.severity}`} key={advisory.id}>
