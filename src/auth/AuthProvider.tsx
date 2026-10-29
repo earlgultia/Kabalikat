@@ -127,7 +127,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
       if (authError) throw authError
     },
-    signOut: async () => { if (supabase) await supabase.auth.signOut() },
+    signOut: async () => {
+      if (supabase) {
+        const { error: signOutError } = await supabase.auth.signOut()
+        if (signOutError) throw signOutError
+      }
+      clearTenantData(knownTenantIds.current)
+      knownTenantIds.current = []
+      currentUserId.current = null
+      setSession(null)
+      setMembership(null)
+      setMemberships([])
+      setIsPlatformAdmin(false)
+      setError(null)
+      setLoading(false)
+    },
   }), [session, membership, memberships, isPlatformAdmin, loading, error, clearTenantData])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

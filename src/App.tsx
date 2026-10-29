@@ -102,6 +102,7 @@ function PlatformWorkspace() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [accountSecurityOpen, setAccountSecurityOpen] = useState(false)
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false)
+  const [logoutError, setLogoutError] = useState('')
   const subscriptionSummary = useQuery({ queryKey: ['platform-subscriptions'], queryFn: listSubscriptionOverview, enabled: activePage === 'overview', staleTime: 60_000 })
   const now = Date.now()
   const needsSubscriptionReview = subscriptionSummary.data?.filter((row) =>
@@ -129,8 +130,13 @@ function PlatformWorkspace() {
   const pageTitle = activePage === 'support' ? 'Support queue' : activePage === 'onboarding' ? 'Barangay onboarding' : activePage === 'subscriptions' ? 'Subscriptions & plans' : 'Overview'
   async function logout() {
     setLogoutConfirmOpen(false)
-    try { await signOut() }
-    finally { navigate('/sign-in', { replace: true }) }
+    setLogoutError('')
+    try {
+      await signOut()
+      navigate('/sign-in', { replace: true })
+    } catch {
+      setLogoutError('We could not sign you out. Check your connection and try again.')
+    }
   }
   return <div className="app-shell platform-shell"><a className="skip-link" href="#main-content">Skip to main content</a>
     <aside className={`sidebar platform-sidebar ${menuOpen ? 'open' : ''}`}>
@@ -141,7 +147,7 @@ function PlatformWorkspace() {
       <div className="sidebar-bottom"><div className="user-card"><div className="avatar">{user?.email?.[0]?.toUpperCase() ?? 'A'}</div><div className="user-details"><strong>{user?.email}</strong><span>Platform administrator</span></div></div></div>
     </aside>
     <main className="main-area platform-main"><header className="topbar platform-topbar"><button type="button" className="icon-button mobile-menu" onClick={() => setMenuOpen(true)} aria-label="Open platform menu" aria-expanded={menuOpen}><Menu size={20} /></button><div className="crumb">Platform <span>/</span> {pageTitle}</div><div className="top-actions"><button ref={accountSecurityOpenerRef} type="button" className="top-avatar account-avatar" onClick={() => setAccountSecurityOpen(true)} aria-label="Open account security">{user?.email?.[0]?.toUpperCase() ?? 'A'}</button><button type="button" className="platform-logout" onClick={() => setLogoutConfirmOpen(true)} aria-label="Sign out"><LogOut size={17} /><span>Sign out</span></button></div></header>
-      <div className="content-wrap platform-content" id="main-content" tabIndex={-1}>{activePage === 'onboarding' ? <OnboardingPage /> : activePage === 'support' ? <Suspense fallback={<div className="ops-loading" role="status">Loading support queue…</div>}><PlatformSupportPage platformAdmin /></Suspense> : activePage === 'subscriptions' ? <Suspense fallback={<div className="ops-loading" role="status">Loading subscriptions…</div>}><PlatformSubscriptionsPage /></Suspense> : <><div className="welcome-row"><div><div className="eyebrow">ARKBYTE TECHNOLOGIES</div><h1>Platform overview</h1><p>Manage KABALIKAT service operations from the platform workspace.</p></div><span className="role-pill">Platform administrator</span></div>
+      <div className="content-wrap platform-content" id="main-content" tabIndex={-1}>{logoutError && <div className="error-banner" role="alert">{logoutError}</div>}{activePage === 'onboarding' ? <OnboardingPage /> : activePage === 'support' ? <Suspense fallback={<div className="ops-loading" role="status">Loading support queue…</div>}><PlatformSupportPage platformAdmin /></Suspense> : activePage === 'subscriptions' ? <Suspense fallback={<div className="ops-loading" role="status">Loading subscriptions…</div>}><PlatformSubscriptionsPage /></Suspense> : <><div className="welcome-row"><div><div className="eyebrow">ARKBYTE TECHNOLOGIES</div><h1>Platform overview</h1><p>Manage KABALIKAT service operations from the platform workspace.</p></div><span className="role-pill">Platform administrator</span></div>
         <div className="setup-banner"><div className="setup-icon"><ShieldCheck size={21} /></div><div><strong>Platform access verified</strong><p>This account is listed in the protected platform administrator registry.</p></div></div>
         {subscriptionSummary.isPending && <div className="dashboard-metrics-loading" role="status">Loading subscription review summary…</div>}
         {subscriptionSummary.error && <div className="error-banner" role="alert">Subscription review counts are unavailable. Open subscriptions to refresh the full records.</div>}
@@ -188,6 +194,7 @@ function Workspace() {
   const [toolQuery, setToolQuery] = useState('')
   const [accountSecurityOpen, setAccountSecurityOpen] = useState(false)
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false)
+  const [logoutError, setLogoutError] = useState('')
   const [updatesOpen, setUpdatesOpen] = useState(false)
   const dialogOpenerRef = useRef<HTMLElement | null>(null)
   const wasDialogOpenRef = useRef(false)
@@ -205,8 +212,13 @@ function Workspace() {
   const canReadCommunityCalendar = nav.some((item) => item.section === 'community-calendar' && (item.roles.length === 0 || item.roles.includes(membership?.role?.key ?? '')))
   async function logout() {
     setLogoutConfirmOpen(false)
-    try { await signOut() }
-    finally { navigate('/sign-in', { replace: true }) }
+    setLogoutError('')
+    try {
+      await signOut()
+      navigate('/sign-in', { replace: true })
+    } catch {
+      setLogoutError('We could not sign you out. Check your connection and try again.')
+    }
   }
   const upcomingEvents = useQuery({ queryKey: ['community-calendar-preview', membership?.barangay_id], queryFn: () => listUpcomingCommunityEvents(membership!.barangay_id, 3), enabled: Boolean(membership?.barangay_id && canReadCommunityCalendar && activeSection === 'overview'), staleTime: 60_000 })
   const dashboard = useQuery({ queryKey: ['workspace-dashboard', membership?.barangay_id], queryFn: () => getWorkspaceDashboardMetrics(membership!.barangay_id), enabled: Boolean(membership?.barangay_id && activeSection === 'overview'), staleTime: 60_000 })
@@ -299,7 +311,7 @@ function Workspace() {
     {menuOpen && <button className="scrim" onClick={() => setMenuOpen(false)} aria-label="Close navigation" />}
     <main className="main-area"><header className="topbar"><div className="crumb">Workspace <span>/</span> {nav.find((item) => item.section === activeSection)?.label ?? 'Overview'}</div><div className="top-actions"><button className="search-control" onClick={(event) => { dialogOpenerRef.current = event.currentTarget; setToolFinderOpen(true) }} aria-label="Find a workspace tool"><Search size={17} /><span>Find a tool</span><kbd>Ctrl K</kbd></button><button className="icon-button search-control-mobile" onClick={(event) => { dialogOpenerRef.current = event.currentTarget; setToolFinderOpen(true) }} aria-label="Find a workspace tool"><Search size={18} /></button><button className="icon-button notification" aria-label={unreadNotificationCount.isError ? 'Open community updates; unread count unavailable' : unreadCount ? 'Open community updates, ' + unreadCount + ' unread' : 'Open community updates'} aria-haspopup="dialog" onClick={(event) => { dialogOpenerRef.current = event.currentTarget; setUpdatesOpen(true) }} disabled={!membership}><Bell size={19} />{Boolean(unreadCount && unreadCount > 0) && <span className="notification-badge" aria-hidden="true">{(unreadCount ?? 0) > 99 ? '99+' : (unreadCount ?? 0)}</span>}</button><button type="button" className="top-avatar account-avatar" onClick={(event) => { dialogOpenerRef.current = event.currentTarget; setAccountSecurityOpen(true) }} aria-label="Open account security">{user.email?.[0]?.toUpperCase() ?? 'U'}</button></div></header>
       <div className="content-wrap" id="main-content" tabIndex={-1}>
-        {error && <div className="error-banner" role="alert">{error}</div>}
+        {error && <div className="error-banner" role="alert">{error}</div>}{logoutError && <div className="error-banner" role="alert">{logoutError}</div>}
         {!membership ? <section className="empty-state"><div className="empty-icon"><Building2 size={25} /></div><h1>No barangay workspace yet</h1><p>Your account is signed in, but it has no active barangay membership. Ask an authorized administrator to invite you. Access is granted only after that membership is provisioned.</p><div className="empty-foot"><ShieldCheck size={16} />Your account cannot select or change its own tenant.</div></section> : activeSection !== 'overview' ? <OperationsSection section={activeSection} /> : <>
           <div className="welcome-row"><div><div className="eyebrow">{barangay?.municipality}, {barangay?.province}</div><h1>Good day, {user.email?.split('@')[0]}</h1><p>Here’s what’s happening in your community today.</p></div><div className="workspace-date"><CalendarDays size={17} /><span>{new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric' }).format(new Date())}</span></div></div>
           <div className="setup-banner"><div className="setup-icon"><CheckCircle2 size={21} /></div><div><strong>Your workspace overview is ready</strong><p>Counts below are limited to information your assigned role can access.</p></div></div>

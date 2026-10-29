@@ -9,14 +9,14 @@ export function LoadingNotice({ compact = false }: { compact?: boolean }) {
   return <div className={compact ? 'ops-loading compact' : 'ops-loading'}><LoaderCircle size={17} className="spin" />Loading authorized records…</div>
 }
 
-export function ErrorNotice({ message }: { message: string }) {
+export function ErrorNotice({ message, onRetry, retrying = false }: { message: string; onRetry?: () => void; retrying?: boolean }) {
   const detail = message.toLowerCase()
   const safeMessage = detail.includes('not authorized') || detail.includes('permission') || detail.includes('row-level security')
     ? 'Your account does not have access to this action.'
     : detail.includes('network') || detail.includes('fetch')
       ? 'The service could not be reached. Check your connection and try again.'
       : 'We could not complete that action. Check the details and try again.'
-  return <div className="ops-error" role="alert"><AlertCircle size={17} /><span>{safeMessage}</span></div>
+  return <div className="ops-error" role="alert"><AlertCircle size={17} /><span>{safeMessage}</span>{onRetry && <button type="button" className="ops-error-retry" onClick={onRetry} disabled={retrying}>{retrying ? 'Retrying…' : 'Try again'}</button>}</div>
 }
 
 export function StatusPill({ status }: { status: string }) {

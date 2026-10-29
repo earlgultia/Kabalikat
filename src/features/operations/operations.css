@@ -42,6 +42,9 @@
 .ops-success { color: #446c49; background: #edf6e9; border: 1px solid #dcebd5; }
 .ops-error { color: #9a5140; background: #fff2ee; border: 1px solid #f0d8d0; }
 .ops-error svg { flex: none; }
+.ops-error-retry { margin-left: auto; flex: none; border: 0; padding: 5px 9px; border-radius: 6px; color: inherit; background: rgb(255 255 255 / 75%); font: inherit; font-weight: 700; cursor: pointer; }
+.ops-error-retry:disabled { cursor: wait; opacity: .7; }
+.ops-error-retry:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
 .ops-loading { min-height: 120px; display: flex; justify-content: center; align-items: center; gap: 8px; color: #7c8a81; font-size: 11px; }
 .ops-loading.compact { min-height: 32px; justify-content: flex-start; font-size: 9px; }
 .spin { animation: spin .8s linear infinite; }

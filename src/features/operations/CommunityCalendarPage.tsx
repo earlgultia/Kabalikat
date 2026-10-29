@@ -85,7 +85,7 @@ export function CommunityCalendarPage() {
       <button className="button outline community-calendar-download" type="button" disabled={!visibleEvents.length} onClick={downloadCalendar}><Download size={15} />Download calendar file</button>
     </div>}
     {events.isPending && barangayId && <LoadingNotice />}
-    {events.error && <ErrorNotice message={events.error.message} />}
+    {events.error && <ErrorNotice message={events.error.message} onRetry={() => void events.refetch()} retrying={events.isFetching} />}
     {!events.isPending && !events.error && events.data?.length === 0 && <div className="ops-empty"><CalendarDays size={22} /><strong>No upcoming community events</strong><p>Published SK programs and health outreach schedules will appear here.</p></div>}
     {events.data && events.data.length > 0 && visibleEvents.length === 0 && <div className="ops-empty"><CalendarDays size={22} /><strong>No matching events</strong><p>Try another event name, location, or event type.</p></div>}
     <div className="community-calendar-list">{visibleEvents.map((event) => <article className="ops-panel community-calendar-card" key={`${event.source}-${event.id}`}>
