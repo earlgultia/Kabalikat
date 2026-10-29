@@ -790,3 +790,103 @@
 .referral-confirm { grid-column: 1 / -1; display: flex!important; flex-direction: row; align-items: flex-start; gap: 9px!important; padding: 10px; background: #f4f7f1; border-radius: 7px; line-height: 1.5; }
 .referral-confirm input { flex: none; width: 16px; height: 16px; min-height: 16px!important; margin: 0; accent-color: #28674f; }
 @media(max-width:650px) { .referral-card > header { flex-direction: column; } .referral-direction { text-align: left; } .referral-detail-grid { grid-template-columns: 1fr; } }
+
+/* Shared layout guards for every role's workspace tools. */
+.workspace-shell .operation-page,
+.workspace-shell .operation-page * { min-width: 0; }
+.workspace-shell .operation-page :where(h1,h2,h3,h4,p,li,dd,dt,strong,small,span,label) { overflow-wrap: anywhere; }
+.workspace-shell .operation-page :where(input,select,textarea,button) { max-width: 100%; }
+.workspace-shell .operation-heading,
+.workspace-shell .ops-panel-heading,
+.workspace-shell .ops-section-title,
+.workspace-shell .ops-form-actions,
+.workspace-shell .row-actions,
+.workspace-shell .archive-toolbar,
+.workspace-shell .archive-document-actions,
+.workspace-shell .meeting-actions,
+.workspace-shell .finance-review-actions,
+.workspace-shell .meeting-records-heading { flex-wrap: wrap; }
+.workspace-shell .operation-heading,
+.workspace-shell .ops-panel-heading,
+.workspace-shell .ops-section-title { align-items: flex-start; gap: 12px 16px; }
+.workspace-shell .operation-heading > div,
+.workspace-shell .ops-panel-heading > div,
+.workspace-shell .ops-section-title > div { min-width: 0; flex: 1 1 260px; }
+.workspace-shell .operation-heading > button { align-self: flex-start; flex: 0 1 auto; }
+.workspace-shell .ops-form-grid > *,
+.workspace-shell .finance-report > *,
+.workspace-shell .incident-summary > *,
+.workspace-shell .meeting-record-grid > *,
+.workspace-shell .subscription-table-controls > * { min-width: 0; }
+.workspace-shell .ops-form-grid input,
+.workspace-shell .ops-form-grid select,
+.workspace-shell .ops-form-grid textarea,
+.workspace-shell .finance-report input,
+.workspace-shell .finance-amendment-form input,
+.workspace-shell .finance-amendment-form textarea,
+.workspace-shell .support-ticket-controls select,
+.workspace-shell .support-status-control select,
+.workspace-shell .sk-update-form input,
+.workspace-shell .sk-update-form select,
+.workspace-shell .sk-update-form textarea { max-width: 100%; width: 100%; }
+.workspace-shell .ops-table-wrap,
+.workspace-shell .subscription-table-wrap { max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; }
+.workspace-shell .ops-request-card,
+.workspace-shell .incident-card,
+.workspace-shell .support-ticket,
+.workspace-shell .referral-card,
+.workspace-shell .sk-project-card,
+.workspace-shell .finance-budget,
+.workspace-shell .meeting-card { min-width: 0; }
+.workspace-shell .ops-request-card,
+.workspace-shell .incident-card > header,
+.workspace-shell .support-ticket > header,
+.workspace-shell .sk-project-header,
+.workspace-shell .finance-budget-head,
+.workspace-shell .finance-transaction-main,
+.workspace-shell .meeting-card-top,
+.workspace-shell .meeting-records-heading { flex-wrap: wrap; }
+.workspace-shell .ops-request-card:has(.resident-document-timeline) { grid-template-columns: minmax(0, 1fr) auto; }
+
+@media (max-width: 900px) {
+  .workspace-shell .operation-heading { margin-bottom: 20px; }
+  .workspace-shell .operation-heading > :last-child:not(button) { display: flex; flex: 1 1 100%; flex-wrap: wrap; gap: 9px; }
+  .workspace-shell .ops-panel { padding: clamp(15px, 2.5vw, 20px); }
+  .workspace-shell .ops-panel-heading { margin-bottom: 14px; }
+  .workspace-shell .ops-request-card { gap: 12px; }
+  .workspace-shell .request-status { flex: 1 1 100%; justify-content: flex-start; }
+  .workspace-shell .finance-report { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .workspace-shell .finance-report > div,
+  .workspace-shell .finance-report > small { grid-column: 1 / -1; }
+  .workspace-shell .archive-toolbar { align-items: stretch; }
+  .workspace-shell .archive-search { min-width: min(200px, 100%); }
+  .workspace-shell .support-ticket > header { align-items: flex-start; flex-direction: column; }
+  .workspace-shell .support-ticket > header > small { text-align: left; }
+  .workspace-shell .support-status-control { max-width: 100%; width: 100%; }
+  .workspace-shell .support-ticket-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .workspace-shell .support-ticket-controls > label:first-child,
+  .workspace-shell .support-ticket-controls > .text-action { grid-column: 1 / -1; }
+}
+
+@media (max-width: 650px) {
+  .workspace-shell .operation-heading { gap: 9px; }
+  .workspace-shell .operation-heading > :last-child:not(button) { width: 100%; }
+  .workspace-shell .ops-panel { padding: 15px; }
+  .workspace-shell .ops-form-grid { grid-template-columns: minmax(0, 1fr); }
+  .workspace-shell .span-two { grid-column: auto; }
+  .workspace-shell .ops-form-actions { align-items: stretch; flex-direction: column; }
+  .workspace-shell .ops-request-card,
+  .workspace-shell .incident-card > header,
+  .workspace-shell .sk-project-header { align-items: flex-start; flex-direction: column; }
+  .workspace-shell .ops-request-card:has(.resident-document-timeline) { grid-template-columns: minmax(0, 1fr); }
+  .workspace-shell .request-status { justify-content: flex-start; }
+  .workspace-shell .finance-report { grid-template-columns: minmax(0, 1fr); }
+  .workspace-shell .finance-report > * { grid-column: 1 / -1; }
+  .workspace-shell .archive-toolbar { flex-direction: column; }
+  .workspace-shell .archive-folder-select { justify-content: space-between; }
+  .workspace-shell .archive-folder-select select { flex: 1; max-width: none; }
+  .workspace-shell .support-ticket-controls { grid-template-columns: minmax(0, 1fr); }
+  .workspace-shell .support-ticket-controls > * { grid-column: 1 / -1; }
+  .workspace-shell .committee-tasks > ul > li { flex-direction: column; }
+  .workspace-shell .committee-task-status { align-items: flex-start; display: flex; flex-wrap: wrap; }
+}
