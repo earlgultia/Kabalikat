@@ -1,7 +1,7 @@
 import { lazy, Suspense, useState, type FormEvent } from 'react'
 import { Link, Navigate, Route, Routes, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Activity, AlertTriangle, Archive, ArrowLeft, ArrowRight, Bell, BookOpen, Building2, CalendarDays, CheckCircle2, ChevronDown, CircleDollarSign, CircleHelp, ClipboardList, Clock3, FileCheck2, FileText, Headset, HeartHandshake, LayoutDashboard, LogOut, Megaphone, Menu, Search, ShieldCheck, UserPlus, Users, UsersRound, WalletCards, X } from 'lucide-react'
+import { Activity, AlertTriangle, Archive, ArrowLeft, ArrowRight, Bell, BookOpen, Building2, CalendarDays, CheckCircle2, ChevronDown, CircleDollarSign, CircleHelp, ClipboardList, Clock3, FileCheck2, FileText, FolderKanban, Headset, HeartHandshake, LayoutDashboard, LogOut, Megaphone, Menu, Search, ShieldCheck, UserPlus, Users, UsersRound, WalletCards, X } from 'lucide-react'
 import { useAuth } from './auth/AuthProvider'
 import { supabaseConfigured } from './lib/supabase'
 import { AcceptInvitationPage } from './features/operations/AcceptInvitationPage'
@@ -57,6 +57,7 @@ const nav: Array<{ label: string; section: OperationSection | 'overview'; icon: 
   { label: 'Barangay archive', section: 'archive', icon: Archive, roles: ['captain','secretary'] },
   { label: 'Budgets & finance', section: 'finance', icon: CircleDollarSign, roles: ['captain','treasurer'] },
   { label: 'Committees', section: 'committees', icon: UsersRound, roles: ['captain','secretary','kagawad'] },
+  { label: 'Barangay projects', section: 'projects', icon: FolderKanban, roles: ['captain','secretary','treasurer','kagawad','sk_chairperson','bhw','tanod','resident'] },
   { label: 'SK projects', section: 'sk-projects', icon: FileCheck2, roles: ['captain','sk_chairperson'] },
   { label: 'Incident reports', section: 'incidents', icon: AlertTriangle, roles: ['captain','tanod','resident'] },
   { label: 'Tanod patrols', section: 'patrols', icon: ClipboardList, roles: ['captain','tanod'] },

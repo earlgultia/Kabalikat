@@ -10,6 +10,7 @@ const ArchivePage = lazy(() => import('./ArchivePage').then((module) => ({ defau
 const FinancePage = lazy(() => import('./FinancePage').then((module) => ({ default: module.FinancePage })))
 const CommitteesPage = lazy(() => import('./CommitteesPage').then((module) => ({ default: module.CommitteesPage })))
 const SkProjectsPage = lazy(() => import('./SkProjectsPage').then((module) => ({ default: module.SkProjectsPage })))
+const ProjectsPage = lazy(() => import('./ProjectsPage').then((module) => ({ default: module.ProjectsPage })))
 const IncidentsPage = lazy(() => import('./IncidentsPage').then((module) => ({ default: module.IncidentsPage })))
 const PatrolPage = lazy(() => import('./PatrolPage').then((module) => ({ default: module.PatrolPage })))
 const DisasterAdvisoriesPage = lazy(() => import('./DisasterAdvisoriesPage').then((module) => ({ default: module.DisasterAdvisoriesPage })))
@@ -20,7 +21,7 @@ function page(component: ComponentType) {
   return <Suspense fallback={<div className="ops-loading" role="status">Loading workspace…</div>}><Page /></Suspense>
 }
 
-export type OperationSection = 'residents' | 'invitations' | 'documents' | 'announcements' | 'meetings' | 'archive' | 'finance' | 'committees' | 'sk-projects' | 'incidents' | 'patrols' | 'advisories' | 'support'
+export type OperationSection = 'residents' | 'invitations' | 'documents' | 'announcements' | 'meetings' | 'archive' | 'finance' | 'committees' | 'projects' | 'sk-projects' | 'incidents' | 'patrols' | 'advisories' | 'support'
 
 export function OperationsSection({ section }: { section: OperationSection }) {
   switch (section) {
@@ -33,6 +34,7 @@ export function OperationsSection({ section }: { section: OperationSection }) {
     case 'finance': return page(FinancePage)
     case 'committees': return page(CommitteesPage)
     case 'sk-projects': return page(SkProjectsPage)
+    case 'projects': return page(ProjectsPage)
     case 'incidents': return page(IncidentsPage)
     case 'patrols': return page(PatrolPage)
     case 'advisories': return page(DisasterAdvisoriesPage)

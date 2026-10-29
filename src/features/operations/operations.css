@@ -483,3 +483,10 @@
   #meeting-print-root section, .meeting-print-resolution { break-inside: avoid; }
 }
 
+.barangay-project-list { display: grid; gap: 14px; }
+.barangay-project-card { display: grid; gap: 15px; }
+.barangay-project-header { align-items: flex-start; display: flex; gap: 16px; justify-content: space-between; }
+.barangay-project-header > div { display: grid; gap: 7px; min-width: 0; }
+.barangay-project-header > svg { color: #638773; flex: none; }
+.barangay-project-header h2 { color: #293f40; font-size: 18px; margin: 0; }
+.barangay-project-header p { color: #53696a; font-size: 13px; line-height: 1.6; margin: 0; white-space: pre-wrap; }
