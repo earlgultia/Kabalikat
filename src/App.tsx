@@ -96,6 +96,7 @@ const nav: Array<{ label: string; section: OperationSection | 'overview'; icon: 
 function PlatformWorkspace() {
   const { user, signOut } = useAuth()
   const [activePage, setActivePage] = useState<'overview' | 'onboarding' | 'support' | 'subscriptions'>('overview')
+  const [menuOpen, setMenuOpen] = useState(false)
   const [accountSecurityOpen, setAccountSecurityOpen] = useState(false)
   const subscriptionSummary = useQuery({ queryKey: ['platform-subscriptions'], queryFn: listSubscriptionOverview, enabled: activePage === 'overview', staleTime: 60_000 })
   const now = Date.now()
@@ -121,16 +122,17 @@ function PlatformWorkspace() {
     { label: 'Support queue', icon: Headset, page: 'support' as const },
     { label: 'Subscriptions & plans', icon: CircleDollarSign, page: 'subscriptions' as const },
   ]
-  return <div className="app-shell"><a className="skip-link" href="#main-content">Skip to main content</a>
-    <aside className="sidebar">
-      <div className="brand"><div className="brand-mark"><ShieldCheck size={21} /></div><div><strong>KABALIKAT</strong><small>PLATFORM ADMIN</small></div></div>
+  const pageTitle = activePage === 'support' ? 'Support queue' : activePage === 'onboarding' ? 'Barangay onboarding' : activePage === 'subscriptions' ? 'Subscriptions & plans' : 'Overview'
+  return <div className="app-shell platform-shell"><a className="skip-link" href="#main-content">Skip to main content</a>
+    <aside className={`sidebar platform-sidebar ${menuOpen ? 'open' : ''}`}>
+      <div className="brand"><div className="brand-mark"><ShieldCheck size={21} /></div><div><strong>KABALIKAT</strong><small>PLATFORM ADMIN</small></div><button type="button" className="icon-button close-menu" onClick={() => setMenuOpen(false)} aria-label="Close platform menu"><X size={19} /></button></div>
       <div className="tenant-switch"><div className="tenant-icon"><ShieldCheck size={17} /></div><div className="tenant-copy"><span>ADMIN CONSOLE</span><strong>ArkByte Technologies</strong></div></div>
       <div className="nav-label">PLATFORM</div>
-      <nav>{adminLinks.map(({ label, icon: Icon, page }) => <button key={label} className={`nav-link ${activePage === page ? 'active' : ''}`} onClick={() => setActivePage(page)}><Icon size={18} /><span>{label}</span></button>)}</nav>
-      <div className="sidebar-bottom"><div className="user-card"><div className="avatar">{user?.email?.[0]?.toUpperCase() ?? 'A'}</div><div className="user-details"><strong>{user?.email}</strong><span>Platform administrator</span></div><button className="icon-button" onClick={() => void signOut()} aria-label="Sign out"><LogOut size={17} /></button></div></div>
+      <nav aria-label="Platform navigation">{adminLinks.map(({ label, icon: Icon, page }) => <button key={label} className={`nav-link ${activePage === page ? 'active' : ''}`} aria-current={activePage === page ? 'page' : undefined} onClick={() => { setActivePage(page); setMenuOpen(false) }}><Icon size={18} /><span>{label}</span></button>)}</nav>
+      <div className="sidebar-bottom"><div className="user-card"><div className="avatar">{user?.email?.[0]?.toUpperCase() ?? 'A'}</div><div className="user-details"><strong>{user?.email}</strong><span>Platform administrator</span></div></div></div>
     </aside>
-    <main className="main-area"><header className="topbar"><div className="crumb">Platform <span>/</span> {activePage === 'support' ? 'Support queue' : activePage === 'onboarding' ? 'Barangay onboarding' : activePage === 'subscriptions' ? 'Subscriptions & plans' : 'Overview'}</div><div className="top-actions"><button ref={accountSecurityOpenerRef} type="button" className="top-avatar account-avatar" onClick={() => setAccountSecurityOpen(true)} aria-label="Open account security">{user?.email?.[0]?.toUpperCase() ?? 'A'}</button></div></header>
-      <div className="content-wrap" id="main-content" tabIndex={-1}>{activePage === 'onboarding' ? <OnboardingPage /> : activePage === 'support' ? <Suspense fallback={<div className="ops-loading" role="status">Loading support queue…</div>}><PlatformSupportPage platformAdmin /></Suspense> : activePage === 'subscriptions' ? <Suspense fallback={<div className="ops-loading" role="status">Loading subscriptions…</div>}><PlatformSubscriptionsPage /></Suspense> : <><div className="welcome-row"><div><div className="eyebrow">ARKBYTE TECHNOLOGIES</div><h1>Platform overview</h1><p>Manage KABALIKAT service operations from the platform workspace.</p></div><span className="role-pill">Platform administrator</span></div>
+    <main className="main-area platform-main"><header className="topbar platform-topbar"><button type="button" className="icon-button mobile-menu" onClick={() => setMenuOpen(true)} aria-label="Open platform menu" aria-expanded={menuOpen}><Menu size={20} /></button><div className="crumb">Platform <span>/</span> {pageTitle}</div><div className="top-actions"><button ref={accountSecurityOpenerRef} type="button" className="top-avatar account-avatar" onClick={() => setAccountSecurityOpen(true)} aria-label="Open account security">{user?.email?.[0]?.toUpperCase() ?? 'A'}</button><button type="button" className="platform-logout" onClick={() => void signOut()} aria-label="Sign out"><LogOut size={17} /><span>Sign out</span></button></div></header>
+      <div className="content-wrap platform-content" id="main-content" tabIndex={-1}>{activePage === 'onboarding' ? <OnboardingPage /> : activePage === 'support' ? <Suspense fallback={<div className="ops-loading" role="status">Loading support queue…</div>}><PlatformSupportPage platformAdmin /></Suspense> : activePage === 'subscriptions' ? <Suspense fallback={<div className="ops-loading" role="status">Loading subscriptions…</div>}><PlatformSubscriptionsPage /></Suspense> : <><div className="welcome-row"><div><div className="eyebrow">ARKBYTE TECHNOLOGIES</div><h1>Platform overview</h1><p>Manage KABALIKAT service operations from the platform workspace.</p></div><span className="role-pill">Platform administrator</span></div>
         <div className="setup-banner"><div className="setup-icon"><ShieldCheck size={21} /></div><div><strong>Platform access verified</strong><p>This account is listed in the protected platform administrator registry.</p></div></div>
         {subscriptionSummary.isPending && <div className="dashboard-metrics-loading" role="status">Loading subscription review summary…</div>}
         {subscriptionSummary.error && <div className="error-banner" role="alert">Subscription review counts are unavailable. Open subscriptions to refresh the full records.</div>}
@@ -149,6 +151,7 @@ function PlatformWorkspace() {
         <footer className="footer"><span>© 2026 KABALIKAT by ArkByte Technologies</span><span><ShieldCheck size={14} /> Platform access is audited at the database boundary</span></footer></>}
       </div>
     </main>
+    {menuOpen && <button type="button" className="scrim" aria-label="Close platform menu" onClick={() => setMenuOpen(false)} />}
     {accountSecurityOpen && <AccountSecurityDialog email={user?.email ?? ''} userId={user?.id ?? ''} tenantId={null} onClose={() => setAccountSecurityOpen(false)} />}
   </div>
 }
