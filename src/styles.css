@@ -513,15 +513,17 @@ body { color: var(--ink); background: var(--canvas); font-size: 16px; line-heigh
 
 @media (max-width: 900px) {
   .platform-shell { max-width: 100vw; overflow-x: clip; }
-  .platform-shell .platform-sidebar { transform: translateX(-100%); transition: transform .2s ease; visibility: hidden; width: min(300px, 86vw); }
-  .platform-shell .platform-sidebar.open { transform: translateX(0); visibility: visible; }
+  .platform-shell .platform-sidebar { display: none; }
+  .platform-shell .platform-topbar .mobile-menu { display: none; }
+  .platform-shell .scrim { display: none; }
   .platform-shell .platform-main { margin-left: 0; max-width: 100vw; width: 100%; }
   .platform-shell .platform-topbar { gap: 8px; height: 58px; padding: 0 14px; }
-  .platform-shell .platform-topbar .mobile-menu { display: inline-grid; margin-left: -5px; }
-  .platform-shell .platform-topbar .crumb { margin: 0 auto 0 8px; }
+  .platform-shell .platform-topbar .crumb { margin: 0 auto 0 0; }
   .platform-shell .platform-topbar .top-actions { gap: 7px; }
   .platform-shell .platform-logout { min-width: 40px; padding: 0 10px; }
   .platform-shell .platform-content { max-width: 100%; padding: 24px clamp(14px, 3vw, 22px) calc(92px + env(safe-area-inset-bottom)); }
+  .platform-shell .platform-directory-table-wrap { display: none; }
+  .platform-shell .platform-directory-cards { display: grid; gap: 9px; }
   .platform-shell .platform-mobile-nav { align-items: stretch; background: #fffefaed; backdrop-filter: blur(14px); border-top: 1px solid #d9e2de; bottom: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); left: 0; min-height: calc(64px + env(safe-area-inset-bottom)); padding: 5px 8px calc(5px + env(safe-area-inset-bottom)); position: fixed; right: 0; z-index: 3; }
 }
 

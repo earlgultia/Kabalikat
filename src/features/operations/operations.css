@@ -560,6 +560,27 @@
 .meeting-qr-panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; display: grid; gap: 12px; margin-top: 16px; padding: 16px; }
 .meeting-qr-panel h4 { align-items: center; color: var(--ink); display: flex; font-size: 15px; gap: 8px; margin: 0; }
 .meeting-qr-panel p { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 5px 0 0; }
+
+@media(max-width:900px) {
+  .platform-shell .support-ticket-list { gap: 16px; }
+  .platform-shell .support-ticket { gap: 16px; padding: clamp(14px,3vw,20px); }
+  .platform-shell .support-ticket > header { align-items: flex-start; flex-direction: column; gap: 9px; }
+  .platform-shell .support-ticket > header > div { flex: 1 1 auto; gap: 8px; min-width: 0; }
+  .platform-shell .support-ticket > header > small { font-size: 12px; line-height: 1.45; }
+  .platform-shell .support-ticket h2 { font-size: 18px; line-height: 1.35; }
+  .platform-shell .support-status-control { max-width: none; width: 100%; }
+  .platform-shell .support-status-control select { min-height: 44px; width: 100%; }
+  .platform-shell .support-conversation, .platform-shell .support-ticket > .incident-history { padding-top: 13px; }
+  .platform-shell .support-conversation summary, .platform-shell .support-ticket > .incident-history summary { min-height: 42px; }
+  .platform-shell .support-reply-form { align-items: stretch; display: grid; gap: 10px; grid-template-columns: minmax(0,1fr) auto; }
+  .platform-shell .support-reply-form > label:first-child, .platform-shell .support-reply-form > .support-internal-toggle { grid-column: 1 / -1; min-width: 0; width: 100%; }
+  .platform-shell .support-reply-form textarea { min-height: 90px; width: 100%; }
+  .platform-shell .support-reply-form > button { align-self: center; grid-column: 2; min-height: 44px; }
+  .platform-shell .support-ticket-controls { align-items: stretch; display: grid; gap: 10px; grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .platform-shell .support-ticket-controls > label:first-child, .platform-shell .support-ticket-controls > .text-action { grid-column: 1 / -1; min-width: 0; width: 100%; }
+  .platform-shell .support-ticket-controls > label:nth-child(2) { min-width: 0; }
+  .platform-shell .support-ticket-controls select, .platform-shell .support-ticket-controls > .button { min-width: 0; width: 100%; }
+}
 .meeting-qr-active { align-items: center; display: flex; flex-wrap: wrap; gap: 18px; }
 .meeting-qr-active img { background: white; border: 1px solid var(--line); border-radius: 10px; height: 192px; padding: 7px; width: 192px; }
 .meeting-qr-active > div { display: grid; gap: 8px; max-width: 320px; }
