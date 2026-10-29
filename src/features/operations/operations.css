@@ -570,7 +570,7 @@
   .platform-shell .support-ticket { gap: 16px; padding: clamp(14px,3vw,20px); }
   .platform-shell .support-ticket > header { align-items: flex-start; flex-direction: column; gap: 9px; }
   .platform-shell .support-ticket > header > div { flex: 1 1 auto; gap: 8px; min-width: 0; }
-  .platform-shell .support-ticket > header > small { font-size: 12px; line-height: 1.45; }
+  .platform-shell .support-ticket > header > small { font-size: 12px; line-height: 1.45; text-align: left; }
   .platform-shell .support-ticket h2 { font-size: 18px; line-height: 1.35; }
   .platform-shell .support-status-control { max-width: none; width: 100%; }
   .platform-shell .support-status-control select { min-height: 44px; width: 100%; }
@@ -584,6 +584,31 @@
   .platform-shell .support-ticket-controls > label:first-child, .platform-shell .support-ticket-controls > .text-action { grid-column: 1 / -1; min-width: 0; width: 100%; }
   .platform-shell .support-ticket-controls > label:nth-child(2) { min-width: 0; }
   .platform-shell .support-ticket-controls select, .platform-shell .support-ticket-controls > .button { min-width: 0; width: 100%; }
+}
+
+.platform-shell .support-ticket { gap: 18px; padding: 22px; }
+.platform-shell .support-ticket > header { align-items: flex-start; gap: 12px 20px; }
+.platform-shell .support-ticket > header > div { flex: 1 1 260px; min-width: 0; }
+.platform-shell .support-ticket > header > small { flex: 0 1 320px; line-height: 1.5; text-align: right; }
+.platform-shell .support-ticket > header .status-pill { max-width: 100%; overflow-wrap: anywhere; white-space: normal; }
+.platform-shell .support-ticket .incident-meta { align-items: flex-start; flex-wrap: wrap; gap: 7px 18px; line-height: 1.5; }
+.platform-shell .support-conversation > ol > li > div { align-items: flex-start; flex-wrap: wrap; gap: 5px 14px; line-height: 1.45; }
+.platform-shell .support-conversation > ol > li > div > strong { flex: 1 1 120px; min-width: 0; overflow-wrap: anywhere; }
+.platform-shell .support-conversation > ol > li > div > span { flex: 0 1 auto; }
+.platform-shell .support-ticket > .incident-history ol > li { gap: 6px; line-height: 1.5; min-width: 0; overflow-wrap: anywhere; }
+.platform-shell .support-ticket > .incident-history ol > li > span { overflow-wrap: anywhere; }
+.platform-shell .support-reply-form textarea { min-width: 0; width: 100%; }
+@media(min-width:901px) and (max-width:1100px) {
+  .platform-shell .support-ticket-controls { display: grid; gap: 10px; grid-template-columns: minmax(0,1fr) minmax(180px,240px); }
+  .platform-shell .support-ticket-controls > label:first-child { grid-column: 1 / -1; min-width: 0; }
+  .platform-shell .support-ticket-controls > label:nth-child(2) { min-width: 0; }
+  .platform-shell .support-ticket-controls select, .platform-shell .support-ticket-controls > .button { min-width: 0; width: 100%; }
+  .platform-shell .support-ticket-controls > .text-action { grid-column: 1 / -1; justify-self: start; }
+}
+@media(max-width:900px) {
+  .platform-shell .support-ticket { padding: clamp(14px,3vw,20px); }
+  .platform-shell .support-ticket > header { flex-direction: column; }
+  .platform-shell .support-ticket > header > small { text-align: left; }
 }
 .meeting-qr-active { align-items: center; display: flex; flex-wrap: wrap; gap: 18px; }
 .meeting-qr-active img { background: white; border: 1px solid var(--line); border-radius: 10px; height: 192px; padding: 7px; width: 192px; }
