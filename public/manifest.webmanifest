@@ -11,8 +11,8 @@
   "background_color": "#f7f5ef",
   "theme_color": "#0d473c",
   "icons": [
-    { "src": "/icons/kabalikat-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/icons/kabalikat-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/icons/kabalikat-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    { "src": "/icons/kabalikat-heart-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/kabalikat-heart-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/kabalikat-heart-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }

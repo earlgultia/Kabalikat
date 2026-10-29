@@ -11,8 +11,8 @@ function pwaAssetsPlugin(): Plugin {
     generateBundle(_options, bundle) {
       const precacheUrls = [
         '/', '/index.html', '/offline.html', '/manifest.webmanifest',
-        '/icons/kabalikat-192.png', '/icons/kabalikat-512.png',
-        '/icons/kabalikat-maskable-512.png', '/icons/apple-touch-icon.png',
+        '/icons/kabalikat-heart-192.png', '/icons/kabalikat-heart-512.png',
+        '/icons/kabalikat-heart-maskable-512.png', '/icons/kabalikat-ios-180.png',
         ...Object.keys(bundle).filter((fileName) => fileName !== 'sw.js' && !fileName.endsWith('.map')).map((fileName) => `/${fileName}`),
       ]
       const template = readFileSync(new URL('./src/pwa/sw-template.js', import.meta.url), 'utf8')

@@ -1,5 +1,5 @@
 /* global self, caches, fetch, URL, __PRECACHE_URLS__ */
-const CACHE_NAME = 'kabalikat-app-v1'
+const CACHE_NAME = 'kabalikat-app-v2'
 const PRECACHE_URLS = __PRECACHE_URLS__
 
 self.addEventListener('install', (event) => {
