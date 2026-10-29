@@ -1,15 +1,17 @@
 import { useState, type FormEvent } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { z } from 'zod'
 import { CheckCircle2, KeyRound } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import { supabase } from '../../lib/supabase'
+import { LogoutConfirmationDialog } from '../../components/LogoutConfirmationDialog'
 import { ErrorNotice } from './shared'
 
 const credentialsSchema = z.object({ email: z.email(), password: z.string().min(8).max(128) })
 
 export function AcceptInvitationPage() {
-  const { user } = useAuth()
+  const { user, signOut } = useAuth()
+  const navigate = useNavigate()
   const [params] = useSearchParams()
   const token = params.get('token') ?? ''
   const [busy, setBusy] = useState(false)
@@ -17,6 +19,13 @@ export function AcceptInvitationPage() {
   const [accepted, setAccepted] = useState(false)
   const [mode, setMode] = useState<'sign-in' | 'create-account'>('create-account')
   const [accountMessage, setAccountMessage] = useState('')
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false)
+
+  async function handleDifferentAccount() {
+    setLogoutConfirmOpen(false)
+    try { await signOut() }
+    finally { navigate('/sign-in', { replace: true }) }
+  }
 
   async function authenticate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setError(''); setAccountMessage('')
@@ -64,7 +73,7 @@ export function AcceptInvitationPage() {
     {accepted ? <div className="ops-success"><CheckCircle2 size={16} />Your membership is active. Opening your workspace...</div> : user ? <>
       <button className="button primary full" onClick={() => void accept()} disabled={busy || token.length !== 64}>{busy ? 'Checking invitation...' : 'Accept invitation'}</button>
       {user.email_confirmed_at == null && <p className="field-hint" style={{ marginTop: 12 }}>Confirm your email before accepting this invitation.</p>}
-      <button className="button outline full" style={{ marginTop: 10 }} onClick={() => void supabase?.auth.signOut()}>Use a different account</button>
+      <button className="button outline full" style={{ marginTop: 10 }} onClick={() => setLogoutConfirmOpen(true)}>Use a different account</button>
       <p className="field-hint" style={{ marginTop: 16 }}>The invitation can only be accepted by its addressed email.</p>
     </> : <>
       <form className="form-stack" onSubmit={(event) => void authenticate(event)}>
@@ -76,5 +85,5 @@ export function AcceptInvitationPage() {
         {mode === 'sign-in' ? 'Create an account' : 'I already have an account'}
       </button>
     </>}
-  </section></main>
+  </section>{logoutConfirmOpen && <LogoutConfirmationDialog onCancel={() => setLogoutConfirmOpen(false)} onConfirm={() => void handleDifferentAccount()} />}</main>
 }

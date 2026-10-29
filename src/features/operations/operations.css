@@ -442,13 +442,13 @@
 .support-summary strong { color: #315b46; font-size: 20px; }
 .support-summary span { color: #596a6d; font-size: 11px; }
 .support-ticket-list { display: grid; gap: 14px; }
-.support-ticket { display: grid; gap: 11px; }
+.support-ticket { display: grid; gap: 13px; min-width: 0; }
 .support-ticket > header { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; }
 .support-ticket > header > div { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; }
-.support-ticket > header > small { color: #697a72; font-size: 10px; }
+.support-ticket > header > small { color: #697a72; font-size: 10px; max-width: 100%; overflow-wrap: anywhere; }
 .support-category { color: #53696a; font-size: 11px; text-transform: capitalize; }
-.support-ticket h2 { color: #293f40; font-size: 17px; margin: 0; }
-.support-ticket-description { color: #53696a; font-size: 13px; line-height: 1.6; margin: 0; white-space: pre-wrap; }
+.support-ticket h2 { color: #293f40; font-size: 17px; margin: 0; overflow-wrap: anywhere; }
+.support-ticket-description { color: #53696a; font-size: 13px; line-height: 1.6; margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
 .support-status-control { color: #354f4c; display: grid; font-size: 11px; font-weight: 700; gap: 5px; max-width: 300px; }
 .support-status-control select { background: #fffefa; border: 1px solid #bfcec8; border-radius: 8px; color: #24353b; font: inherit; min-height: 40px; padding: 7px 9px; text-transform: capitalize; }
 .support-conversation { border-top: 1px solid #e1e8e3; padding-top: 10px; }
@@ -457,7 +457,7 @@
 .support-conversation > ol > li { background: #f7f9f6; border-radius: 8px; padding: 10px 12px; }
 .support-conversation > ol > li.support-internal-note { background: #fff6e4; border-left: 3px solid #d4ad49; }
 .support-conversation > ol > li > div { align-items: center; color: #53696a; display: flex; font-size: 10px; justify-content: space-between; }
-.support-conversation > ol > li p { color: #354b4a; font-size: 12px; line-height: 1.6; margin: 6px 0 0; white-space: pre-wrap; }
+.support-conversation > ol > li p { color: #354b4a; font-size: 12px; line-height: 1.6; margin: 6px 0 0; overflow-wrap: anywhere; white-space: pre-wrap; }
 .support-reply-form { align-items: end; display: flex; flex-wrap: wrap; gap: 9px; }
 .support-reply-form > label:first-child { color: #354f4c; display: grid; flex: 1 1 260px; font-size: 11px; font-weight: 700; gap: 5px; }
 .support-reply-form textarea { background: #fffefa; border: 1px solid #bfcec8; border-radius: 8px; color: #24353b; font: inherit; min-height: 70px; padding: 8px 10px; resize: vertical; }
@@ -468,6 +468,15 @@
 .support-ticket-controls input { background: transparent; border: 0; color: #24353b; flex: 1; font: inherit; min-width: 0; outline: none; }
 .support-ticket-controls > label:nth-child(2) { color: #354f4c; display: grid; font-size: 11px; font-weight: 700; gap: 5px; }
 .support-ticket-controls select { background: #fffefa; border: 1px solid #bfcec8; border-radius: 8px; color: #24353b; font: inherit; min-height: 42px; padding: 7px 10px; }
+@media(max-width:760px) {
+  .support-ticket-controls { align-items: stretch; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .support-ticket-controls > label:first-child, .support-ticket-controls > .text-action { grid-column: 1 / -1; min-width: 0; width: 100%; }
+  .support-ticket-controls > label:nth-child(2) { min-width: 0; }
+  .support-ticket-controls select, .support-ticket-controls > .button { min-width: 0; width: 100%; }
+  .support-ticket > header { align-items: flex-start; }
+  .support-status-control { max-width: none; }
+  .support-reply-form > button { min-height: 42px; }
+}
 .subscription-notice { align-items: flex-start; color: #674b20; display: flex; gap: 10px; margin-bottom: 18px; }
 .subscription-notice svg { flex: none; margin-top: 2px; }
 .subscription-notice p { font-size: 12px; line-height: 1.6; margin: 0; }
