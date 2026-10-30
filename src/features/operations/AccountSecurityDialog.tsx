@@ -1,8 +1,9 @@
-import { useState, type FormEvent, type KeyboardEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
 import { Bell, KeyRound, ShieldCheck, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { useModalFocus } from '../../lib/useModalFocus'
 import { listCommunityNotificationPreferences, saveCommunityNotificationPreference } from './notifications-data'
 
 const passwordSchema = z.object({
@@ -13,6 +14,7 @@ const passwordSchema = z.object({
 }).refine((value) => value.password === value.confirmation, { path: ['confirmation'], message: 'The passwords do not match.' })
 
 export function AccountSecurityDialog({ email, userId, tenantId, onClose }: { email: string; userId: string; tenantId: string | null; onClose: () => void }) {
+  const { dialogRef, handleDialogKeyDown } = useModalFocus<HTMLElement>()
   const queryClient = useQueryClient()
   const [busy, setBusy] = useState(false)
   const [preferenceBusy, setPreferenceBusy] = useState(false)
@@ -51,17 +53,9 @@ export function AccountSecurityDialog({ email, userId, tenantId, onClose }: { em
     } finally { setBusy(false) }
   }
 
-  function trapFocus(event: KeyboardEvent<HTMLElement>) {
-    if (event.key !== 'Tab') return
-    const focusable = event.currentTarget.querySelectorAll<HTMLElement>('input:not([disabled]), button:not([disabled])')
-    const first = focusable[0], last = focusable[focusable.length - 1]
-    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
-    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
-  }
-
   return <div className="tool-finder-backdrop account-security-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose() }}>
-    <section className="account-security-dialog" role="dialog" aria-modal="true" aria-labelledby="account-security-title" onKeyDown={(event) => { trapFocus(event); if (event.key === 'Escape' && !busy) onClose() }}>
-      <header><span className="account-security-icon"><KeyRound size={20} /></span><div><h2 id="account-security-title">Account security</h2><p>Change the password for {email}</p></div><button autoFocus type="button" className="icon-button" aria-label="Close account security" onClick={onClose} disabled={busy}><X size={18} /></button></header>
+    <section ref={dialogRef} className="account-security-dialog" role="dialog" aria-modal="true" aria-labelledby="account-security-title" tabIndex={-1} onKeyDown={(event) => { handleDialogKeyDown(event); if (event.key === 'Escape' && !busy) onClose() }}>
+      <header><span className="account-security-icon"><KeyRound size={20} /></span><div><h2 id="account-security-title">Account security</h2><p>Change the password for {email}</p></div><button type="button" className="icon-button" aria-label="Close account security" onClick={onClose} disabled={busy}><X size={18} /></button></header>
       <section className="notification-preferences" aria-labelledby="notification-preferences-title">
         <div className="notification-preferences-heading"><Bell size={17} /><div><h3 id="notification-preferences-title">In-app notifications</h3><p>Choose which new updates appear in your inbox for this barangay.</p></div></div>
         {!tenantId && <p className="field-hint">Join an active barangay workspace to manage notification preferences.</p>}

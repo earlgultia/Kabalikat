@@ -14,6 +14,10 @@ self.addEventListener('activate', (event) => {
   })())
 })
 
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') event.waitUntil(self.skipWaiting())
+})
+
 self.addEventListener('fetch', (event) => {
   const request = event.request
   if (request.method !== 'GET' || request.headers.has('range')) return

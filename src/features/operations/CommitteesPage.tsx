@@ -1,9 +1,9 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
-import { CheckCircle2, UsersRound } from 'lucide-react'
+import { CheckCircle2, ChevronLeft, ChevronRight, UsersRound } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
-import { assignCommitteeMember, createCommittee, createCommitteeTask, listAssignableCommitteeMembers, listCommitteeMembers, listCommittees, listCommitteeTasks, updateCommitteeTaskStatus, type CommitteeTaskRow } from './committee-data'
+import { assignCommitteeMember, COMMITTEE_PAGE_SIZE, createCommittee, createCommitteeTask, listAssignableCommitteeMembers, listCommitteeMembers, listCommittees, listCommitteeTasks, updateCommitteeTaskStatus, type CommitteeTaskRow } from './committee-data'
 import { hasPermission } from './data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 
@@ -14,11 +14,15 @@ export function CommitteesPage() {
   const { membership, user } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
   const queryClient = useQueryClient()
+  const [page, setPage] = useState(0)
+  useEffect(() => setPage(0), [tenantId])
   const canManage = useQuery({ queryKey: ['permission', tenantId, 'committee.manage'], queryFn: () => hasPermission(tenantId, 'committee.manage'), enabled: Boolean(tenantId) })
-  const committees = useQuery({ queryKey: ['committees', tenantId], queryFn: () => listCommittees(tenantId), enabled: Boolean(tenantId) })
-  const tasks = useQuery({ queryKey: ['committee-tasks', tenantId], queryFn: () => listCommitteeTasks(tenantId), enabled: Boolean(tenantId) })
-  const members = useQuery({ queryKey: ['committee-members', tenantId], queryFn: () => listCommitteeMembers(tenantId), enabled: Boolean(tenantId) })
+  const committees = useQuery({ queryKey: ['committees', tenantId, page], queryFn: () => listCommittees(tenantId, page), enabled: Boolean(tenantId) })
+  const committeeIds = committees.data?.rows.map((committee) => committee.id) ?? []
+  const tasks = useQuery({ queryKey: ['committee-tasks', tenantId, committeeIds], queryFn: () => listCommitteeTasks(tenantId, committeeIds), enabled: Boolean(tenantId) && Boolean(committees.data) })
+  const members = useQuery({ queryKey: ['committee-members', tenantId, committeeIds], queryFn: () => listCommitteeMembers(tenantId, committeeIds), enabled: Boolean(tenantId) && Boolean(committees.data) })
   const candidates = useQuery({ queryKey: ['committee-candidates', tenantId], queryFn: () => listAssignableCommitteeMembers(tenantId), enabled: Boolean(tenantId && canManage.data) })
+  const totalPages = Math.ceil((committees.data?.totalCount ?? 0) / COMMITTEE_PAGE_SIZE)
   const [showCreate, setShowCreate] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -38,7 +42,7 @@ export function CommitteesPage() {
     const parsed = committeeSchema.safeParse(Object.fromEntries(new FormData(form).entries()))
     if (!parsed.success) { setError(parsed.error.issues[0]?.message ?? 'Review the committee details.'); return }
     setBusy(true); setError(''); setMessage('')
-    try { await createCommittee(tenantId, parsed.data.name, parsed.data.description); await refresh(); form.reset(); setShowCreate(false); setMessage('Committee created.') }
+    try { await createCommittee(tenantId, parsed.data.name, parsed.data.description); setPage(0); await refresh(); form.reset(); setShowCreate(false); setMessage('Committee created.') }
     catch (err) { setError(err instanceof Error ? err.message : 'Unable to create this committee.') }
     finally { setBusy(false) }
   }
@@ -86,8 +90,8 @@ export function CommitteesPage() {
     {Boolean(tenantId) && !canManage.isPending && !canManage.error && !canManage.data && <div className="ops-panel archive-access"><UsersRound size={20} /><div><strong>Committee access is assignment-based</strong><p>You will see committees after an authorized administrator assigns you to one.</p></div></div>}
     {showCreate && canManage.data && <form className="ops-panel ops-form" onSubmit={(event) => void submitCommittee(event)}><div className="ops-panel-heading"><div><h2>Create a committee</h2><p>Only authorized committee managers can configure workspaces.</p></div><UsersRound size={18} /></div><div className="ops-form-grid"><label>Committee name<input name="name" maxLength={120} required /></label><label className="span-two">Purpose / description<textarea name="description" maxLength={1000} /></label></div><div className="ops-form-actions"><button className="button primary" disabled={busy}>Create committee</button></div></form>}
     {committees.isPending && tenantId && <LoadingNotice />}{committees.error && <ErrorNotice message={committees.error.message} />}
-    {committees.data?.length === 0 && <div className="ops-empty"><UsersRound size={22} /><strong>No committee workspaces assigned</strong><p>Ask an authorized Captain or Secretary to create or assign a committee.</p></div>}
-    <div className="committee-workspace-list">{committees.data?.map((committee) => {
+    {committees.data?.totalCount === 0 && <div className="ops-empty"><UsersRound size={22} /><strong>No committee workspaces assigned</strong><p>Ask an authorized Captain or Secretary to create or assign a committee.</p></div>}
+    <div className="committee-workspace-list">{committees.data?.rows.map((committee) => {
       const committeeMembers = members.data?.filter((member) => member.committee_id === committee.id) ?? []
       const committeeTasks = tasks.data?.filter((task) => task.committee_id === committee.id) ?? []
       return <article className="ops-panel committee-workspace" key={committee.id}>
@@ -100,5 +104,12 @@ export function CommitteesPage() {
         </section>
       </article>
     })}</div>
+    {totalPages > 1 && <nav className="ops-panel ops-form-actions" aria-label="Committee pages">
+      <span className="muted">Page {page + 1} of {totalPages} - {committees.data?.totalCount ?? 0} committees</span>
+      <div className="finance-review-actions">
+        <button className="button outline" disabled={page === 0 || committees.isFetching} onClick={() => setPage((current) => current - 1)}><ChevronLeft size={16} />Previous</button>
+        <button className="button outline" disabled={page + 1 >= totalPages || committees.isFetching} onClick={() => setPage((current) => current + 1)}>Next<ChevronRight size={16} /></button>
+      </div>
+    </nav>}
   </section>
 }

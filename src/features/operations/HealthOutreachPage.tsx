@@ -1,10 +1,10 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
-import { CalendarHeart, CheckCircle2, MapPin, ShieldAlert } from 'lucide-react'
+import { CalendarHeart, CheckCircle2, ChevronLeft, ChevronRight, MapPin, ShieldAlert } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import { hasPermission } from './data'
-import { completeHealthCampaign, createHealthCampaign, listHealthCampaigns, reviewHealthCampaign, type HealthCampaign } from './health-outreach-data'
+import { completeHealthCampaign, createHealthCampaign, HEALTH_CAMPAIGN_PAGE_SIZE, listHealthCampaigns, reviewHealthCampaign, type HealthCampaign } from './health-outreach-data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 import { formatDateTime } from './format'
 
@@ -14,9 +14,12 @@ export function HealthOutreachPage() {
   const { membership, user } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
   const queryClient = useQueryClient()
+  const [page, setPage] = useState(0)
+  useEffect(() => setPage(0), [tenantId])
   const canManage = useQuery({ queryKey: ['permission', tenantId, 'health.campaign.manage'], queryFn: () => hasPermission(tenantId, 'health.campaign.manage'), enabled: Boolean(tenantId) })
   const canReview = useQuery({ queryKey: ['permission', tenantId, 'health.campaign.review'], queryFn: () => hasPermission(tenantId, 'health.campaign.review'), enabled: Boolean(tenantId) })
-  const campaigns = useQuery({ queryKey: ['health-outreach-campaigns', tenantId], queryFn: () => listHealthCampaigns(tenantId), enabled: Boolean(tenantId) })
+  const campaigns = useQuery({ queryKey: ['health-outreach-campaigns', tenantId, page], queryFn: () => listHealthCampaigns(tenantId, page), enabled: Boolean(tenantId) })
+  const totalPages = Math.ceil((campaigns.data?.totalCount ?? 0) / HEALTH_CAMPAIGN_PAGE_SIZE)
   const [showForm, setShowForm] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -68,8 +71,8 @@ export function HealthOutreachPage() {
       <div className="ops-form-actions"><button className="button primary" disabled={busy}>Submit for review</button></div>
     </form>}
     {campaigns.isPending && tenantId && <LoadingNotice />}{campaigns.error && <ErrorNotice message="Unable to load outreach schedules." />}
-    {campaigns.data?.length === 0 && <div className="ops-empty"><CalendarHeart size={22} /><strong>No outreach schedules yet</strong><p>Published community events will appear here.</p></div>}
-    <div className="referral-list">{campaigns.data?.map((campaign) => <article className="ops-panel referral-card" key={campaign.id}>
+    {campaigns.data?.totalCount === 0 && <div className="ops-empty"><CalendarHeart size={22} /><strong>No outreach schedules yet</strong><p>Published community events will appear here.</p></div>}
+    <div className="referral-list">{campaigns.data?.rows.map((campaign) => <article className="ops-panel referral-card" key={campaign.id}>
       <div className="referral-card-head"><div><h2>{campaign.title}</h2><p><MapPin size={14} />{campaign.location}</p></div><StatusPill status={campaign.status} /></div>
       {campaign.description && <p className="referral-summary">{campaign.description}</p>}
       <div className="referral-meta"><span><strong>Starts</strong>{formatDateTime(campaign.starts_at)}</span><span><strong>Ends</strong>{formatDateTime(campaign.ends_at)}</span></div>
@@ -77,5 +80,12 @@ export function HealthOutreachPage() {
       {canReview.data && campaign.status === 'draft' && <div className="ops-form-actions"><button className="button primary" disabled={busy || campaign.created_by === user?.id} title={campaign.created_by === user?.id ? 'The creator cannot approve their own schedule.' : undefined} onClick={() => void act(campaign, 'approve')}>Publish</button><button className="button outline" disabled={busy} onClick={() => void act(campaign, 'reject')}>Return with reason</button></div>}
       {canManage.data && campaign.status === 'published' && new Date(campaign.ends_at).getTime() <= Date.now() && <div className="ops-form-actions"><button className="button outline" disabled={busy} onClick={() => void act(campaign, 'complete')}>Mark complete</button></div>}
     </article>)}</div>
+    {totalPages > 1 && <nav className="ops-panel ops-form-actions" aria-label="Outreach schedule pages">
+      <span className="muted">Page {page + 1} of {totalPages} - {campaigns.data?.totalCount ?? 0} schedules</span>
+      <div className="finance-review-actions">
+        <button className="button outline" disabled={page === 0 || campaigns.isFetching} onClick={() => setPage((current) => current - 1)}><ChevronLeft size={16} />Previous</button>
+        <button className="button outline" disabled={page + 1 >= totalPages || campaigns.isFetching} onClick={() => setPage((current) => current + 1)}>Next<ChevronRight size={16} /></button>
+      </div>
+    </nav>}
   </section>
 }

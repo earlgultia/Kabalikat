@@ -65,7 +65,7 @@ Migrations enable RLS and limit authenticated table privileges. Writes that requ
 - QR codes contain a temporary token in the URL fragment; only its SHA-256 hash is stored. Check-in still requires an authenticated active eligible attendee. The QR token expires within five minutes, can be revoked by refreshing it, and does not replace identity verification by the account.
 - Treasurers can submit budgets, transactions, and linked adjustment requests. Captains have a separate approval permission and cannot approve their own submissions. Approved expenses and adjustments are serialized against the budget amount; posted entries cannot be edited or deleted through the client. A different authorized approver can void a posted transaction with a required reason; voided expenses no longer count against budget usage. Receipts, budget amendments, and logged date-range CSV exports are supported.
 - Residents can request corrections to their own first name, last name, or phone number. A different staff member with `resident.update` must approve the request before the resident record changes; rejected requests require a reason. Requests and decisions have protected audit events, and direct client writes are revoked.
-- A resident can download a JSON copy of their own linked profile, household association, residency-check statuses, profile-correction requests, and document-request summaries. Each query is bound to the signed-in user, selected barangay, and existing RLS policies; the export omits internal actor IDs and other residents' records.
+- A resident can download a JSON copy of their own linked profile, household association, residency-check statuses, profile-correction requests, document-request summaries, incident reports with owner-scoped status history, and private feedback with owner-scoped event history. Queries use the signed-in account, selected barangay, existing RLS policies, or a narrowly scoped owner-only RPC; the export omits internal actor IDs and other residents' records.
 
 Migration `0044_resident_profile_correction_requests.sql` adds the resident profile correction workflow.
 Migration `0045_resident_correction_decision_notifications.sql` adds owner-only in-app notifications when a correction is approved or declined. These transactional notices do not use the optional announcement/advisory notification preferences.
@@ -81,7 +81,34 @@ Migration `0054_notify_feedback_closure.sql` also creates or refreshes the owner
 Migration `0055_notify_retargeted_role_announcements.sql` updates the published-announcement notification trigger to run when its target role changes, notifying newly eligible members while keeping existing notification visibility tied to current announcement access.
 Migration `0056_align_notification_role_scope.sql` requires role-targeted announcement notifications to match a barangay-scoped membership role, aligning the notification access helper with the announcement read policy.
 Migration `0057_scope_role_announcement_delivery.sql` applies that same barangay-role scope check when the announcement trigger creates notifications for a role-targeted post.
+Migration `0058_resident_owned_feedback_export.sql` provides a private feedback export RPC that remains scoped to the authenticated submitter even when that account also has staff access to the full feedback queue.
 
-`supabase/tests/database/0001_foundation.test.sql` through `0008_finance_budgets.test.sql` are pgTAP integration suites for tenant isolation and key workflows. They require a local Supabase/Postgres test database and have not been executed in this workspace because no Supabase CLI, Docker, or database connection is configured.
+Migration `0059_paginated_resident_directory.sql` adds a security-invoker function for searchable, paginated resident directory results with a barangay-wide latest residency status filter. It also adds an index for each resident's newest verification lookup; the function observes the existing resident and household row-level security policies.
+
+Migration `0060_paginated_document_request_queue.sql` adds security-invoker paging and search for document requests, applying the status and text filters before pagination while keeping visibility subject to existing row-level policies. A companion permission-checked RPC returns status history only for the request IDs on the current page.
+
+Migration `0061_paginated_announcement_feed.sql` adds an ordering index for stable announcement paging across published posts and authorized drafts.
+
+Migration `0062_paginated_meeting_schedule.sql` adds a stable tenant/date ordering index for the paginated meeting schedule.
+
+Migration `0063_paginated_invitations.sql` adds a stable tenant/creation-time ordering index for the paginated invitation history.
+
+Migration `0064_paginated_disaster_advisories.sql` adds a stable tenant/creation-time ordering index for disaster advisory paging.
+
+Migration `0065_paginated_barangay_projects.sql` adds a stable tenant/creation-time ordering index for project paging. The client fetches project updates only for projects on the currently visible page; existing row-level security continues to govern both queries.
+
+Migration `0066_paginated_committee_workspaces.sql` adds a stable tenant/name ordering index for committee workspace paging. The client loads members and action items only for committees on the visible page; existing row-level security continues to govern all three queries.
+
+Migration `0067_paginated_health_outreach_schedules.sql` adds a stable tenant/start-time ordering index for outreach schedule paging. The list remains subject to the existing published-schedule and staff-access row-level policies.
+
+Migration `0068_paginated_incident_reports.sql` adds RLS-respecting server-side search and paging for incident reports, with visible-row totals and summary counts derived under the caller's existing policies. Incident history and evidence queries are limited to the incident IDs on the current page; the owner-only status-history RPC also verifies report ownership for every requested ID.
+
+Patrol checkpoint history is loaded only when an authorized user opens a shift's history and is paged in 50-row slices using the existing tenant/shift/time index and row-level policies.
+
+Migration `0069_paginated_patrol_shifts.sql` adds a security-invoker patrol shift page function and an index for stable tenant-scoped ordering. Active shifts appear first, scheduled shifts next, then completed and cancelled shifts; existing row-level policies keep Tanods limited to their assigned records.
+
+Migration `0070_paginated_incident_history.sql` adds an owner-checked RPC for bounded resident incident status history. Incident history is now fetched only when opened and paged in 50-entry slices; resident history continues to omit staff response notes and private evidence events.
+
+`supabase/tests/database/0001_foundation.test.sql` through `0008_finance_budgets.test.sql` cover tenant isolation and key early workflows. `0009_role_targeted_announcement_delivery.test.sql` verifies role-targeted announcement delivery, published-post retargeting, duplicate prevention, notification access for the new audience, access revocation for the former audience, and rejection of platform-scoped targets (including malformed legacy targets). `0010_resident_profile_corrections.test.sql` covers resident ownership, cross-resident and cross-barangay isolation, staff approval, official record updates, withdrawal, audit history, and owner-only decision notifications. `0011_private_community_feedback.test.sql` covers linked-resident eligibility, private submissions, hidden author fields, tenant-scoped staff access, response and closure transitions, event history, and owner-only notifications both with and without a staff response. `0012_public_document_verification.test.sql` checks the two-code verification boundary, minimal public disclosure, expiry, revocation, and revocation audit history. `0013_platform_subscription_controls.test.sql` checks platform-admin-only subscription access and changes, tenant RLS boundaries, validated trial windows, and subscription event history. `0014_resident_owned_feedback_export.test.sql` verifies that personal exports remain owner-scoped even when staff permissions provide access to the broader feedback queue. These pgTAP suites require a local Supabase/Postgres test database; the new GitHub Actions workflow starts an isolated database and runs them, but its first CI result is pending.
 
 This schema does not yet implement complete accounting and reconciliation, patient health records, BHW clinical workflows, youth registry/programs, or OCR processing. QR attendance and meeting PDF export are browser features over the current meeting schema. Review and test migrations against a disposable database before using any real records.

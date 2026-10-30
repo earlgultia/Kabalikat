@@ -7,7 +7,7 @@ KABALIKAT is a multi-barangay management platform by ArkByte Technologies. This 
 1. Install Node.js 20.19+ or 22.12+ and npm.
 2. Run `npm install`.
 3. Copy `.env.example` to `.env.local` and set the Supabase project URL and public anon/publishable key.
-4. Apply migrations `0001_foundation.sql` through `0057_scope_role_announcement_delivery.sql` in order to a **development** Supabase project using the Supabase CLI or SQL editor.
+4. Apply migrations `0001_foundation.sql` through `0070_paginated_incident_history.sql` in order to a **development** Supabase project using the Supabase CLI or SQL editor.
 5. Run `npm run dev`.
 
 Available commands: `npm run dev`, `npm run typecheck`, `npm run lint`, `npm test`, and `npm run build`.
@@ -30,4 +30,4 @@ Phase 7 adds general barangay project tracking, separate from SK proposals and t
 
 Phase 7 also includes controlled inter-barangay referrals and restricted incident evidence. Referrals use an explicit disclosure basis, limited information, and audited access; incident evidence is stored privately and visible only to the Captain or Tanod assigned to the incident. The responsible barangays must establish and review their disclosure policy before using referrals with real information.
 
-See the [project timeline and status](docs/PROJECT_TIMELINE.md), [setup guide](docs/SETUP.md), [security notes](docs/SECURITY.md), and [architecture](docs/ARCHITECTURE.md).
+See the [project timeline and status](docs/PROJECT_TIMELINE.md), [setup guide](docs/SETUP.md), [security notes](docs/SECURITY.md), [backup and recovery runbook](docs/BACKUP_RECOVERY.md), and [architecture](docs/ARCHITECTURE.md).

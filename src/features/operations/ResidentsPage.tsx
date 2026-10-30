@@ -1,9 +1,9 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
 import { Check, Download, Home, Search, UserPlus, UserRoundPen } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
-import { cancelResidentProfileChange, getOwnResidentDataExport, hasPermission, listHouseholds, listResidents, listResidencyVerifications, listResidentProfileChangeRequests, registerResident, reviewResidentProfileChange, submitResidentProfileChange, verifyResident } from './data'
+import { cancelResidentProfileChange, getOwnResidentDataExport, hasPermission, listHouseholds, listResidents, listResidentsPage, listResidencyVerifications, listResidentProfileChangeRequests, registerResident, reviewResidentProfileChange, submitResidentProfileChange, verifyResident, RESIDENT_PAGE_SIZE } from './data'
 import { ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 
 const residentSchema = z.object({
@@ -28,28 +28,37 @@ export function ResidentsPage() {
   const [exportBusy, setExportBusy] = useState(false)
   const [residentSearch, setResidentSearch] = useState('')
   const [residencyFilter, setResidencyFilter] = useState('all')
-  const residents = useQuery({ queryKey: ['residents', tenantId], queryFn: () => listResidents(tenantId), enabled: Boolean(tenantId) })
+  const [page, setPage] = useState(0)
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  useEffect(() => {
+    const timeout = window.setTimeout(() => { setDebouncedSearch(residentSearch); setPage(0) }, 250)
+    return () => window.clearTimeout(timeout)
+  }, [residentSearch])
+  const residents = useQuery({
+    queryKey: ['residents', tenantId, role === 'resident' ? 'own' : page, role === 'resident' ? '' : debouncedSearch, role === 'resident' ? 'all' : residencyFilter],
+    queryFn: async () => {
+      if (role === 'resident') return { rows: await listResidents(tenantId), total: 0, verificationStatuses: {} as Record<string, string> }
+      const result = await listResidentsPage(tenantId, page, debouncedSearch, residencyFilter)
+      return { rows: result.residents, total: result.total, verificationStatuses: result.verificationStatuses }
+    },
+    enabled: Boolean(tenantId),
+  })
   const households = useQuery({ queryKey: ['households', tenantId], queryFn: () => listHouseholds(tenantId), enabled: Boolean(tenantId) })
-  const verifications = useQuery({ queryKey: ['residency-verifications', tenantId], queryFn: () => listResidencyVerifications(tenantId), enabled: Boolean(tenantId) })
+  const residentRows = residents.data?.rows ?? []
+  const verifications = useQuery({
+    queryKey: ['residency-verifications', tenantId, residentRows.map((resident) => resident.id)],
+    queryFn: () => listResidencyVerifications(tenantId, residentRows.map((resident) => resident.id)),
+    enabled: Boolean(tenantId && role === 'resident' && residentRows.length),
+  })
   const canCreate = useQuery({ queryKey: ['permission', tenantId, 'resident.create'], queryFn: () => hasPermission(tenantId, 'resident.create'), enabled: Boolean(tenantId) })
   const canVerify = useQuery({ queryKey: ['permission', tenantId, 'resident.verify'], queryFn: () => hasPermission(tenantId, 'resident.verify'), enabled: Boolean(tenantId) })
   const canReviewChanges = useQuery({ queryKey: ['permission', tenantId, 'resident.update'], queryFn: () => hasPermission(tenantId, 'resident.update'), enabled: Boolean(tenantId) })
   const profileChanges = useQuery({ queryKey: ['resident-profile-changes', tenantId], queryFn: () => listResidentProfileChangeRequests(tenantId), enabled: Boolean(tenantId) && (role === 'resident' || canReviewChanges.data === true) })
-  const canSelfRegister = role === 'resident' && residents.data?.length === 0
-  const ownResident = role === 'resident' ? residents.data?.[0] : undefined
-  const filteredResidents = (residents.data ?? []).filter((resident) => {
-    const verificationStatus = verifications.data?.find((item) => item.resident_id === resident.id)?.status ?? 'pending'
-    const query = residentSearch.trim().toLocaleLowerCase()
-    const matchesSearch = !query || [
-      resident.first_name,
-      resident.last_name,
-      resident.phone,
-      resident.household?.household_code,
-      resident.household?.address_line,
-      resident.household?.purok,
-    ].some((value) => value?.toLocaleLowerCase().includes(query))
-    return matchesSearch && (residencyFilter === 'all' || verificationStatus === residencyFilter)
-  })
+  const canSelfRegister = role === 'resident' && residentRows.length === 0
+  const ownResident = role === 'resident' ? residentRows[0] : undefined
+  const latestVerificationByResident = new Map<string, string>(Object.entries(residents.data?.verificationStatuses ?? {}))
+  for (const item of [...(verifications.data ?? [])].reverse()) latestVerificationByResident.set(item.resident_id, item.status)
+  const filteredResidents = residentRows
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setMessage(''); setErrorMessage('')
@@ -190,20 +199,22 @@ export function ResidentsPage() {
       </div>
       <div className="ops-form-actions"><span className="field-hint">A household record is created with residency status set to pending.</span><button className="button primary" disabled={busy}>{busy ? 'Saving…' : 'Save resident'}</button></div>
     </form>}
-    {residents.isPending ? <LoadingNotice /> : residents.error ? <ErrorNotice message={residents.error.message} /> : !residents.data?.length ?
-      <div className="ops-empty"><Home size={22} /><strong>No resident records available</strong><p>Records appear here when they are registered for this barangay.</p></div> :
+    {residents.isPending ? <LoadingNotice /> : residents.error ? <ErrorNotice message={residents.error.message} /> : !residentRows.length && (role === 'resident' || !residents.data?.total) ?
+      <div className="ops-empty"><Home size={22} /><strong>{role !== 'resident' && (debouncedSearch || residencyFilter !== 'all') ? 'No matching residents' : 'No resident records available'}</strong><p>{role !== 'resident' && (debouncedSearch || residencyFilter !== 'all') ? 'Try another search or residency status.' : 'Records appear here when they are registered for this barangay.'}</p></div> :
       <>
-      <div className="community-calendar-filters">
+      {role !== 'resident' && <div className="community-calendar-filters">
         <label className="community-calendar-search"><Search size={16} /><input type="search" aria-label="Search resident records" value={residentSearch} onChange={(event) => setResidentSearch(event.target.value)} placeholder="Search name, phone, household, or address" /></label>
-        <label>Residency status<select value={residencyFilter} onChange={(event) => setResidencyFilter(event.target.value)}><option value="all">All statuses</option><option value="pending">Pending</option><option value="verified">Verified</option><option value="rejected">Rejected</option></select></label>
-      </div>
-      <p className="field-hint" aria-live="polite">Showing {filteredResidents.length} of {residents.data.length} resident {residents.data.length === 1 ? 'record' : 'records'}.</p>
+        <label>Residency status<select value={residencyFilter} onChange={(event) => { setResidencyFilter(event.target.value); setPage(0) }}><option value="all">All statuses</option><option value="pending">Pending</option><option value="verified">Verified</option><option value="rejected">Rejected</option></select></label>
+      </div>}
+      {role !== 'resident' && <p className="field-hint" aria-live="polite">Showing {filteredResidents.length} resident {filteredResidents.length === 1 ? 'record' : 'records'} on this page. {residents.data?.total ?? 0} records match these filters.</p>}
       {filteredResidents.length ? <div className="ops-table-wrap"><table className="ops-table"><thead><tr><th>Resident</th><th>Household</th><th>Contact</th><th>Residency</th><th>Record</th></tr></thead><tbody>
-        {filteredResidents.map((resident) => {
-          const verification = verifications.data?.find((item) => item.resident_id === resident.id)
-          return <tr key={resident.id}><td><strong>{resident.first_name} {resident.last_name}</strong><small>{resident.birth_date ? new Date(resident.birth_date + 'T00:00:00').toLocaleDateString() : 'Birth date not recorded'}</small></td><td>{resident.household?.household_code ?? '—'}<small>{resident.household?.purok ?? resident.household?.address_line ?? 'Address unavailable'}</small></td><td>{resident.phone ?? '—'}</td><td><StatusPill status={verification?.status ?? 'pending'} />{canVerify.data && <div className="row-actions"><button onClick={() => void verify(resident.id, 'verified')}>Verify</button><button onClick={() => void verify(resident.id, 'rejected')}>Reject</button></div>}</td><td><StatusPill status={resident.record_status} /></td></tr>
-        })}
-      </tbody></table></div> : <div className="ops-empty"><Search size={22} /><strong>No matching residents</strong><p>Try another search or choose a different residency status.</p></div>}
+        {filteredResidents.map((resident) => <tr key={resident.id}><td><strong>{resident.first_name} {resident.last_name}</strong><small>{resident.birth_date ? new Date(resident.birth_date + 'T00:00:00').toLocaleDateString() : 'Birth date not recorded'}</small></td><td>{resident.household?.household_code ?? '—'}<small>{resident.household?.purok ?? resident.household?.address_line ?? 'Address unavailable'}</small></td><td>{resident.phone ?? '—'}</td><td><StatusPill status={latestVerificationByResident.get(resident.id) ?? 'pending'} />{canVerify.data && <div className="row-actions"><button onClick={() => void verify(resident.id, 'verified')}>Verify</button><button onClick={() => void verify(resident.id, 'rejected')}>Reject</button></div>}</td><td><StatusPill status={resident.record_status} /></td></tr>)}
+      </tbody></table></div> : <div className="ops-empty"><Search size={22} /><strong>No residents on this page match that status</strong><p>Choose another status or move to another page.</p></div>}
+      {role !== 'resident' && (residents.data?.total ?? 0) > RESIDENT_PAGE_SIZE && <nav className="ops-form-actions" aria-label="Resident directory pages">
+        <button className="button outline" disabled={page === 0 || residents.isFetching} onClick={() => setPage((current) => Math.max(0, current - 1))}>Previous</button>
+        <span className="field-hint">Page {page + 1} of {Math.ceil((residents.data?.total ?? 0) / RESIDENT_PAGE_SIZE)}</span>
+        <button className="button outline" disabled={(page + 1) * RESIDENT_PAGE_SIZE >= (residents.data?.total ?? 0) || residents.isFetching} onClick={() => setPage((current) => current + 1)}>Next</button>
+      </nav>}
       </>}
     {canCreate.isPending && <LoadingNotice compact />}
   </section>

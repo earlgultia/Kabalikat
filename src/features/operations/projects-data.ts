@@ -2,6 +2,8 @@ import { supabase } from '../../lib/supabase'
 
 export type BarangayProject = { id: string; title: string; description: string; planned_start: string | null; planned_end: string | null; status: 'planned' | 'active' | 'paused' | 'completed' | 'cancelled'; created_at: string }
 export type BarangayProjectUpdate = { id: string; project_id: string; update_type: 'milestone' | 'progress'; title: string; details: string; created_at: string }
+export type BarangayProjectPage = { rows: BarangayProject[]; totalCount: number }
+export const BARANGAY_PROJECT_PAGE_SIZE = 20
 
 function client() {
   if (!supabase) throw new Error('Supabase is not configured.')
@@ -21,12 +23,21 @@ function rpc<T>(name: string, args: Record<string, unknown>) {
   })
 }
 
-export function listBarangayProjects(tenantId: string) {
-  return read<BarangayProject>(client().from('barangay_projects').select('id,title,description,planned_start,planned_end,status,created_at').eq('barangay_id', tenantId).order('created_at', { ascending: false }))
+export async function listBarangayProjects(tenantId: string, page: number): Promise<BarangayProjectPage> {
+  const from = page * BARANGAY_PROJECT_PAGE_SIZE
+  const { data, error, count } = await client().from('barangay_projects')
+    .select('id,title,description,planned_start,planned_end,status,created_at', { count: 'exact' })
+    .eq('barangay_id', tenantId)
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
+    .range(from, from + BARANGAY_PROJECT_PAGE_SIZE - 1)
+  if (error) throw new Error(error.message)
+  return { rows: (data ?? []) as BarangayProject[], totalCount: count ?? 0 }
 }
 
-export function listBarangayProjectUpdates(tenantId: string) {
-  return read<BarangayProjectUpdate>(client().from('barangay_project_updates').select('id,project_id,update_type,title,details,created_at').eq('barangay_id', tenantId).order('created_at', { ascending: false }))
+export function listBarangayProjectUpdates(tenantId: string, projectIds: string[]) {
+  if (projectIds.length === 0) return Promise.resolve([] as BarangayProjectUpdate[])
+  return read<BarangayProjectUpdate>(client().from('barangay_project_updates').select('id,project_id,update_type,title,details,created_at').eq('barangay_id', tenantId).in('project_id', projectIds).order('created_at', { ascending: false }).order('id', { ascending: false }))
 }
 
 export function createBarangayProject(input: { tenantId: string; title: string; description: string; start: string; end: string }) {

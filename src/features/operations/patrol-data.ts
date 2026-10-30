@@ -5,7 +5,11 @@ export type PatrolShift = {
   id: string; title: string; patrol_area: string; starts_at: string; ends_at: string; status: string
   assigned_to: string; started_at: string | null; completed_at: string | null; cancellation_note: string | null; created_at: string
 }
+export type PatrolShiftPage = { rows: PatrolShift[]; totalCount: number }
 export type PatrolLog = { id: string; shift_id: string; entry_type: string; location_note: string; details: string; created_at: string }
+export type PatrolLogPage = { rows: PatrolLog[]; totalCount: number }
+export const PATROL_SHIFT_PAGE_SIZE = 50
+export const PATROL_LOG_PAGE_SIZE = 50
 
 function client() {
   if (!supabase) throw new Error('Supabase is not configured.')
@@ -18,16 +22,24 @@ export async function listPatrolAssignees(tenantId: string): Promise<PatrolAssig
   return (data ?? []) as PatrolAssignee[]
 }
 
-export async function listPatrolShifts(tenantId: string): Promise<PatrolShift[]> {
-  const { data, error } = await client().from('patrol_shifts').select('id,title,patrol_area,starts_at,ends_at,status,assigned_to,started_at,completed_at,cancellation_note,created_at').eq('barangay_id', tenantId).order('starts_at', { ascending: false })
+export async function listPatrolShifts(tenantId: string, page: number): Promise<PatrolShiftPage> {
+  const { data, error } = await client().rpc('list_patrol_shifts_page', { p_barangay_id: tenantId, p_page: page, p_page_size: PATROL_SHIFT_PAGE_SIZE })
   if (error) throw new Error(error.message)
-  return (data ?? []) as PatrolShift[]
+  const rows = (data ?? []) as Array<PatrolShift & { total_count: number }>
+  return { rows, totalCount: Number(rows[0]?.total_count ?? 0) }
 }
 
-export async function listPatrolLogs(tenantId: string): Promise<PatrolLog[]> {
-  const { data, error } = await client().from('patrol_shift_logs').select('id,shift_id,entry_type,location_note,details,created_at').eq('barangay_id', tenantId).order('created_at')
+export async function listPatrolLogs(tenantId: string, shiftId: string, page: number): Promise<PatrolLogPage> {
+  const from = page * PATROL_LOG_PAGE_SIZE
+  const { data, error, count } = await client().from('patrol_shift_logs')
+    .select('id,shift_id,entry_type,location_note,details,created_at', { count: 'exact' })
+    .eq('barangay_id', tenantId)
+    .eq('shift_id', shiftId)
+    .order('created_at')
+    .order('id')
+    .range(from, from + PATROL_LOG_PAGE_SIZE - 1)
   if (error) throw new Error(error.message)
-  return (data ?? []) as PatrolLog[]
+  return { rows: (data ?? []) as PatrolLog[], totalCount: count ?? 0 }
 }
 
 async function run(name: string, args: Record<string, unknown>) {

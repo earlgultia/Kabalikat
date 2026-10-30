@@ -7,6 +7,8 @@ export type CommitteeTaskRow = {
   assigned_to: string | null; due_date: string | null; created_at: string
 }
 export type AssignableMemberRow = { user_id: string; display_name: string; role_label: string }
+export type CommitteePage = { rows: CommitteeRow[]; totalCount: number }
+export const COMMITTEE_PAGE_SIZE = 20
 
 function client() {
   if (!supabase) throw new Error('Supabase is not configured.')
@@ -19,16 +21,26 @@ async function read<T>(request: PromiseLike<{ data: unknown; error: { message: s
   return (data ?? []) as T[]
 }
 
-export function listCommittees(tenantId: string) {
-  return read<CommitteeRow>(client().from('committees').select('id,name,description,status,created_at').eq('barangay_id', tenantId).order('name'))
+export async function listCommittees(tenantId: string, page: number): Promise<CommitteePage> {
+  const from = page * COMMITTEE_PAGE_SIZE
+  const { data, error, count } = await client().from('committees')
+    .select('id,name,description,status,created_at', { count: 'exact' })
+    .eq('barangay_id', tenantId)
+    .order('name')
+    .order('id')
+    .range(from, from + COMMITTEE_PAGE_SIZE - 1)
+  if (error) throw new Error(error.message)
+  return { rows: (data ?? []) as CommitteeRow[], totalCount: count ?? 0 }
 }
 
-export function listCommitteeMembers(tenantId: string) {
-  return read<CommitteeMemberRow>(client().from('committee_members').select('committee_id,user_id,profile:profiles(display_name)').eq('barangay_id', tenantId))
+export function listCommitteeMembers(tenantId: string, committeeIds: string[]) {
+  if (committeeIds.length === 0) return Promise.resolve([] as CommitteeMemberRow[])
+  return read<CommitteeMemberRow>(client().from('committee_members').select('committee_id,user_id,profile:profiles(display_name)').eq('barangay_id', tenantId).in('committee_id', committeeIds))
 }
 
-export function listCommitteeTasks(tenantId: string) {
-  return read<CommitteeTaskRow>(client().from('committee_tasks').select('id,committee_id,title,description,status,assigned_to,due_date,created_at').eq('barangay_id', tenantId).order('due_date'))
+export function listCommitteeTasks(tenantId: string, committeeIds: string[]) {
+  if (committeeIds.length === 0) return Promise.resolve([] as CommitteeTaskRow[])
+  return read<CommitteeTaskRow>(client().from('committee_tasks').select('id,committee_id,title,description,status,assigned_to,due_date,created_at').eq('barangay_id', tenantId).in('committee_id', committeeIds).order('due_date').order('id'))
 }
 
 export async function listAssignableCommitteeMembers(tenantId: string) {

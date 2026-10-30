@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
 import { Bell, Megaphone } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
-import { createAnnouncement, hasPermission, listAnnouncementAudienceRoles, listAnnouncements, updateAnnouncementStatus } from './data'
+import { ANNOUNCEMENT_PAGE_SIZE, createAnnouncement, hasPermission, listAnnouncementAudienceRoles, listAnnouncementPage, updateAnnouncementStatus } from './data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 
 const announcementSchema = z.object({
@@ -19,7 +19,8 @@ export function AnnouncementsPage() {
   const { membership, user } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
   const queryClient = useQueryClient()
-  const announcements = useQuery({ queryKey: ['announcements', tenantId], queryFn: () => listAnnouncements(tenantId), enabled: Boolean(tenantId) })
+  const [page, setPage] = useState(0)
+  const announcements = useQuery({ queryKey: ['announcements', tenantId, page], queryFn: () => listAnnouncementPage(tenantId, page), enabled: Boolean(tenantId) })
   const canPublish = useQuery({ queryKey: ['permission', tenantId, 'announcement.publish'], queryFn: () => hasPermission(tenantId, 'announcement.publish'), enabled: Boolean(tenantId) })
   const audienceRoles = useQuery({ queryKey: ['announcement-audience-roles'], queryFn: listAnnouncementAudienceRoles, enabled: Boolean(canPublish.data) })
   const [open, setOpen] = useState(false)
@@ -45,6 +46,7 @@ export function AnnouncementsPage() {
         publish,
       })
       await queryClient.invalidateQueries({ queryKey: ['announcements', tenantId] })
+      setPage(0)
       setMessage(publish
         ? 'Announcement published. In-app notices were created for eligible recipients.'
         : 'Announcement saved as a draft. No notification was created.')
@@ -81,11 +83,16 @@ export function AnnouncementsPage() {
       <div className="ops-form-actions"><span className="field-hint">Keep sensitive resident or health details out of public messages.</span><button className="button primary" disabled={busy}>{busy ? 'Saving…' : 'Save announcement'}</button></div>
     </form>}
     <div className="ops-section-title"><h2>Community updates</h2><p>Published messages are visible according to their audience and tenant membership.</p></div>
-    {!tenantId ? <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to view local announcements." /> : announcements.isPending ? <LoadingNotice /> : announcements.error ? <ErrorNotice message={announcements.error.message} /> : announcements.data?.length ?
-      <div className="ops-announcement-list">{announcements.data.map((item) => <article className="ops-panel announcement-card" key={item.id}>
+    {!tenantId ? <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to view local announcements." /> : announcements.isPending ? <LoadingNotice /> : announcements.error ? <ErrorNotice message={announcements.error.message} /> : announcements.data?.total ? announcements.data.announcements.length ?
+      <div className="ops-announcement-list">{announcements.data.announcements.map((item) => <article className="ops-panel announcement-card" key={item.id}>
         <div className="announcement-top"><div><StatusPill status={item.status} /><span className="audience-label">{item.audience === 'role' ? `Role: ${audienceRoles.data?.find((role) => role.id === item.audience_role_id)?.label ?? 'selected role'}` : item.audience}</span></div>{canPublish.data && item.status !== 'archived' && <button className="text-action" onClick={() => void setStatus(item.id, item.status === 'published' ? 'archived' : 'published')}>{item.status === 'published' ? 'Archive' : 'Publish'}</button>}</div>
         <h2>{item.title}</h2><p>{item.body}</p><small>{item.published_at ? 'Published ' + new Date(item.published_at).toLocaleString() : 'Draft'}{item.expires_at ? ' · Expires ' + new Date(item.expires_at).toLocaleDateString() : ''}</small>
-      </article>)}</div> : <EmptyNotice title="No announcements yet" detail="Published community updates will appear here." />}
+      </article>)}</div> : <EmptyNotice title="No announcements on this page" detail="Move to another page to see more community updates." /> : <EmptyNotice title="No announcements yet" detail="Published community updates will appear here." />}
+    {announcements.data && announcements.data.total > ANNOUNCEMENT_PAGE_SIZE && <nav className="ops-form-actions" aria-label="Announcement pages">
+      <button className="button outline" disabled={page === 0 || announcements.isFetching} onClick={() => setPage((current) => Math.max(0, current - 1))}>Previous</button>
+      <span className="field-hint">Page {page + 1} of {Math.ceil(announcements.data.total / ANNOUNCEMENT_PAGE_SIZE)}</span>
+      <button className="button outline" disabled={(page + 1) * ANNOUNCEMENT_PAGE_SIZE >= announcements.data.total || announcements.isFetching} onClick={() => setPage((current) => current + 1)}>Next</button>
+    </nav>}
   </section>
 }
 

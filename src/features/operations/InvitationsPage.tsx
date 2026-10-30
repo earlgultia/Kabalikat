@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
 import { Clipboard, UserPlus, XCircle } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
-import { createInvitation, hasPermission, listInvitations, revokeInvitation } from './data'
+import { createInvitation, hasPermission, listInvitationPage, revokeInvitation, INVITATION_PAGE_SIZE } from './data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 
 const invitationSchema = z.object({
@@ -15,7 +15,8 @@ export function InvitationsPage() {
   const { membership } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
   const queryClient = useQueryClient()
-  const invitations = useQuery({ queryKey: ['invitations', tenantId], queryFn: () => listInvitations(tenantId), enabled: Boolean(tenantId) })
+  const [page, setPage] = useState(0)
+  const invitations = useQuery({ queryKey: ['invitations', tenantId, page], queryFn: () => listInvitationPage(tenantId, page), enabled: Boolean(tenantId) })
   const canInvite = useQuery({ queryKey: ['permission', tenantId, 'membership.invite'], queryFn: () => hasPermission(tenantId, 'membership.invite'), enabled: Boolean(tenantId) })
   const [inviteUrl, setInviteUrl] = useState('')
   const [error, setError] = useState('')
@@ -36,6 +37,7 @@ export function InvitationsPage() {
       setInviteUrl(url.toString())
       setSuccess('Invitation link created. It expires in 7 days and can only be accepted by the invited email address.')
       await queryClient.invalidateQueries({ queryKey: ['invitations', tenantId] })
+      setPage(0)
       form.reset()
     } catch (err) { setError(err instanceof Error ? err.message : 'Unable to create this invitation.') }
     finally { setBusy(false) }
@@ -72,13 +74,18 @@ export function InvitationsPage() {
     </form>}
     {error && !canInvite.data && <ErrorNotice message={error} />}
     <div className="ops-section-title"><h2>Recent invitations</h2><p>Invitation tokens are never listed or shown again after creation.</p></div>
-    {!tenantId ? null : invitations.isPending ? <LoadingNotice /> : invitations.error ? <ErrorNotice message={invitations.error.message} /> : invitations.data?.length ?
+    {!tenantId ? null : invitations.isPending ? <LoadingNotice /> : invitations.error ? <ErrorNotice message={invitations.error.message} /> : invitations.data?.total ? invitations.data.invitations.length ?
       <div className="ops-table-wrap"><table className="ops-table"><thead><tr><th>Email</th><th>Status</th><th>Expires</th><th>Actions</th></tr></thead><tbody>
-        {invitations.data.map((invite) => {
+        {invitations.data.invitations.map((invite) => {
           const expired = invite.status === 'pending' && new Date(invite.expires_at).getTime() <= Date.now()
           return <tr key={invite.id}><td>{invite.invited_email}</td><td><StatusPill status={expired ? 'expired' : invite.status} /></td><td>{new Date(invite.expires_at).toLocaleString()}</td><td>{canInvite.data && invite.status === 'pending' && !expired && <button className="text-action danger-action" onClick={() => void revoke(invite.id, invite.invited_email)}><XCircle size={13} />Revoke</button>}</td></tr>
         })}
-      </tbody></table></div> : <EmptyNotice title="No invitations yet" detail="New invitation records will appear here." />}
+      </tbody></table></div> : <EmptyNotice title="No invitations on this page" detail="Move to another page to see more invitations." /> : <EmptyNotice title="No invitations yet" detail="New invitation records will appear here." />}
+    {invitations.data && invitations.data.total > INVITATION_PAGE_SIZE && <nav className="ops-form-actions" aria-label="Invitation pages">
+      <button className="button outline" disabled={page === 0 || invitations.isFetching} onClick={() => setPage((current) => Math.max(0, current - 1))}>Previous</button>
+      <span className="field-hint">Page {page + 1} of {Math.ceil(invitations.data.total / INVITATION_PAGE_SIZE)}</span>
+      <button className="button outline" disabled={(page + 1) * INVITATION_PAGE_SIZE >= invitations.data.total || invitations.isFetching} onClick={() => setPage((current) => current + 1)}>Next</button>
+    </nav>}
   </section>
 }
 

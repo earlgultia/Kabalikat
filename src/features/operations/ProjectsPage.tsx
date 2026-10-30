@@ -1,10 +1,10 @@
 import { useState, type FormEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
-import { CheckCircle2, FolderKanban, Plus, Waypoints } from 'lucide-react'
+import { CheckCircle2, ChevronLeft, ChevronRight, FolderKanban, Plus, Waypoints } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import { hasPermission } from './data'
-import { addBarangayProjectUpdate, createBarangayProject, listBarangayProjectUpdates, listBarangayProjects, updateBarangayProjectStatus, type BarangayProject, type BarangayProjectUpdate } from './projects-data'
+import { addBarangayProjectUpdate, BARANGAY_PROJECT_PAGE_SIZE, createBarangayProject, listBarangayProjectUpdates, listBarangayProjects, updateBarangayProjectStatus, type BarangayProject, type BarangayProjectUpdate } from './projects-data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 import { formatDateTime } from './format'
 
@@ -23,9 +23,18 @@ export function ProjectsPage() {
   const { membership } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
   const queryClient = useQueryClient()
+  const [page, setPage] = useState(0)
   const canManage = useQuery({ queryKey: ['permission', tenantId, 'project.manage'], queryFn: () => hasPermission(tenantId, 'project.manage'), enabled: Boolean(tenantId) })
-  const projects = useQuery({ queryKey: ['barangay-projects', tenantId], queryFn: () => listBarangayProjects(tenantId), enabled: Boolean(tenantId) })
-  const updates = useQuery({ queryKey: ['barangay-project-updates', tenantId], queryFn: () => listBarangayProjectUpdates(tenantId), enabled: Boolean(tenantId) })
+  const projects = useQuery({ queryKey: ['barangay-projects', tenantId, page], queryFn: () => listBarangayProjects(tenantId, page), enabled: Boolean(tenantId) })
+  const projectIds = projects.data?.rows.map((project) => project.id) ?? []
+  const updates = useQuery({ queryKey: ['barangay-project-updates', tenantId, projectIds], queryFn: () => listBarangayProjectUpdates(tenantId, projectIds), enabled: Boolean(tenantId) && Boolean(projects.data) })
+  const projectUpdatesById = new Map<string, BarangayProjectUpdate[]>()
+  updates.data?.forEach((update) => {
+    const projectUpdates = projectUpdatesById.get(update.project_id)
+    if (projectUpdates) projectUpdates.push(update)
+    else projectUpdatesById.set(update.project_id, [update])
+  })
+  const totalPages = Math.ceil((projects.data?.totalCount ?? 0) / BARANGAY_PROJECT_PAGE_SIZE)
   const [showForm, setShowForm] = useState(false)
   const [updateProject, setUpdateProject] = useState('')
   const [busy, setBusy] = useState(false)
@@ -48,7 +57,7 @@ export function ProjectsPage() {
     setBusy(true); setError(''); setMessage('')
     try {
       await createBarangayProject({ tenantId, title: parsed.data.title, description: parsed.data.description, start: parsed.data.start, end: parsed.data.end })
-      await refresh(); form.reset(); setShowForm(false); setMessage('Barangay project added.')
+      setPage(0); await refresh(); form.reset(); setShowForm(false); setMessage('Barangay project added.')
     } catch { setError('Unable to create the project. Review the details and try again.') }
     finally { setBusy(false) }
   }
@@ -85,9 +94,9 @@ export function ProjectsPage() {
     {showForm && canManage.data && <form className="ops-panel ops-form" onSubmit={(event) => void createProject(event)}><div className="ops-panel-heading"><div><h2>New barangay project</h2><p>Project notes are separate from the official finance ledger.</p></div><FolderKanban size={19} /></div><div className="ops-form-grid"><label>Project title<input name="title" minLength={3} maxLength={180} required /></label><label>Planned start<input name="start" type="date" /></label><label>Planned end<input name="end" type="date" /></label><label className="span-two">Description<textarea name="description" maxLength={4000} /></label></div><div className="ops-form-actions"><button className="button primary" disabled={busy}>Create project</button></div></form>}
     {(projects.isPending || updates.isPending) && tenantId && <LoadingNotice />}
     {(projects.error || updates.error) && <ErrorNotice message="Unable to load project records." />}
-    {projects.data?.length === 0 && <div className="ops-empty"><FolderKanban size={22} /><strong>No barangay projects yet</strong><p>When an authorized official adds a project, its status and progress will appear here.</p></div>}
-    <div className="barangay-project-list">{projects.data?.map((project) => {
-      const projectUpdates = updates.data?.filter((update) => update.project_id === project.id) ?? []
+    {projects.data?.totalCount === 0 && <div className="ops-empty"><FolderKanban size={22} /><strong>No barangay projects yet</strong><p>When an authorized official adds a project, its status and progress will appear here.</p></div>}
+    <div className="barangay-project-list">{projects.data?.rows.map((project) => {
+      const projectUpdates = projectUpdatesById.get(project.id) ?? []
       return <article className="ops-panel barangay-project-card" key={project.id}>
         <div className="barangay-project-header"><div><StatusPill status={project.status} /><h2>{project.title}</h2><p>{project.description || 'No description provided.'}</p></div><Waypoints size={21} aria-hidden="true" /></div>
         {(project.planned_start || project.planned_end) && <div className="sk-project-meta">{project.planned_start && <span>Start {dateLabel(project.planned_start)}</span>}{project.planned_end && <span>End {dateLabel(project.planned_end)}</span>}<span>Created {formatDateTime(project.created_at)}</span></div>}
@@ -97,5 +106,12 @@ export function ProjectsPage() {
         </section>
       </article>
     })}</div>
+    {totalPages > 1 && <nav className="ops-panel ops-form-actions" aria-label="Project pages">
+      <span className="muted">Page {page + 1} of {totalPages} - {projects.data?.totalCount ?? 0} projects</span>
+      <div className="finance-review-actions">
+        <button className="button outline" disabled={page === 0 || projects.isFetching} onClick={() => setPage((current) => current - 1)}><ChevronLeft size={16} />Previous</button>
+        <button className="button outline" disabled={page + 1 >= totalPages || projects.isFetching} onClick={() => setPage((current) => current + 1)}>Next<ChevronRight size={16} /></button>
+      </div>
+    </nav>}
   </section>
 }

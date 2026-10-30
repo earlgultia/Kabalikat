@@ -4,8 +4,8 @@ import { z } from 'zod'
 import { CalendarDays, CheckCircle2, ClipboardList } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import {
-  createMeeting, hasPermission, listAttendance, listMeetingAttendees, listMeetings, listTenantMembers,
-  markAttendance, recordAttendance, updateMeetingStatus,
+  createMeeting, hasPermission, listAttendance, listMeetingAttendees, listMeetingPage, listTenantMembers,
+  markAttendance, recordAttendance, updateMeetingStatus, MEETING_PAGE_SIZE,
 } from './data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 import { formatDateTime } from './format'
@@ -24,7 +24,8 @@ export function MeetingsPage() {
   const { membership, user } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
   const queryClient = useQueryClient()
-  const meetings = useQuery({ queryKey: ['meetings', tenantId], queryFn: () => listMeetings(tenantId), enabled: Boolean(tenantId) })
+  const [page, setPage] = useState(0)
+  const meetings = useQuery({ queryKey: ['meetings', tenantId, page], queryFn: () => listMeetingPage(tenantId, page), enabled: Boolean(tenantId) })
   const canManage = useQuery({ queryKey: ['permission', tenantId, 'meeting.manage'], queryFn: () => hasPermission(tenantId, 'meeting.manage'), enabled: Boolean(tenantId) })
   const canManageAttendance = useQuery({ queryKey: ['permission', tenantId, 'attendance.manage'], queryFn: () => hasPermission(tenantId, 'attendance.manage'), enabled: Boolean(tenantId) })
   const canSelectAttendees = useQuery({ queryKey: ['permission', tenantId, 'membership.read'], queryFn: () => hasPermission(tenantId, 'membership.read'), enabled: Boolean(tenantId) })
@@ -61,6 +62,7 @@ export function MeetingsPage() {
         agenda: parsed.data.agenda ?? '', attendeeIds: selectedAttendees,
       })
       await queryClient.invalidateQueries({ queryKey: ['meetings', tenantId] })
+      setPage(0)
       setSelectedMeeting(id); setMessage('Meeting created. You are added as an eligible attendee.')
       setSelectedAttendees([]); setOpen(false); form.reset()
     } catch (err) { setError(err instanceof Error ? err.message : 'Unable to create this meeting.') }
@@ -117,8 +119,8 @@ export function MeetingsPage() {
       <div className="ops-form-actions"><span className="field-hint">Attendance self-check-in opens 30 minutes before start and closes 30 minutes after end.</span><button className="button primary" disabled={busy}>{busy ? 'Saving…' : 'Create meeting'}</button></div>
     </form>}
     <div className="ops-section-title"><h2>Scheduled meetings</h2><p>Meeting lists and attendance are tenant- and role-scoped.</p></div>
-    {!tenantId ? null : meetings.isPending ? <LoadingNotice /> : meetings.error ? <ErrorNotice message={meetings.error.message} /> : meetings.data?.length ?
-      <div className="ops-meeting-list">{meetings.data.map((meeting) => <article className="ops-panel meeting-card" key={meeting.id}>
+    {!tenantId ? null : meetings.isPending ? <LoadingNotice /> : meetings.error ? <ErrorNotice message={meetings.error.message} /> : meetings.data?.total ? meetings.data.meetings.length ?
+      <div className="ops-meeting-list">{meetings.data.meetings.map((meeting) => <article className="ops-panel meeting-card" key={meeting.id}>
         <div className="meeting-card-top"><div className="request-icon"><CalendarDays size={18} /></div><div className="meeting-title"><h2>{meeting.title}</h2><p>{meeting.location} · {formatDateTime(meeting.starts_at)}</p></div><StatusPill status={meeting.status} /></div>
         {meeting.agenda && <div className="meeting-agenda"><strong><ClipboardList size={14} />Agenda</strong><p>{meeting.agenda}</p></div>}
         <div className="meeting-actions"><button className="button outline" onClick={() => setSelectedMeeting((current) => current === meeting.id ? '' : meeting.id)}>{selectedMeeting === meeting.id ? 'Hide meeting details' : 'View attendance & records'}</button>
@@ -144,7 +146,12 @@ export function MeetingsPage() {
             attendanceLoading={attendance.isPending || Boolean(attendance.error)}
             canManage={Boolean(canManage.data)} />
         </div>}
-      </article>)}</div> : <EmptyNotice title="No meetings scheduled" detail="Meetings created for this barangay will appear here." />}
+      </article>)}</div> : <EmptyNotice title="No meetings on this page" detail="Move to another page to see more meetings." /> : <EmptyNotice title="No meetings scheduled" detail="Meetings created for this barangay will appear here." />}
+    {meetings.data && meetings.data.total > MEETING_PAGE_SIZE && <nav className="ops-form-actions" aria-label="Meeting pages">
+      <button className="button outline" disabled={page === 0 || meetings.isFetching} onClick={() => setPage((current) => Math.max(0, current - 1))}>Previous</button>
+      <span className="field-hint">Page {page + 1} of {Math.ceil(meetings.data.total / MEETING_PAGE_SIZE)}</span>
+      <button className="button outline" disabled={(page + 1) * MEETING_PAGE_SIZE >= meetings.data.total || meetings.isFetching} onClick={() => setPage((current) => current + 1)}>Next</button>
+    </nav>}
   </section>
 }
 

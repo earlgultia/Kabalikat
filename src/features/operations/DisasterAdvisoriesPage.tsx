@@ -1,10 +1,10 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
 import { AlertTriangle, CheckCircle2, ExternalLink, MapPin, Megaphone, Phone, Plus, Printer, ShieldCheck } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import { hasPermission } from './data'
-import { archiveDisasterEmergencyResource, createDisasterAdvisory, listDisasterAdvisories, listDisasterAdvisoryEvents, listDisasterEmergencyResourceActivity, listDisasterEmergencyResources, publishDisasterAdvisory, publishDisasterEmergencyResource, resolveDisasterAdvisory, saveDisasterEmergencyResource, type DisasterAdvisory, type DisasterEmergencyResource } from './disaster-data'
+import { archiveDisasterEmergencyResource, createDisasterAdvisory, listDisasterAdvisoryPage, listDisasterAdvisoryEvents, listDisasterEmergencyResourceActivity, listDisasterEmergencyResources, publishDisasterAdvisory, publishDisasterEmergencyResource, resolveDisasterAdvisory, saveDisasterEmergencyResource, type DisasterAdvisory, type DisasterEmergencyResource, DISASTER_ADVISORY_PAGE_SIZE } from './disaster-data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 import { formatDateTime } from './format'
 
@@ -21,8 +21,26 @@ export function DisasterAdvisoriesPage() {
   const canManage = useQuery({ queryKey: ['permission', tenantId, 'disaster.manage'], queryFn: () => hasPermission(tenantId, 'disaster.manage'), enabled: Boolean(tenantId) })
   const canRead = useQuery({ queryKey: ['permission', tenantId, 'disaster.read'], queryFn: () => hasPermission(tenantId, 'disaster.read'), enabled: Boolean(tenantId) })
   const enabled = Boolean(tenantId && (canManage.data || canRead.data))
-  const advisories = useQuery({ queryKey: ['disaster-advisories', tenantId], queryFn: () => listDisasterAdvisories(tenantId), enabled })
-  const events = useQuery({ queryKey: ['disaster-advisory-events', tenantId], queryFn: () => listDisasterAdvisoryEvents(tenantId), enabled: Boolean(tenantId && canManage.data) })
+  const [page, setPage] = useState(0)
+  const [advisorySearch, setAdvisorySearch] = useState('')
+  const [advisorySeverityFilter, setAdvisorySeverityFilter] = useState<'all' | DisasterAdvisory['severity']>('all')
+  const [advisoryStatusFilter, setAdvisoryStatusFilter] = useState<'all' | DisasterAdvisory['status']>('all')
+  const [debouncedAdvisorySearch, setDebouncedAdvisorySearch] = useState('')
+  useEffect(() => {
+    const timeout = window.setTimeout(() => { setDebouncedAdvisorySearch(advisorySearch); setPage(0) }, 250)
+    return () => window.clearTimeout(timeout)
+  }, [advisorySearch])
+  const advisories = useQuery({
+    queryKey: ['disaster-advisories', tenantId, page, debouncedAdvisorySearch, advisorySeverityFilter, canManage.data ? advisoryStatusFilter : 'all'],
+    queryFn: () => listDisasterAdvisoryPage(tenantId, page, debouncedAdvisorySearch, advisorySeverityFilter, canManage.data ? advisoryStatusFilter : 'all'),
+    enabled,
+  })
+  const advisoryIds = advisories.data?.advisories.map((item) => item.id) ?? []
+  const events = useQuery({
+    queryKey: ['disaster-advisory-events', tenantId, advisoryIds],
+    queryFn: () => listDisasterAdvisoryEvents(tenantId, advisoryIds),
+    enabled: Boolean(tenantId && canManage.data && advisoryIds.length),
+  })
   const resources = useQuery({ queryKey: ['disaster-emergency-resources', tenantId], queryFn: () => listDisasterEmergencyResources(tenantId), enabled })
   const resourceActivity = useQuery({ queryKey: ['disaster-emergency-resource-activity', tenantId], queryFn: () => listDisasterEmergencyResourceActivity(tenantId), enabled: Boolean(tenantId && canManage.data) })
   const [showForm, setShowForm] = useState(false)
@@ -31,9 +49,6 @@ export function DisasterAdvisoriesPage() {
   const [resourceTypeFilter, setResourceTypeFilter] = useState<'all' | DisasterEmergencyResource['resource_type']>('all')
   const [resourceStatusFilter, setResourceStatusFilter] = useState<'all' | DisasterEmergencyResource['status']>('all')
   const [resourceSearch, setResourceSearch] = useState('')
-  const [advisorySearch, setAdvisorySearch] = useState('')
-  const [advisorySeverityFilter, setAdvisorySeverityFilter] = useState<'all' | DisasterAdvisory['severity']>('all')
-  const [advisoryStatusFilter, setAdvisoryStatusFilter] = useState<'all' | DisasterAdvisory['status']>('all')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
@@ -54,13 +69,7 @@ export function DisasterAdvisoriesPage() {
     const matchesSearch = !term || [resource.name, resource.phone, resource.address, resource.details].some((value) => value?.toLocaleLowerCase().includes(term))
     return matchesType && matchesStatus && matchesSearch
   })
-  const visibleAdvisories = (advisories.data ?? []).filter((advisory) => {
-    const term = advisorySearch.trim().toLocaleLowerCase()
-    const matchesSeverity = advisorySeverityFilter === 'all' || advisory.severity === advisorySeverityFilter
-    const matchesStatus = advisoryStatusFilter === 'all' || advisory.status === advisoryStatusFilter
-    const matchesSearch = !term || [advisory.title, advisory.affected_area, advisory.instructions].some((value) => value.toLocaleLowerCase().includes(term))
-    return matchesSeverity && matchesStatus && matchesSearch
-  })
+  const visibleAdvisories = advisories.data?.advisories ?? []
 
   async function saveResource(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -115,7 +124,7 @@ export function DisasterAdvisoriesPage() {
     const expiresAt = parsed.data.expiry ? new Date(parsed.data.expiry) : null
     if (expiresAt && (!Number.isFinite(expiresAt.getTime()) || expiresAt.getTime() <= Date.now())) { setError('Expiry must be a future date and time.'); return }
     setBusy(true); setError(''); setMessage('')
-    try { await createDisasterAdvisory({ tenantId, type: parsed.data.type, severity: parsed.data.severity, title: parsed.data.title, area: parsed.data.area, instructions: parsed.data.instructions, expiresAt: expiresAt?.toISOString() ?? null }); await refresh(); form.reset(); setShowForm(false); setMessage('Advisory draft saved. Review it before publishing.') }
+    try { await createDisasterAdvisory({ tenantId, type: parsed.data.type, severity: parsed.data.severity, title: parsed.data.title, area: parsed.data.area, instructions: parsed.data.instructions, expiresAt: expiresAt?.toISOString() ?? null }); await refresh(); setPage(0); form.reset(); setShowForm(false); setMessage('Advisory draft saved. Review it before publishing.') }
     catch (err) { setError(err instanceof Error ? err.message : 'Unable to save this advisory.') }
     finally { setBusy(false) }
   }
@@ -180,9 +189,10 @@ export function DisasterAdvisoriesPage() {
       <label>Expires (optional)<input name="expiry" type="datetime-local" /></label>
     </div><div className="ops-form-actions"><button className="button primary" disabled={busy}>Save draft</button></div></form>}
     {advisories.isPending && enabled && <LoadingNotice />}{advisories.error && <ErrorNotice message={advisories.error.message} />}
-    {advisories.data?.length === 0 && <div className="ops-empty"><Megaphone size={22} /><strong>No advisories available</strong><p>Published disaster advisories will appear here.</p></div>}
-    {advisories.data && advisories.data.length > 0 && <div className="advisory-filters"><label>Search advisories<input value={advisorySearch} onChange={(event) => setAdvisorySearch(event.target.value)} placeholder="Title, affected area, or instructions" /></label><label>Severity<select value={advisorySeverityFilter} onChange={(event) => setAdvisorySeverityFilter(event.target.value as typeof advisorySeverityFilter)}><option value="all">All severities</option><option value="information">Information</option><option value="watch">Watch</option><option value="warning">Warning</option><option value="emergency">Emergency</option></select></label>{canManage.data && <label>Status<select value={advisoryStatusFilter} onChange={(event) => setAdvisoryStatusFilter(event.target.value as typeof advisoryStatusFilter)}><option value="all">All statuses</option><option value="draft">Draft</option><option value="published">Published</option><option value="resolved">Resolved</option></select></label>}</div>}
-    {advisories.data && advisories.data.length > 0 && visibleAdvisories.length === 0 && <p className="field-hint">No advisories match these filters. Change the search, severity, or status.</p>}
+    {enabled && <div className="advisory-filters"><label>Search advisories<input value={advisorySearch} onChange={(event) => setAdvisorySearch(event.target.value)} placeholder="Title, affected area, or instructions" /></label><label>Severity<select value={advisorySeverityFilter} onChange={(event) => { setAdvisorySeverityFilter(event.target.value as typeof advisorySeverityFilter); setPage(0) }}><option value="all">All severities</option><option value="information">Information</option><option value="watch">Watch</option><option value="warning">Warning</option><option value="emergency">Emergency</option></select></label>{canManage.data && <label>Status<select value={advisoryStatusFilter} onChange={(event) => { setAdvisoryStatusFilter(event.target.value as typeof advisoryStatusFilter); setPage(0) }}><option value="all">All statuses</option><option value="draft">Draft</option><option value="published">Published</option><option value="resolved">Resolved</option></select></label>}</div>}
+    {advisories.data?.total === 0 && (debouncedAdvisorySearch || advisorySeverityFilter !== 'all' || advisoryStatusFilter !== 'all') && <p className="field-hint">No advisories match these filters. Change the search, severity, or status.</p>}
+    {advisories.data?.total === 0 && !debouncedAdvisorySearch && advisorySeverityFilter === 'all' && advisoryStatusFilter === 'all' && <div className="ops-empty"><Megaphone size={22} /><strong>No advisories available</strong><p>Published disaster advisories will appear here.</p></div>}
+    {advisories.data?.total ? visibleAdvisories.length ? null : <p className="field-hint">No advisories are available on this page. Return to the previous page.</p> : null}
     <div className="advisory-list">{visibleAdvisories.map((advisory) => {
       const expired = advisory.expires_at ? new Date(advisory.expires_at).getTime() <= Date.now() : false
       const advisoryEvents = events.data?.filter((item) => item.advisory_id === advisory.id) ?? []
@@ -196,5 +206,10 @@ export function DisasterAdvisoriesPage() {
         {canManage.data && <details className="incident-history"><summary>Advisory history ({advisoryEvents.length})</summary><ol>{advisoryEvents.map((item) => <li key={item.id}><strong>{item.action}</strong><span>{formatDateTime(item.created_at)}</span>{item.note && <p>{item.note}</p>}</li>)}</ol></details>}
       </article>
     })}</div>
+    {advisories.data && advisories.data.total > DISASTER_ADVISORY_PAGE_SIZE && <nav className="ops-form-actions" aria-label="Disaster advisory pages">
+      <button className="button outline" disabled={page === 0 || advisories.isFetching} onClick={() => setPage((current) => Math.max(0, current - 1))}>Previous</button>
+      <span className="field-hint">Page {page + 1} of {Math.ceil(advisories.data.total / DISASTER_ADVISORY_PAGE_SIZE)}</span>
+      <button className="button outline" disabled={(page + 1) * DISASTER_ADVISORY_PAGE_SIZE >= advisories.data.total || advisories.isFetching} onClick={() => setPage((current) => current + 1)}>Next</button>
+    </nav>}
   </section>
 }

@@ -1,11 +1,11 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
 import { Check, FileText, History, ListChecks, Send, Settings2 } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import {
-  createDocumentRequest, createDocumentType, hasPermission, listDocumentRequestActivity, listDocumentRequests, listDocumentTypeActivity, listDocumentTypes, revokeIssuedDocument,
-  listResidents, resubmitDocumentRequest, transitionDocumentRequest, updateDocumentType, type DocumentRequestRow, type DocumentTypeRow,
+  createDocumentRequest, createDocumentType, hasPermission, listDocumentRequestActivity, listDocumentRequestsPage, listDocumentTypeActivity, listDocumentTypes, revokeIssuedDocument,
+  listResidents, resubmitDocumentRequest, transitionDocumentRequest, updateDocumentType, type DocumentRequestRow, type DocumentTypeRow, DOCUMENT_REQUEST_PAGE_SIZE,
 } from './data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 
@@ -70,12 +70,27 @@ export function DocumentsPage() {
   const [selectedTypeId, setSelectedTypeId] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [requestSearch, setRequestSearch] = useState('')
+  const [debouncedRequestSearch, setDebouncedRequestSearch] = useState('')
+  const [requestPage, setRequestPage] = useState(0)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
-  const requests = useQuery({ queryKey: ['document-requests', tenantId], queryFn: () => listDocumentRequests(tenantId), enabled: Boolean(tenantId) })
+  useEffect(() => {
+    const timeout = window.setTimeout(() => { setDebouncedRequestSearch(requestSearch); setRequestPage(0) }, 250)
+    return () => window.clearTimeout(timeout)
+  }, [requestSearch])
+  const requests = useQuery({
+    queryKey: ['document-requests', tenantId, requestPage, debouncedRequestSearch, statusFilter],
+    queryFn: () => listDocumentRequestsPage(tenantId, requestPage, debouncedRequestSearch, statusFilter),
+    enabled: Boolean(tenantId),
+  })
   const canReadRequests = useQuery({ queryKey: ['permission', tenantId, 'document.request.read'], queryFn: () => hasPermission(tenantId, 'document.request.read'), enabled: Boolean(tenantId) })
-  const activity = useQuery({ queryKey: ['document-request-activity', tenantId], queryFn: () => listDocumentRequestActivity(tenantId), enabled: Boolean(tenantId && (canReadRequests.data || requests.data?.some((request) => request.resident?.user_id === user?.id))) })
+  const visibleRequestIds = requests.data?.requests.map((request) => request.id) ?? []
+  const activity = useQuery({
+    queryKey: ['document-request-activity', tenantId, visibleRequestIds],
+    queryFn: () => listDocumentRequestActivity(tenantId, visibleRequestIds),
+    enabled: Boolean(tenantId && visibleRequestIds.length && (canReadRequests.data || (isResident && requests.data?.requests.some((request) => request.resident?.user_id === user?.id)))),
+  })
   const types = useQuery({ queryKey: ['document-types', tenantId], queryFn: () => listDocumentTypes(tenantId), enabled: Boolean(tenantId) })
   const residents = useQuery({ queryKey: ['residents', tenantId], queryFn: () => listResidents(tenantId), enabled: Boolean(tenantId) })
   const canReview = useQuery({ queryKey: ['permission', tenantId, 'document.request.review'], queryFn: () => hasPermission(tenantId, 'document.request.review'), enabled: Boolean(tenantId) })
@@ -179,14 +194,7 @@ export function DocumentsPage() {
   }
 
   const ownOrAssignedResidents = residents.data ?? []
-  const normalizedSearch = requestSearch.trim().toLocaleLowerCase()
-  const visibleRequests = (requests.data ?? []).filter((request) => {
-    const matchesStatus = statusFilter === 'all' || request.status === statusFilter
-    const residentName = request.resident ? `${request.resident.first_name} ${request.resident.last_name}` : ''
-    const matchesSearch = !normalizedSearch || [request.reference_number, residentName, request.document_type?.name ?? '']
-      .some((value) => value.toLocaleLowerCase().includes(normalizedSearch))
-    return matchesStatus && matchesSearch
-  })
+  const visibleRequests = requests.data?.requests ?? []
   return <section className="operation-page">
     <PageHeading title="Document services" description="Track applications through review, approval, issuance, and release.">
       {canManageTypes.data && <button className="button outline" onClick={() => setManageTypesOpen((value) => !value)}><Settings2 size={16} />{manageTypesOpen ? 'Close document setup' : 'Manage document types'}</button>}
@@ -230,8 +238,8 @@ export function DocumentsPage() {
     </section>}
     {types.error && <ErrorNotice message={types.error.message} />}
     <div className="ops-section-title"><h2>Requests</h2><p>Residents see only their own private requests; authorized staff see their tenant queue.</p></div>
-    {requests.data && requests.data.length > 0 && <div className="incident-filters"><label>Search requests<input type="search" value={requestSearch} onChange={(event) => setRequestSearch(event.target.value)} placeholder="Reference, resident, or document" /></label><label>Filter requests by status<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="all">All requests ({requests.data.length})</option>{[...new Set(requests.data.map((request) => request.status))].sort().map((status) => <option value={status} key={status}>{status.replaceAll('_', ' ')} ({requests.data.filter((request) => request.status === status).length})</option>)}</select></label></div>}
-    {!tenantId ? <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to view document services and requests." /> : requests.isPending ? <LoadingNotice /> : requests.error ? <ErrorNotice message={requests.error.message} /> : requests.data?.length ? visibleRequests.length ?
+    {tenantId && <div className="incident-filters"><label>Search requests<input type="search" value={requestSearch} onChange={(event) => setRequestSearch(event.target.value)} placeholder="Reference, resident, purpose, or document" /></label><label>Filter requests by status<select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setRequestPage(0) }}><option value="all">All requests</option>{['pending', 'under_review', 'awaiting_approval', 'approved', 'rejected', 'issued', 'released', 'cancelled'].map((status) => <option value={status} key={status}>{status.replaceAll('_', ' ')}</option>)}</select></label></div>}
+    {!tenantId ? <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to view document services and requests." /> : requests.isPending ? <LoadingNotice /> : requests.error ? <ErrorNotice message={requests.error.message} /> : requests.data?.total ? visibleRequests.length ?
       <div className="ops-request-list">{visibleRequests.map((request) => {
         const isStaff = Boolean(canReview.data || canIssue.data)
         const requestEvents = activity.data?.filter((entry) => entry.request_id === request.id) ?? []
@@ -254,7 +262,12 @@ export function DocumentsPage() {
           {request.resident?.user_id === user?.id && requestEvents.length > 0 && <div className="resident-document-timeline" aria-label="Your request status history"><strong><History size={14} />Status updates</strong><ol>{[...requestEvents].sort((a, b) => a.created_at.localeCompare(b.created_at)).map((entry) => <li key={`${entry.request_id}-${entry.to_status}-${entry.created_at}`}><span>{entry.to_status.replaceAll('_', ' ')}</span><time dateTime={entry.created_at}>{new Date(entry.created_at).toLocaleString()}</time></li>)}</ol><small>Only status and time are shown here. Contact the barangay office if you need help with a decision.</small></div>}
           {requestEvents.length > 0 && request.resident?.user_id !== user?.id && <details className="document-request-history"><summary><History size={14} />Request history</summary><ol>{[...requestEvents].sort((a, b) => a.created_at.localeCompare(b.created_at)).map((entry) => <li key={`${entry.request_id}-${entry.to_status}-${entry.created_at}`}><span><strong>{entry.from_status ? `${entry.from_status.replaceAll('_', ' ')} → ` : ''}${entry.to_status.replaceAll('_', ' ')}</strong><time dateTime={entry.created_at}>{new Date(entry.created_at).toLocaleString()}</time></span><small>{entry.actor_name}{entry.reason ? ` · ${entry.reason}` : ''}</small></li>)}</ol></details>}
         </article>
-      })}</div> : <EmptyNotice title="No requests match these filters" detail="Try another search term or choose a different status." /> : <EmptyNotice title="No document requests" detail="New applications submitted for this barangay will appear here." />}
+      })}</div> : <EmptyNotice title="No requests on this page" detail="Try another status or return to a previous page." /> : <EmptyNotice title={requestSearch || statusFilter !== 'all' ? 'No requests match these filters' : 'No document requests'} detail={requestSearch || statusFilter !== 'all' ? 'Try another search term or choose a different status.' : 'New applications submitted for this barangay will appear here.'} />}
+    {requests.data && requests.data.total > DOCUMENT_REQUEST_PAGE_SIZE && <nav className="ops-form-actions" aria-label="Document request pages">
+      <button className="button outline" disabled={requestPage === 0 || requests.isFetching} onClick={() => setRequestPage((current) => Math.max(0, current - 1))}>Previous</button>
+      <span className="field-hint">Page {requestPage + 1} of {Math.ceil(requests.data.total / DOCUMENT_REQUEST_PAGE_SIZE)}</span>
+      <button className="button outline" disabled={(requestPage + 1) * DOCUMENT_REQUEST_PAGE_SIZE >= requests.data.total || requests.isFetching} onClick={() => setRequestPage((current) => current + 1)}>Next</button>
+    </nav>}
   </section>
 }
 

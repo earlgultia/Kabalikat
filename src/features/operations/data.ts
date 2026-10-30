@@ -34,6 +34,16 @@ export type ResidentPersonalDataExport = {
     reference_number: string; document_type: string | null; purpose: string; status: string; submitted_at: string
     issued_document: { issuance_number: string; issued_at: string; expires_at: string | null; status: string } | null
   }>
+  incident_reports: Array<{
+    category: string; severity: string; location: string; summary: string; details: string
+    status: string; resolution_note: string | null; submitted_at: string
+    status_history: Array<{ action: string; created_at: string }>
+  }>
+  community_feedback: Array<{
+    category: string; subject: string; message: string; status: string; staff_response: string | null
+    submitted_at: string; updated_at: string
+    history: Array<{ action: string; note: string; created_at: string }>
+  }>
 }
 export type HouseholdRow = { id: string; household_code: string; address_line: string; purok: string | null }
 
@@ -130,6 +140,36 @@ export function listResidents(tenantId: string) {
     .eq('barangay_id', tenantId).order('last_name'))
 }
 
+export const RESIDENT_PAGE_SIZE = 25
+
+export async function listResidentsPage(tenantId: string, page: number, search: string, verificationStatus: string) {
+  const { data, error } = await client().rpc('list_resident_directory_page', {
+    p_barangay_id: tenantId,
+    p_page: page,
+    p_page_size: RESIDENT_PAGE_SIZE,
+    p_search: search.trim() || null,
+    p_verification_status: verificationStatus,
+  })
+  if (error) throw new Error(error.message)
+  const result = (data ?? []) as Array<{
+    id: string; first_name: string; last_name: string; birth_date: string | null; phone: string | null
+    record_status: ResidentRow['record_status']; household_id: string | null; household_code: string | null
+    address_line: string | null; purok: string | null; verification_status: string; total_count: number
+  }>
+  return {
+    residents: result.map((resident): ResidentRow => ({
+      id: resident.id, first_name: resident.first_name, last_name: resident.last_name,
+      birth_date: resident.birth_date, phone: resident.phone, record_status: resident.record_status,
+      household_id: resident.household_id,
+      household: resident.household_code && resident.address_line !== null
+        ? { household_code: resident.household_code, address_line: resident.address_line, purok: resident.purok }
+        : null,
+    })),
+    verificationStatuses: Object.fromEntries(result.map((resident) => [resident.id, resident.verification_status])) as Record<string, string>,
+    total: Number(result[0]?.total_count ?? 0),
+  }
+}
+
 export async function getOwnResidentDataExport(tenantId: string): Promise<ResidentPersonalDataExport> {
   const supabaseClient = client()
   const { data: userData, error: userError } = await supabaseClient.auth.getUser()
@@ -151,6 +191,27 @@ export async function getOwnResidentDataExport(tenantId: string): Promise<Reside
     .select('proposed_first_name,proposed_last_name,proposed_phone,request_note,status,review_reason,created_at,reviewed_at')
     .eq('barangay_id', tenantId).eq('resident_id', resident.id).order('created_at', { ascending: false })
   if (ownCorrectionsError) throw new Error(ownCorrectionsError.message)
+
+  const { data: incidentPermission, error: incidentPermissionError } = await supabaseClient.rpc('has_tenant_permission', {
+    p_barangay_id: tenantId, p_permission: 'incident.report',
+  })
+  if (incidentPermissionError) throw new Error(incidentPermissionError.message)
+  const ownIncidents = incidentPermission
+    ? await rows<{
+        id: string; category: string; severity: string; location: string; summary: string; details: string
+        status: string; resolution_note: string | null; created_at: string
+      }>(supabaseClient.from('incidents')
+        .select('id,category,severity,location,summary,details,status,resolution_note,created_at')
+        .eq('barangay_id', tenantId).eq('created_by', userData.user.id).order('created_at', { ascending: false }))
+    : []
+  const ownIncidentEvents = incidentPermission
+    ? await rpc<Array<{ incident_id: string; action: string; created_at: string }>>('get_own_incident_status_events', { p_barangay_id: tenantId })
+    : []
+  const ownFeedback = await rpc<Array<{
+    id: string; category: string; subject: string; message: string; status: string
+    staff_response: string | null; created_at: string; updated_at: string
+    history: Array<{ action: string; note: string; created_at: string }>
+  }>>('get_own_community_feedback_export', { p_barangay_id: tenantId })
 
   const household = Array.isArray(resident.household) ? resident.household[0] : resident.household
   return {
@@ -181,6 +242,19 @@ export async function getOwnResidentDataExport(tenantId: string): Promise<Reside
         } : null,
       }
     }),
+    incident_reports: ownIncidents.map((incident) => ({
+      category: incident.category, severity: incident.severity, location: incident.location,
+      summary: incident.summary, details: incident.details, status: incident.status,
+      resolution_note: incident.resolution_note, submitted_at: incident.created_at,
+      status_history: ownIncidentEvents.filter((entry) => entry.incident_id === incident.id)
+        .map(({ action, created_at }) => ({ action, created_at })),
+    })),
+    community_feedback: ownFeedback.map((feedback) => ({
+      category: feedback.category, subject: feedback.subject, message: feedback.message,
+      status: feedback.status, staff_response: feedback.staff_response,
+      submitted_at: feedback.created_at, updated_at: feedback.updated_at,
+      history: feedback.history,
+    })),
   }
 }
 
@@ -232,14 +306,26 @@ export function cancelResidentProfileChange(requestId: string) {
   return rpc<void>('cancel_resident_profile_change', { p_request_id: requestId })
 }
 
-export function listResidencyVerifications(tenantId: string) {
-  return rows<ResidencyVerificationRow>(client().from('residency_verifications')
-    .select('resident_id,status,reason,created_at').eq('barangay_id', tenantId).order('created_at', { ascending: false }))
+export function listResidencyVerifications(tenantId: string, residentIds?: string[]) {
+  let request = client().from('residency_verifications')
+    .select('resident_id,status,reason,created_at').eq('barangay_id', tenantId).order('created_at', { ascending: false })
+  if (residentIds) {
+    if (residentIds.length === 0) return Promise.resolve([] as ResidencyVerificationRow[])
+    request = request.in('resident_id', residentIds)
+  }
+  return rows<ResidencyVerificationRow>(request)
 }
 
-export function listInvitations(tenantId: string) {
-  return rows<InvitationRow>(client().from('invitations')
-    .select('id,invited_email,status,expires_at,created_at').eq('barangay_id', tenantId).order('created_at', { ascending: false }))
+export const INVITATION_PAGE_SIZE = 20
+
+export async function listInvitationPage(tenantId: string, page: number) {
+  const from = Math.max(0, page) * INVITATION_PAGE_SIZE
+  const { data, error, count } = await client().from('invitations')
+    .select('id,invited_email,status,expires_at,created_at', { count: 'exact' })
+    .eq('barangay_id', tenantId).order('created_at', { ascending: false }).order('id', { ascending: false })
+    .range(from, from + INVITATION_PAGE_SIZE - 1)
+  if (error) throw new Error(error.message)
+  return { invitations: (data ?? []) as InvitationRow[], total: count ?? 0 }
 }
 
 export async function createInvitation(tenantId: string, email: string, roleKey: string) {
@@ -286,14 +372,29 @@ export function updateDocumentType(input: {
   })
 }
 
-export function listDocumentRequests(tenantId: string) {
-  return rows<DocumentRequestRow>(client().from('document_requests')
+export const DOCUMENT_REQUEST_PAGE_SIZE = 25
+
+export async function listDocumentRequestsPage(tenantId: string, page: number, search: string, status: string) {
+  const { data: pageData, error: pageError } = await client().rpc('list_document_request_page', {
+    p_barangay_id: tenantId, p_page: page, p_page_size: DOCUMENT_REQUEST_PAGE_SIZE,
+    p_search: search.trim() || null, p_status: status,
+  })
+  if (pageError) throw new Error(pageError.message)
+  const pageRows = (pageData ?? []) as Array<{ request_id: string; total_count: number }>
+  if (!pageRows.length) return { requests: [] as DocumentRequestRow[], total: 0 }
+  const orderedIds = pageRows.map((row) => row.request_id)
+  const requests = await rows<DocumentRequestRow>(client().from('document_requests')
     .select('id,reference_number,purpose,status,submitted_at,rejection_reason,document_type:document_types(name),resident:residents(first_name,last_name,user_id),issued:issued_documents(issuance_number,issued_at,expires_at,verification_status,events:issued_document_events(id,action,reason,created_at))')
-    .eq('barangay_id', tenantId).order('submitted_at', { ascending: false }))
+    .eq('barangay_id', tenantId).in('id', orderedIds))
+  const byId = new Map(requests.map((request) => [request.id, request]))
+  return { requests: orderedIds.map((id) => byId.get(id)).filter((request): request is DocumentRequestRow => Boolean(request)), total: Number(pageRows[0]?.total_count ?? 0) }
 }
 
-export async function listDocumentRequestActivity(tenantId: string): Promise<DocumentRequestActivityRow[]> {
-  const { data, error } = await client().rpc('list_document_request_activity', { p_barangay_id: tenantId })
+export async function listDocumentRequestActivity(tenantId: string, requestIds: string[]): Promise<DocumentRequestActivityRow[]> {
+  if (requestIds.length === 0) return []
+  const { data, error } = await client().rpc('list_document_request_page_activity', {
+    p_barangay_id: tenantId, p_request_ids: requestIds,
+  })
   if (error) throw new Error(error.message)
   return (data ?? []) as DocumentRequestActivityRow[]
 }
@@ -318,10 +419,22 @@ export function resubmitDocumentRequest(requestId: string, purpose: string) {
   return rpc<void>('resubmit_document_request', { p_request_id: requestId, p_purpose: purpose })
 }
 
-export function listAnnouncements(tenantId: string) {
+export const ANNOUNCEMENT_PAGE_SIZE = 20
+
+export async function listAnnouncementPage(tenantId: string, page: number) {
+  const from = Math.max(0, page) * ANNOUNCEMENT_PAGE_SIZE
+  const { data, error, count } = await client().from('announcements')
+    .select('id,title,body,audience,audience_role_id,status,published_at,expires_at,created_at', { count: 'exact' })
+    .eq('barangay_id', tenantId).order('created_at', { ascending: false }).order('id', { ascending: false })
+    .range(from, from + ANNOUNCEMENT_PAGE_SIZE - 1)
+  if (error) throw new Error(error.message)
+  return { announcements: (data ?? []) as AnnouncementRow[], total: count ?? 0 }
+}
+
+export function listRecentAnnouncements(tenantId: string) {
   return rows<AnnouncementRow>(client().from('announcements')
     .select('id,title,body,audience,audience_role_id,status,published_at,expires_at,created_at')
-    .eq('barangay_id', tenantId).order('created_at', { ascending: false }))
+    .eq('barangay_id', tenantId).order('created_at', { ascending: false }).order('id', { ascending: false }).limit(100))
 }
 
 export function listAnnouncementAudienceRoles() {
@@ -345,9 +458,16 @@ export function updateAnnouncementStatus(id: string, status: 'published' | 'arch
   }).eq('id', id).then(({ error }) => { if (error) throw new Error(error.message) })
 }
 
-export function listMeetings(tenantId: string) {
-  return rows<MeetingRow>(client().from('meetings')
-    .select('id,title,location,starts_at,ends_at,agenda,status').eq('barangay_id', tenantId).order('starts_at', { ascending: false }))
+export const MEETING_PAGE_SIZE = 20
+
+export async function listMeetingPage(tenantId: string, page: number) {
+  const from = Math.max(0, page) * MEETING_PAGE_SIZE
+  const { data, error, count } = await client().from('meetings')
+    .select('id,title,location,starts_at,ends_at,agenda,status', { count: 'exact' })
+    .eq('barangay_id', tenantId).order('starts_at', { ascending: false }).order('id', { ascending: false })
+    .range(from, from + MEETING_PAGE_SIZE - 1)
+  if (error) throw new Error(error.message)
+  return { meetings: (data ?? []) as MeetingRow[], total: count ?? 0 }
 }
 
 export function listTenantMembers(tenantId: string) {

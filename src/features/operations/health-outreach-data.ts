@@ -16,16 +16,24 @@ export type HealthCampaign = {
   review_note: string | null
   completed_at: string | null
 }
+export type HealthCampaignPage = { rows: HealthCampaign[]; totalCount: number }
+export const HEALTH_CAMPAIGN_PAGE_SIZE = 20
 
 function client() {
   if (!supabase) throw new Error('Supabase is not configured.')
   return supabase
 }
 
-export async function listHealthCampaigns(barangayId: string) {
-  const { data, error } = await client().from('health_outreach_campaigns').select('*').eq('barangay_id', barangayId).order('starts_at')
+export async function listHealthCampaigns(barangayId: string, page: number): Promise<HealthCampaignPage> {
+  const from = page * HEALTH_CAMPAIGN_PAGE_SIZE
+  const { data, error, count } = await client().from('health_outreach_campaigns')
+    .select('*', { count: 'exact' })
+    .eq('barangay_id', barangayId)
+    .order('starts_at')
+    .order('id')
+    .range(from, from + HEALTH_CAMPAIGN_PAGE_SIZE - 1)
   if (error) throw new Error(error.message)
-  return (data ?? []) as HealthCampaign[]
+  return { rows: (data ?? []) as HealthCampaign[], totalCount: count ?? 0 }
 }
 
 async function rpc(name: string, args: Record<string, unknown>) {

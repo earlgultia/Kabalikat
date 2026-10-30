@@ -1,14 +1,32 @@
-import { useState, type FormEvent } from 'react'
+import { useState, type FormEvent, type SyntheticEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
-import { CheckCircle2, ClipboardList, MapPinned, Route } from 'lucide-react'
+import { CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, MapPinned, Route } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import { hasPermission } from './data'
-import { addPatrolLog, cancelPatrolShift, completePatrolShift, createPatrolShift, listPatrolAssignees, listPatrolLogs, listPatrolShifts, startPatrolShift } from './patrol-data'
+import { addPatrolLog, cancelPatrolShift, completePatrolShift, createPatrolShift, listPatrolAssignees, listPatrolLogs, listPatrolShifts, PATROL_LOG_PAGE_SIZE, PATROL_SHIFT_PAGE_SIZE, startPatrolShift } from './patrol-data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 import { formatDateTime } from './format'
 
 const scheduleSchema = z.object({ assignee: z.string().uuid(), title: z.string().trim().min(3).max(140), area: z.string().trim().min(2).max(240), start: z.string().min(1), end: z.string().min(1) })
+
+function PatrolLogHistory({ tenantId, shiftId }: { tenantId: string; shiftId: string }) {
+  const [open, setOpen] = useState(false)
+  const [page, setPage] = useState(0)
+  const logs = useQuery({ queryKey: ['patrol-logs', tenantId, shiftId, page], queryFn: () => listPatrolLogs(tenantId, shiftId, page), enabled: open })
+  const totalPages = Math.ceil((logs.data?.totalCount ?? 0) / PATROL_LOG_PAGE_SIZE)
+  return <details className="incident-history" onToggle={(event: SyntheticEvent<HTMLDetailsElement>) => setOpen(event.currentTarget.open)}>
+    <summary>Shift log{logs.data ? ` (${logs.data.totalCount})` : ''}</summary>
+    {logs.isPending && open && <LoadingNotice compact />}
+    {logs.error && <ErrorNotice message="Unable to load this shift history." />}
+    {logs.data?.totalCount === 0 && <p>No log entries yet.</p>}
+    {logs.data?.rows.length ? <ol>{logs.data.rows.map((log) => <li key={log.id}><strong>{log.entry_type.replace('_', ' ')}</strong><span>{formatDateTime(log.created_at)}{log.location_note ? ` · ${log.location_note}` : ''}</span>{log.details && <p>{log.details}</p>}</li>)}</ol> : null}
+    {totalPages > 1 && <div className="ops-form-actions"><span className="muted">Page {page + 1} of {totalPages}</span><div className="finance-review-actions">
+      <button className="button outline" disabled={page === 0 || logs.isFetching} onClick={() => setPage((current) => current - 1)}><span aria-hidden="true">‹ </span>Previous</button>
+      <button className="button outline" disabled={page + 1 >= totalPages || logs.isFetching} onClick={() => setPage((current) => current + 1)}>Next<span aria-hidden="true"> ›</span></button>
+    </div></div>}
+  </details>
+}
 
 export function PatrolPage() {
   const { membership, user } = useAuth()
@@ -17,8 +35,9 @@ export function PatrolPage() {
   const canManage = useQuery({ queryKey: ['permission', tenantId, 'patrol.manage'], queryFn: () => hasPermission(tenantId, 'patrol.manage'), enabled: Boolean(tenantId) })
   const canAccess = useQuery({ queryKey: ['permission', tenantId, 'patrol.access'], queryFn: () => hasPermission(tenantId, 'patrol.access'), enabled: Boolean(tenantId) })
   const enabled = Boolean(tenantId && (canManage.data || canAccess.data))
-  const shifts = useQuery({ queryKey: ['patrol-shifts', tenantId], queryFn: () => listPatrolShifts(tenantId), enabled })
-  const logs = useQuery({ queryKey: ['patrol-logs', tenantId], queryFn: () => listPatrolLogs(tenantId), enabled })
+  const [page, setPage] = useState(0)
+  const shifts = useQuery({ queryKey: ['patrol-shifts', tenantId, page], queryFn: () => listPatrolShifts(tenantId, page), enabled })
+  const totalPages = Math.ceil((shifts.data?.totalCount ?? 0) / PATROL_SHIFT_PAGE_SIZE)
   const assignees = useQuery({ queryKey: ['patrol-assignees', tenantId], queryFn: () => listPatrolAssignees(tenantId), enabled: Boolean(tenantId && canManage.data) })
   const [showForm, setShowForm] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -38,7 +57,7 @@ export function PatrolPage() {
     const ends = new Date(parsed.data.end)
     if (!Number.isFinite(starts.getTime()) || !Number.isFinite(ends.getTime()) || ends <= starts || ends.getTime() - starts.getTime() > 12 * 60 * 60 * 1000) { setError('Choose a valid shift time lasting no more than 12 hours.'); return }
     setBusy(true); setError(''); setMessage('')
-    try { await createPatrolShift({ tenantId, assigneeId: parsed.data.assignee, title: parsed.data.title, area: parsed.data.area, startsAt: starts.toISOString(), endsAt: ends.toISOString() }); await refresh(); form.reset(); setShowForm(false); setMessage('Patrol shift scheduled.') }
+    try { await createPatrolShift({ tenantId, assigneeId: parsed.data.assignee, title: parsed.data.title, area: parsed.data.area, startsAt: starts.toISOString(), endsAt: ends.toISOString() }); setPage(0); await refresh(); form.reset(); setShowForm(false); setMessage('Patrol shift scheduled.') }
     catch (err) { setError(err instanceof Error ? err.message : 'Unable to schedule this patrol.') }
     finally { setBusy(false) }
   }
@@ -80,9 +99,8 @@ export function PatrolPage() {
       <label>Starts<input type="datetime-local" name="start" required /></label><label>Ends<input type="datetime-local" name="end" required /></label>
     </div><div className="ops-form-actions"><button className="button primary" disabled={busy || assignees.isPending}>Schedule shift</button></div></form>}
     {shifts.isPending && enabled && <LoadingNotice />}{shifts.error && <ErrorNotice message={shifts.error.message} />}
-    {shifts.data?.length === 0 && <div className="ops-empty"><Route size={22} /><strong>No patrol shifts</strong><p>Scheduled shifts and your assigned patrols appear here.</p></div>}
-    <div className="patrol-list">{shifts.data?.map((shift) => {
-      const shiftLogs = logs.data?.filter((log) => log.shift_id === shift.id) ?? []
+    {shifts.data?.totalCount === 0 && <div className="ops-empty"><Route size={22} /><strong>No patrol shifts</strong><p>Scheduled shifts and your assigned patrols appear here.</p></div>}
+    <div className="patrol-list">{shifts.data?.rows.map((shift) => {
       const isAssigned = shift.assigned_to === user?.id
       return <article className="ops-panel patrol-card" key={shift.id}>
         <header><div><StatusPill status={shift.status} /><h2>{shift.title}</h2></div><strong>{assigneeName(shift.assigned_to)}</strong></header>
@@ -91,8 +109,15 @@ export function PatrolPage() {
         {isAssigned && shift.status === 'scheduled' && <button className="button primary patrol-action" disabled={busy} onClick={() => void runAction(() => startPatrolShift(shift.id), 'Patrol shift started.')}>Start shift</button>}
         {isAssigned && shift.status === 'active' && <><form className="patrol-log-form" onSubmit={(event) => void addLog(shift.id, event)}><label>Log type<select name="entryType"><option value="checkpoint">Checkpoint</option><option value="observation">Observation</option></select></label><label>Location note (optional)<input name="location" maxLength={240} placeholder="Landmark or area" /></label><label className="patrol-log-details">Details<textarea name="details" minLength={3} maxLength={1500} required placeholder="Briefly record what happened." /></label><button className="button outline" disabled={busy}>Save log</button></form><button className="button primary patrol-action" disabled={busy} onClick={() => { if (window.confirm('Complete this patrol shift?')) void runAction(() => completePatrolShift(shift.id), 'Patrol shift completed.') }}>Complete shift</button></>}
         {canManage.data && shift.status === 'scheduled' && <button className="button outline patrol-action" disabled={busy} onClick={() => { const reason = window.prompt('Reason for cancelling this shift:') ?? ''; if (reason.trim().length >= 3) void runAction(() => cancelPatrolShift(shift.id, reason), 'Patrol shift cancelled.') }}>Cancel shift</button>}
-        <details className="incident-history"><summary>Shift log ({shiftLogs.length})</summary><ol>{shiftLogs.map((log) => <li key={log.id}><strong>{log.entry_type.replace('_',' ')}</strong><span>{formatDateTime(log.created_at)}{log.location_note ? ` · ${log.location_note}` : ''}</span>{log.details && <p>{log.details}</p>}</li>)}</ol></details>
+        <PatrolLogHistory tenantId={tenantId} shiftId={shift.id} />
       </article>
     })}</div>
+    {totalPages > 1 && <nav className="ops-panel ops-form-actions" aria-label="Patrol shift pages">
+      <span className="muted">Active and upcoming shifts appear first. Page {page + 1} of {totalPages} - {shifts.data?.totalCount ?? 0} shifts</span>
+      <div className="finance-review-actions">
+        <button className="button outline" disabled={page === 0 || shifts.isFetching} onClick={() => setPage((current) => current - 1)}><ChevronLeft size={16} />Previous</button>
+        <button className="button outline" disabled={page + 1 >= totalPages || shifts.isFetching} onClick={() => setPage((current) => current + 1)}>Next<ChevronRight size={16} /></button>
+      </div>
+    </nav>}
   </section>
 }

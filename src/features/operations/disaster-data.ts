@@ -18,14 +18,34 @@ function client() {
   return supabase
 }
 
-export async function listDisasterAdvisories(tenantId: string): Promise<DisasterAdvisory[]> {
-  const { data, error } = await client().from('disaster_advisories').select('id,advisory_type,severity,title,affected_area,instructions,status,expires_at,resolution_note,created_by,published_at,created_at').eq('barangay_id', tenantId).order('created_at', { ascending: false })
+export const DISASTER_ADVISORY_PAGE_SIZE = 20
+
+const advisoryColumns = 'id,advisory_type,severity,title,affected_area,instructions,status,expires_at,resolution_note,created_by,published_at,created_at'
+
+export async function listDisasterAdvisoryPage(tenantId: string, page: number, search: string, severity: string, status: string) {
+  const from = Math.max(0, page) * DISASTER_ADVISORY_PAGE_SIZE
+  const query = search.trim().replace(/[,%()_*"\\]/g, ' ').replace(/\s+/g, ' ').slice(0, 120)
+  let request = client().from('disaster_advisories').select(advisoryColumns, { count: 'exact' }).eq('barangay_id', tenantId)
+  if (severity !== 'all') request = request.eq('severity', severity)
+  if (status !== 'all') request = request.eq('status', status)
+  if (query) request = request.or(`title.ilike.%${query}%,affected_area.ilike.%${query}%,instructions.ilike.%${query}%`)
+  const { data, error, count } = await request.order('created_at', { ascending: false }).order('id', { ascending: false })
+    .range(from, from + DISASTER_ADVISORY_PAGE_SIZE - 1)
+  if (error) throw new Error(error.message)
+  return { advisories: (data ?? []) as DisasterAdvisory[], total: count ?? 0 }
+}
+
+export async function listRecentDisasterAdvisories(tenantId: string): Promise<DisasterAdvisory[]> {
+  const { data, error } = await client().from('disaster_advisories').select(advisoryColumns)
+    .eq('barangay_id', tenantId).order('created_at', { ascending: false }).order('id', { ascending: false }).limit(100)
   if (error) throw new Error(error.message)
   return (data ?? []) as DisasterAdvisory[]
 }
 
-export async function listDisasterAdvisoryEvents(tenantId: string): Promise<DisasterAdvisoryEvent[]> {
-  const { data, error } = await client().from('disaster_advisory_events').select('id,advisory_id,action,note,created_at').eq('barangay_id', tenantId).order('created_at')
+export async function listDisasterAdvisoryEvents(tenantId: string, advisoryIds: string[]): Promise<DisasterAdvisoryEvent[]> {
+  if (advisoryIds.length === 0) return []
+  const { data, error } = await client().from('disaster_advisory_events').select('id,advisory_id,action,note,created_at')
+    .eq('barangay_id', tenantId).in('advisory_id', advisoryIds).order('created_at')
   if (error) throw new Error(error.message)
   return (data ?? []) as DisasterAdvisoryEvent[]
 }

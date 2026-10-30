@@ -1,0 +1,14 @@
+# Local Supabase stack configuration for migration and pgTAP verification.
+# This configuration is not linked to or capable of changing a hosted project.
+project_id = "kabalikat"
+
+[db]
+port = 54322
+major_version = 17
+
+[db.migrations]
+enabled = true
+schema_paths = []
+
+[db.seed]
+enabled = false
