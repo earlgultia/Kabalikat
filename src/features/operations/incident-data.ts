@@ -6,7 +6,6 @@ export type IncidentRow = {
 }
 export type IncidentEventRow = { id: string; incident_id: string; action: string; note?: string | null; created_at: string }
 export type IncidentEventPage = { rows: IncidentEventRow[]; totalCount: number }
-export type IncidentAssigneeRow = { user_id: string; display_name: string }
 export type IncidentEvidenceRow = { id: string; incident_id: string; file_name: string; mime_type: string; file_size: number; storage_path: string; created_at: string }
 export type IncidentPage = { rows: IncidentRow[]; totalCount: number }
 export type IncidentSummary = { openCount: number; urgentOpenCount: number; myOpenCount: number; assignedToMeCount: number }
@@ -47,12 +46,6 @@ export async function listIncidentSummary(tenantId: string, userId: string): Pro
   const failed = results.find((result) => result.error)
   if (failed?.error) throw new Error(failed.error.message)
   return { openCount: results[0].count ?? 0, urgentOpenCount: results[1].count ?? 0, myOpenCount: results[2].count ?? 0, assignedToMeCount: results[3].count ?? 0 }
-}
-
-export async function listIncidentAssignees(tenantId: string): Promise<IncidentAssigneeRow[]> {
-  const { data, error } = await client().rpc('get_incident_assignees', { p_barangay_id: tenantId })
-  if (error) throw new Error(error.message)
-  return (data ?? []) as IncidentAssigneeRow[]
 }
 
 export async function listIncidentEvents(tenantId: string, incidentId: string, page: number, ownStatusOnly = false): Promise<IncidentEventPage> {

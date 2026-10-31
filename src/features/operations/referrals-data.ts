@@ -1,6 +1,8 @@
 import { supabase } from '../../lib/supabase'
 
 export type ReferralDestination = { id: string; name: string; municipality: string; province: string; code: string }
+export const REFERRAL_DESTINATION_PAGE_SIZE = 25
+export type ReferralDestinationPage = { rows: ReferralDestination[]; total: number }
 export type InterbarangayReferral = {
   id: string; origin_barangay_id: string; origin_name: string; receiving_barangay_id: string; receiving_name: string
   purpose: string; disclosure_basis: string; shared_information: string; incident_id: string | null
@@ -9,28 +11,39 @@ export type InterbarangayReferral = {
   viewer_side: 'origin' | 'receiving'
 }
 export type InterbarangayReferralActivity = { referral_id: string; action: string; actor_name: string; created_at: string }
+export const REFERRAL_PAGE_SIZE = 25
+export type ReferralPage = { rows: InterbarangayReferral[]; total: number }
+export type ReferralActivityPage = { rows: Omit<InterbarangayReferralActivity, 'referral_id'>[]; total: number }
 
 function client() {
   if (!supabase) throw new Error('Supabase is not configured.')
   return supabase
 }
 
-export async function listReferralDestinations(originId: string) {
-  const { data, error } = await client().rpc('get_referral_destinations', { p_origin_barangay_id: originId })
+export async function listReferralDestinations(originId: string, page: number, search: string): Promise<ReferralDestinationPage> {
+  const { data, error } = await client().rpc('list_referral_destination_page', {
+    p_origin_barangay_id: originId, p_page: page, p_page_size: REFERRAL_DESTINATION_PAGE_SIZE,
+    p_search: search.trim() || null,
+  })
   if (error) throw new Error(error.message)
-  return (data ?? []) as ReferralDestination[]
+  const rows = (data ?? []) as (ReferralDestination & { total_count: number })[]
+  return { rows, total: Number(rows[0]?.total_count ?? 0) }
 }
 
-export async function listInterbarangayReferrals() {
-  const { data, error } = await client().rpc('list_interbarangay_referrals')
+export async function listInterbarangayReferrals(page: number): Promise<ReferralPage> {
+  const { data, error } = await client().rpc('list_interbarangay_referral_page', { p_page: page, p_page_size: REFERRAL_PAGE_SIZE })
   if (error) throw new Error(error.message)
-  return (data ?? []) as InterbarangayReferral[]
+  const rows = (data ?? []) as (InterbarangayReferral & { total_count: number })[]
+  return { rows, total: Number(rows[0]?.total_count ?? 0) }
 }
 
-export async function listInterbarangayReferralActivity(): Promise<InterbarangayReferralActivity[]> {
-  const { data, error } = await client().rpc('list_interbarangay_referral_activity')
+export async function listInterbarangayReferralActivity(referralId: string, page: number): Promise<ReferralActivityPage> {
+  const { data, error } = await client().rpc('list_interbarangay_referral_activity_page', {
+    p_referral_id: referralId, p_page: page, p_page_size: REFERRAL_PAGE_SIZE,
+  })
   if (error) throw new Error(error.message)
-  return (data ?? []) as InterbarangayReferralActivity[]
+  const rows = (data ?? []) as (Omit<InterbarangayReferralActivity, 'referral_id'> & { total_count: number })[]
+  return { rows, total: Number(rows[0]?.total_count ?? 0) }
 }
 
 async function rpc(name: string, args: Record<string, unknown>) {

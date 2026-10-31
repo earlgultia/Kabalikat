@@ -817,7 +817,21 @@
 .referral-reply-form > div { display: flex; gap: 8px; }
 .referral-confirm { grid-column: 1 / -1; display: flex!important; flex-direction: row; align-items: flex-start; gap: 9px!important; padding: 10px; background: #f4f7f1; border-radius: 7px; line-height: 1.5; }
 .referral-confirm input { flex: none; width: 16px; height: 16px; min-height: 16px!important; margin: 0; accent-color: #28674f; }
-@media(max-width:650px) { .referral-card > header { flex-direction: column; } .referral-direction { text-align: left; } .referral-detail-grid { grid-template-columns: 1fr; } }
+.referral-destination-picker { display: grid; gap: 8px; min-width: 0; }
+.referral-destination-picker > label { color: #354f4c; font-size: 12px; font-weight: 700; }
+.referral-destination-picker > input { background: #fffefa; border: 1px solid #bfcec8; border-radius: 8px; color: #24353b; font: inherit; font-size: 13px; min-height: 42px; padding: 8px 10px; width: 100%; }
+.referral-destination-options { border: 0; display: grid; gap: 7px; margin: 0; min-width: 0; padding: 0; }
+.referral-destination-options legend { color: #596a6d; font-size: 11px; margin-bottom: 6px; }
+.referral-destination-options > label { align-items: center; background: #fffefa; border: 1px solid #d8e1db; border-radius: 9px; cursor: pointer; display: flex; gap: 10px; min-width: 0; padding: 10px 12px; }
+.referral-destination-options > label.selected { background: #eef6f0; border-color: #5d927a; }
+.referral-destination-options input { accent-color: #28674f; flex: none; height: 16px; width: 16px; }
+.referral-destination-options > label > span { display: grid; gap: 3px; min-width: 0; }
+.referral-destination-options strong { color: #293f40; font-size: 12px; }
+.referral-destination-options small { color: #596a6d; font-size: 10px; overflow-wrap: anywhere; }
+.referral-destination-pagination { align-items: center; color: #596a6d; display: flex; flex-wrap: wrap; font-size: 11px; gap: 8px; justify-content: space-between; }
+.referral-destination-pagination > div { display: flex; flex-wrap: wrap; gap: 7px; }
+.referral-destination-pagination .button { min-height: 36px; }
+@media(max-width:650px) { .referral-card > header { flex-direction: column; } .referral-direction { text-align: left; } .referral-detail-grid { grid-template-columns: 1fr; } .referral-destination-pagination { align-items: stretch; flex-direction: column; } .referral-destination-pagination > div { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); } }
 
 /* Shared layout guards for every role's workspace tools. */
 .workspace-shell .operation-page,
@@ -917,4 +931,24 @@
   .workspace-shell .support-ticket-controls > * { grid-column: 1 / -1; }
   .workspace-shell .committee-tasks > ul > li { flex-direction: column; }
   .workspace-shell .committee-task-status { align-items: flex-start; display: flex; flex-wrap: wrap; }
+}
+
+.workspace-shell .tanod-picker { display: grid; gap: 9px; min-width: 0; }
+.workspace-shell .tanod-picker-search,
+.workspace-shell .tanod-picker-select { color: #354f4c; display: grid; font-size: 12px; font-weight: 700; gap: 6px; min-width: 0; }
+.workspace-shell .tanod-picker-search-input { align-items: center; background: #fffefa; border: 1px solid #bfcec8; border-radius: 8px; display: flex; gap: 8px; min-height: 42px; padding: 0 10px; }
+.workspace-shell .tanod-picker-search-input input { background: transparent; border: 0; color: #24353b; flex: 1; font: inherit; font-weight: 400; min-height: 38px; min-width: 0; outline: 0; }
+.workspace-shell .tanod-picker-search-input:focus-within { outline: 2px solid #a7c69b; outline-offset: 1px; }
+.workspace-shell .tanod-picker-select select { background: #fffefa; border: 1px solid #bfcec8; border-radius: 8px; color: #24353b; font: inherit; font-weight: 400; min-height: 42px; padding: 8px 10px; width: 100%; }
+.workspace-shell .tanod-picker-pages { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; }
+.workspace-shell .tanod-picker-pages > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.workspace-shell .tanod-picker-error { color: #9b332d; font-size: 12px; }
+.workspace-shell .incident-assign { max-width: 420px; }
+.workspace-shell .incident-assign > span { color: #354f4c; font-size: 12px; font-weight: 700; }
+.workspace-shell .patrol-card .ops-form-grid > .tanod-picker { grid-column: 1 / -1; }
+@media (max-width: 650px) {
+  .workspace-shell .tanod-picker-pages { align-items: stretch; flex-direction: column; }
+  .workspace-shell .tanod-picker-pages > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .workspace-shell .tanod-picker-pages .button { justify-content: center; min-width: 0; }
+  .workspace-shell .incident-assign { max-width: none; width: 100%; }
 }

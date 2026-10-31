@@ -4,7 +4,8 @@ import { z } from 'zod'
 import { CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, MapPinned, Route } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import { hasPermission } from './data'
-import { addPatrolLog, cancelPatrolShift, completePatrolShift, createPatrolShift, listPatrolAssignees, listPatrolLogs, listPatrolShifts, PATROL_LOG_PAGE_SIZE, PATROL_SHIFT_PAGE_SIZE, startPatrolShift } from './patrol-data'
+import { addPatrolLog, cancelPatrolShift, completePatrolShift, createPatrolShift, listPatrolLogs, listPatrolShifts, PATROL_LOG_PAGE_SIZE, PATROL_SHIFT_PAGE_SIZE, startPatrolShift } from './patrol-data'
+import { TanodPicker } from './TanodPicker'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 import { formatDateTime } from './format'
 
@@ -38,8 +39,8 @@ export function PatrolPage() {
   const [page, setPage] = useState(0)
   const shifts = useQuery({ queryKey: ['patrol-shifts', tenantId, page], queryFn: () => listPatrolShifts(tenantId, page), enabled })
   const totalPages = Math.ceil((shifts.data?.totalCount ?? 0) / PATROL_SHIFT_PAGE_SIZE)
-  const assignees = useQuery({ queryKey: ['patrol-assignees', tenantId], queryFn: () => listPatrolAssignees(tenantId), enabled: Boolean(tenantId && canManage.data) })
   const [showForm, setShowForm] = useState(false)
+  const [assigneeId, setAssigneeId] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
@@ -57,7 +58,7 @@ export function PatrolPage() {
     const ends = new Date(parsed.data.end)
     if (!Number.isFinite(starts.getTime()) || !Number.isFinite(ends.getTime()) || ends <= starts || ends.getTime() - starts.getTime() > 12 * 60 * 60 * 1000) { setError('Choose a valid shift time lasting no more than 12 hours.'); return }
     setBusy(true); setError(''); setMessage('')
-    try { await createPatrolShift({ tenantId, assigneeId: parsed.data.assignee, title: parsed.data.title, area: parsed.data.area, startsAt: starts.toISOString(), endsAt: ends.toISOString() }); setPage(0); await refresh(); form.reset(); setShowForm(false); setMessage('Patrol shift scheduled.') }
+    try { await createPatrolShift({ tenantId, assigneeId: parsed.data.assignee, title: parsed.data.title, area: parsed.data.area, startsAt: starts.toISOString(), endsAt: ends.toISOString() }); setPage(0); await refresh(); form.reset(); setAssigneeId(''); setShowForm(false); setMessage('Patrol shift scheduled.') }
     catch (err) { setError(err instanceof Error ? err.message : 'Unable to schedule this patrol.') }
     finally { setBusy(false) }
   }
@@ -80,7 +81,7 @@ export function PatrolPage() {
     if (await runAction(() => addPatrolLog(shiftId, entryType, location, details), 'Patrol log entry saved.')) form.reset()
   }
 
-  const assigneeName = (id: string) => id === user?.id ? 'You' : assignees.data?.find((person) => person.user_id === id)?.display_name ?? 'Assigned Tanod'
+  const assigneeName = (id: string) => id === user?.id ? 'You' : 'Assigned Tanod'
 
   return <section className="operation-page">
     <PageHeading title="Tanod patrols" description="Schedule patrol shifts and record manual checkpoint notes.">
@@ -93,11 +94,11 @@ export function PatrolPage() {
     {message && <div className="ops-success"><CheckCircle2 size={16} />{message}</div>}{error && <ErrorNotice message={error} />}
     {Boolean(tenantId) && !canManage.data && !canAccess.data && !canManage.isPending && !canAccess.isPending && !canManage.error && !canAccess.error && <EmptyNotice title="Patrol access is restricted" detail="Only authorized Captains and Tanods can access patrol shifts. Contact your barangay administrator if you need access." />}
     {showForm && canManage.data && <form className="ops-panel ops-form" onSubmit={(event) => void schedule(event)}><div className="ops-panel-heading"><div><h2>Schedule a patrol shift</h2><p>Assign an active Tanod from this barangay.</p></div><ClipboardList size={19} /></div><div className="ops-form-grid">
-      <label>Assigned Tanod<select name="assignee" required defaultValue=""><option value="" disabled>Select active Tanod</option>{assignees.data?.map((person) => <option key={person.user_id} value={person.user_id}>{person.display_name}</option>)}</select></label>
+      <TanodPicker tenantId={tenantId} permission="patrol.manage" name="assignee" selectedId={assigneeId} onChange={setAssigneeId} />
       <label>Shift title<input name="title" maxLength={140} required /></label>
       <label className="span-two">Patrol area<input name="area" maxLength={240} placeholder="General area or route description" required /></label>
       <label>Starts<input type="datetime-local" name="start" required /></label><label>Ends<input type="datetime-local" name="end" required /></label>
-    </div><div className="ops-form-actions"><button className="button primary" disabled={busy || assignees.isPending}>Schedule shift</button></div></form>}
+    </div><div className="ops-form-actions"><button className="button primary" disabled={busy || !assigneeId}>Schedule shift</button></div></form>}
     {shifts.isPending && enabled && <LoadingNotice />}{shifts.error && <ErrorNotice message={shifts.error.message} />}
     {shifts.data?.totalCount === 0 && <div className="ops-empty"><Route size={22} /><strong>No patrol shifts</strong><p>Scheduled shifts and your assigned patrols appear here.</p></div>}
     <div className="patrol-list">{shifts.data?.rows.map((shift) => {

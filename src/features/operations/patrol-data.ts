@@ -1,6 +1,5 @@
 import { supabase } from '../../lib/supabase'
 
-export type PatrolAssignee = { user_id: string; display_name: string }
 export type PatrolShift = {
   id: string; title: string; patrol_area: string; starts_at: string; ends_at: string; status: string
   assigned_to: string; started_at: string | null; completed_at: string | null; cancellation_note: string | null; created_at: string
@@ -14,12 +13,6 @@ export const PATROL_LOG_PAGE_SIZE = 50
 function client() {
   if (!supabase) throw new Error('Supabase is not configured.')
   return supabase
-}
-
-export async function listPatrolAssignees(tenantId: string): Promise<PatrolAssignee[]> {
-  const { data, error } = await client().rpc('get_patrol_assignees', { p_barangay_id: tenantId })
-  if (error) throw new Error(error.message)
-  return (data ?? []) as PatrolAssignee[]
 }
 
 export async function listPatrolShifts(tenantId: string, page: number): Promise<PatrolShiftPage> {

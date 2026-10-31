@@ -2,15 +2,19 @@ import { supabase } from '../../lib/supabase'
 
 export type CommitteeRow = { id: string; name: string; description: string; status: 'active' | 'archived'; created_at: string }
 export type CommitteeMemberRow = { committee_id: string; user_id: string; profile: { display_name: string } | null }
+export type CommitteeMemberPage = { rows: CommitteeMemberRow[]; totalCount: number }
 export type CommitteeTaskRow = {
   id: string; committee_id: string; title: string; description: string; status: 'open' | 'in_progress' | 'blocked' | 'completed'
   assigned_to: string | null; due_date: string | null; created_at: string
+  assignee_name?: string | null
 }
+export type CommitteeTaskPage = { rows: CommitteeTaskRow[]; totalCount: number }
 export type AssignableMemberRow = { user_id: string; display_name: string; role_label: string }
 export type AssignableMemberPage = { rows: AssignableMemberRow[]; totalCount: number }
 export type CommitteePage = { rows: CommitteeRow[]; totalCount: number }
 export const COMMITTEE_PAGE_SIZE = 20
 export const COMMITTEE_MEMBER_PAGE_SIZE = 25
+export const COMMITTEE_CONTENT_PAGE_SIZE = 25
 
 function client() {
   if (!supabase) throw new Error('Supabase is not configured.')
@@ -35,14 +39,32 @@ export async function listCommittees(tenantId: string, page: number): Promise<Co
   return { rows: (data ?? []) as CommitteeRow[], totalCount: count ?? 0 }
 }
 
-export function listCommitteeMembers(tenantId: string, committeeIds: string[]) {
-  if (committeeIds.length === 0) return Promise.resolve([] as CommitteeMemberRow[])
-  return read<CommitteeMemberRow>(client().from('committee_members').select('committee_id,user_id,profile:profiles(display_name)').eq('barangay_id', tenantId).in('committee_id', committeeIds))
+export async function listCommitteeMembers(tenantId: string, committeeId: string, page: number): Promise<CommitteeMemberPage> {
+  const from = Math.max(page, 0) * COMMITTEE_CONTENT_PAGE_SIZE
+  const { data, error, count } = await client().from('committee_members')
+    .select('committee_id,user_id,profile:profiles(display_name)', { count: 'exact' })
+    .eq('barangay_id', tenantId).eq('committee_id', committeeId)
+    .order('user_id').range(from, from + COMMITTEE_CONTENT_PAGE_SIZE - 1)
+  if (error) throw new Error(error.message)
+  return { rows: (data ?? []) as unknown as CommitteeMemberRow[], totalCount: count ?? 0 }
 }
 
-export function listCommitteeTasks(tenantId: string, committeeIds: string[]) {
-  if (committeeIds.length === 0) return Promise.resolve([] as CommitteeTaskRow[])
-  return read<CommitteeTaskRow>(client().from('committee_tasks').select('id,committee_id,title,description,status,assigned_to,due_date,created_at').eq('barangay_id', tenantId).in('committee_id', committeeIds).order('due_date').order('id'))
+export async function listCommitteeTasks(tenantId: string, committeeId: string, page: number): Promise<CommitteeTaskPage> {
+  const from = Math.max(page, 0) * COMMITTEE_CONTENT_PAGE_SIZE
+  const { data, error, count } = await client().from('committee_tasks')
+    .select('id,committee_id,title,description,status,assigned_to,due_date,created_at', { count: 'exact' })
+    .eq('barangay_id', tenantId).eq('committee_id', committeeId)
+    .order('due_date', { ascending: true, nullsFirst: false }).order('id')
+    .range(from, from + COMMITTEE_CONTENT_PAGE_SIZE - 1)
+  if (error) throw new Error(error.message)
+  const rows = (data ?? []) as CommitteeTaskRow[]
+  const assigneeIds = [...new Set(rows.map((task) => task.assigned_to).filter((id): id is string => Boolean(id)))]
+  if (assigneeIds.length) {
+    const names = await read<{ id: string; display_name: string | null }>(client().from('profiles').select('id,display_name').in('id', assigneeIds))
+    const nameById = new Map(names.map((profile) => [profile.id, profile.display_name]))
+    for (const task of rows) task.assignee_name = task.assigned_to ? nameById.get(task.assigned_to) : null
+  }
+  return { rows, totalCount: count ?? 0 }
 }
 
 export async function listAssignableCommitteeMembers(tenantId: string, committeeId: string, page: number, search: string): Promise<AssignableMemberPage> {

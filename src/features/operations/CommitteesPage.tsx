@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
 import { CheckCircle2, ChevronLeft, ChevronRight, UsersRound } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
-import { assignCommitteeMember, COMMITTEE_MEMBER_PAGE_SIZE, COMMITTEE_PAGE_SIZE, createCommittee, createCommitteeTask, listAssignableCommitteeMembers, listCommitteeMembers, listCommittees, listCommitteeTasks, updateCommitteeTaskStatus, type CommitteeTaskRow } from './committee-data'
+import { assignCommitteeMember, COMMITTEE_CONTENT_PAGE_SIZE, COMMITTEE_MEMBER_PAGE_SIZE, COMMITTEE_PAGE_SIZE, createCommittee, createCommitteeTask, listAssignableCommitteeMembers, listCommitteeMembers, listCommittees, listCommitteeTasks, updateCommitteeTaskStatus, type CommitteeTaskRow } from './committee-data'
 import { hasPermission } from './data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 
@@ -48,6 +48,63 @@ function CommitteeMemberPicker({ tenantId, committeeId, busy, onAssign }: {
   </details>
 }
 
+function CommitteeWorkspaceCard({
+  tenantId, committee, canManage, currentUserId, busy, onAssign, onAddTask, onChangeTask,
+}: {
+  tenantId: string
+  committee: { id: string; name: string; description: string }
+  canManage: boolean
+  currentUserId: string
+  busy: boolean
+  onAssign: (event: FormEvent<HTMLFormElement>) => void
+  onAddTask: (event: FormEvent<HTMLFormElement>) => void
+  onChangeTask: (task: CommitteeTaskRow, status: CommitteeTaskRow['status']) => void
+}) {
+  const [membersOpen, setMembersOpen] = useState(false)
+  const [tasksOpen, setTasksOpen] = useState(false)
+  const [memberPage, setMemberPage] = useState(0)
+  const [taskPage, setTaskPage] = useState(0)
+  const members = useQuery({ queryKey: ['committee-members', tenantId, committee.id, memberPage], queryFn: () => listCommitteeMembers(tenantId, committee.id, memberPage), enabled: membersOpen })
+  const tasks = useQuery({ queryKey: ['committee-tasks', tenantId, committee.id, taskPage], queryFn: () => listCommitteeTasks(tenantId, committee.id, taskPage), enabled: tasksOpen })
+  const committeeMembers = members.data?.rows ?? []
+  const committeeTasks = tasks.data?.rows ?? []
+  const memberTotal = members.data?.totalCount ?? 0
+  const taskTotal = tasks.data?.totalCount ?? 0
+  const memberPages = Math.max(1, Math.ceil(memberTotal / COMMITTEE_CONTENT_PAGE_SIZE))
+  const taskPages = Math.max(1, Math.ceil(taskTotal / COMMITTEE_CONTENT_PAGE_SIZE))
+  const currentMemberPage = Math.min(memberPage, memberPages - 1)
+  const currentTaskPage = Math.min(taskPage, taskPages - 1)
+  useEffect(() => { if (memberPage !== currentMemberPage) setMemberPage(currentMemberPage) }, [currentMemberPage, memberPage])
+  useEffect(() => { if (taskPage !== currentTaskPage) setTaskPage(currentTaskPage) }, [currentTaskPage, taskPage])
+
+  return <article className="ops-panel committee-workspace" key={committee.id}>
+    <div className="committee-workspace-heading"><div><span className="status-pill status-active">Active</span><h2>{committee.name}</h2><p>{committee.description || 'No description provided.'}</p></div><UsersRound size={20} /></div>
+    <details className="committee-members" onToggle={(event) => setMembersOpen(event.currentTarget.open)}>
+      <summary><h3>Members <span>{members.isPending && membersOpen ? '…' : members.data?.totalCount ?? '—'}</span></h3></summary>
+      {membersOpen && members.isPending && <p className="field-hint" role="status">Loading committee members…</p>}
+      {membersOpen && members.error && <p className="ops-error" role="alert">Unable to load committee members.</p>}
+      {membersOpen && members.data && <>
+        {committeeMembers.length ? <ul>{committeeMembers.map((member) => {
+          const name = member.profile?.display_name || 'Assigned member'
+          return <li key={member.user_id}><span className="committee-avatar">{name.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase()}</span><span>{name}</span></li>
+        })}</ul> : <p>No members assigned yet.</p>}
+        {memberPages > 1 && <div className="committee-picker-pagination"><span>Page {currentMemberPage + 1} of {memberPages} · {memberTotal} members</span><div><button type="button" className="button outline" disabled={currentMemberPage === 0 || members.isFetching} onClick={() => setMemberPage(currentMemberPage - 1)}>Previous</button><button type="button" className="button outline" disabled={currentMemberPage + 1 >= memberPages || members.isFetching} onClick={() => setMemberPage(currentMemberPage + 1)}>Next</button></div></div>}
+      </>}
+      {canManage && <CommitteeMemberPicker tenantId={tenantId} committeeId={committee.id} busy={busy} onAssign={onAssign} />}
+    </details>
+    <details className="committee-tasks" onToggle={(event) => setTasksOpen(event.currentTarget.open)}>
+      <summary><h3>Action items <span>{tasks.isPending && tasksOpen ? '…' : tasks.data?.totalCount ?? '—'}</span></h3></summary>
+      {tasksOpen && tasks.isPending && <p className="field-hint" role="status">Loading action items…</p>}
+      {tasksOpen && tasks.error && <p className="ops-error" role="alert">Unable to load committee action items.</p>}
+      {tasksOpen && tasks.data && <>
+        {committeeTasks.length ? <ul>{committeeTasks.map((task) => <li key={task.id}><div><strong>{task.title}</strong>{task.description && <p>{task.description}</p>}<small>{task.assigned_to ? `Assigned to ${task.assignee_name || (task.assigned_to === currentUserId ? 'You' : 'Assigned member')}` : 'Unassigned'}{task.due_date ? ` · Due ${new Date(`${task.due_date}T00:00:00`).toLocaleDateString()}` : ''}</small></div><div className="committee-task-status"><StatusPill status={task.status} />{(canManage || task.assigned_to === currentUserId) && <select aria-label={`Update status for ${task.title}`} value={task.status} disabled={busy} onChange={(event) => onChangeTask(task, event.target.value as CommitteeTaskRow['status'])}><option value="open">Open</option><option value="in_progress">In progress</option><option value="blocked">Blocked</option><option value="completed">Completed</option></select>}</div></li>)}</ul> : <p>No action items yet.</p>}
+        {taskPages > 1 && <div className="committee-picker-pagination"><span>Page {currentTaskPage + 1} of {taskPages} · {taskTotal} action items</span><div><button type="button" className="button outline" disabled={currentTaskPage === 0 || tasks.isFetching} onClick={() => setTaskPage(currentTaskPage - 1)}>Previous</button><button type="button" className="button outline" disabled={currentTaskPage + 1 >= taskPages || tasks.isFetching} onClick={() => setTaskPage(currentTaskPage + 1)}>Next</button></div></div>}
+      </>}
+      <form className="committee-task-form" onSubmit={onAddTask}><label>Action item<input name="title" placeholder="Prepare a community proposal" maxLength={180} required /></label><label>Details<textarea name="description" maxLength={2000} /></label><div className="committee-task-form-row">{canManage && <label>Assign to<select name="assignedTo" defaultValue=""><option value="">Unassigned</option>{committeeMembers.map((member) => <option key={member.user_id} value={member.user_id}>{member.profile?.display_name || 'Assigned member'}</option>)}</select></label>}{!canManage && <input type="hidden" name="assignedTo" value={currentUserId} />}<label>Due date<input type="date" name="dueDate" /></label><button className="button primary" disabled={busy}>Add action item</button></div></form>
+    </details>
+  </article>
+}
+
 export function CommitteesPage() {
   const { membership, user } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
@@ -56,9 +113,6 @@ export function CommitteesPage() {
   useEffect(() => setPage(0), [tenantId])
   const canManage = useQuery({ queryKey: ['permission', tenantId, 'committee.manage'], queryFn: () => hasPermission(tenantId, 'committee.manage'), enabled: Boolean(tenantId) })
   const committees = useQuery({ queryKey: ['committees', tenantId, page], queryFn: () => listCommittees(tenantId, page), enabled: Boolean(tenantId) })
-  const committeeIds = committees.data?.rows.map((committee) => committee.id) ?? []
-  const tasks = useQuery({ queryKey: ['committee-tasks', tenantId, committeeIds], queryFn: () => listCommitteeTasks(tenantId, committeeIds), enabled: Boolean(tenantId) && Boolean(committees.data) })
-  const members = useQuery({ queryKey: ['committee-members', tenantId, committeeIds], queryFn: () => listCommitteeMembers(tenantId, committeeIds), enabled: Boolean(tenantId) && Boolean(committees.data) })
   const totalPages = Math.ceil((committees.data?.totalCount ?? 0) / COMMITTEE_PAGE_SIZE)
   const [showCreate, setShowCreate] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -113,9 +167,6 @@ export function CommitteesPage() {
     finally { setBusy(false) }
   }
 
-  const displayName = (memberId: string) => members.data?.find((member) => member.user_id === memberId)?.profile?.display_name || 'Assigned member'
-  const initials = (memberId: string) => displayName(memberId).split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase()
-
   return <section className="operation-page">
     <PageHeading title="Committee workspaces" description="Coordinate assigned members and track committee action items.">
       {canManage.data && <button className="button primary" onClick={() => setShowCreate((visible) => !visible)}>New committee</button>}
@@ -128,19 +179,7 @@ export function CommitteesPage() {
     {showCreate && canManage.data && <form className="ops-panel ops-form" onSubmit={(event) => void submitCommittee(event)}><div className="ops-panel-heading"><div><h2>Create a committee</h2><p>Only authorized committee managers can configure workspaces.</p></div><UsersRound size={18} /></div><div className="ops-form-grid"><label>Committee name<input name="name" maxLength={120} required /></label><label className="span-two">Purpose / description<textarea name="description" maxLength={1000} /></label></div><div className="ops-form-actions"><button className="button primary" disabled={busy}>Create committee</button></div></form>}
     {committees.isPending && tenantId && <LoadingNotice />}{committees.error && <ErrorNotice message={committees.error.message} />}
     {committees.data?.totalCount === 0 && <div className="ops-empty"><UsersRound size={22} /><strong>No committee workspaces assigned</strong><p>Ask an authorized Captain or Secretary to create or assign a committee.</p></div>}
-    <div className="committee-workspace-list">{committees.data?.rows.map((committee) => {
-      const committeeMembers = members.data?.filter((member) => member.committee_id === committee.id) ?? []
-      const committeeTasks = tasks.data?.filter((task) => task.committee_id === committee.id) ?? []
-      return <article className="ops-panel committee-workspace" key={committee.id}>
-        <div className="committee-workspace-heading"><div><span className="status-pill status-active">Active</span><h2>{committee.name}</h2><p>{committee.description || 'No description provided.'}</p></div><UsersRound size={20} /></div>
-        <section className="committee-members"><h3>Members <span>{committeeMembers.length}</span></h3>{committeeMembers.length ? <ul>{committeeMembers.map((member) => <li key={member.user_id}><span className="committee-avatar">{initials(member.user_id)}</span><span>{displayName(member.user_id)}</span></li>)}</ul> : <p>No members assigned yet.</p>}
-          {canManage.data && <CommitteeMemberPicker tenantId={tenantId} committeeId={committee.id} busy={busy} onAssign={(event) => void assignMember(committee.id, event)} />}
-        </section>
-        <section className="committee-tasks"><h3>Action items <span>{committeeTasks.length}</span></h3>{committeeTasks.length ? <ul>{committeeTasks.map((task) => <li key={task.id}><div><strong>{task.title}</strong>{task.description && <p>{task.description}</p>}<small>{task.assigned_to ? `Assigned to ${displayName(task.assigned_to)}` : 'Unassigned'}{task.due_date ? ` · Due ${new Date(`${task.due_date}T00:00:00`).toLocaleDateString()}` : ''}</small></div><div className="committee-task-status"><StatusPill status={task.status} />{(canManage.data || task.assigned_to === user?.id) && <select aria-label={`Update status for ${task.title}`} value={task.status} disabled={busy} onChange={(event) => void changeStatus(task, event.target.value as CommitteeTaskRow['status'])}><option value="open">Open</option><option value="in_progress">In progress</option><option value="blocked">Blocked</option><option value="completed">Completed</option></select>}</div></li>)}</ul> : <p>No action items yet.</p>}
-          <form className="committee-task-form" onSubmit={(event) => void addTask(committee.id, event)}><label>Action item<input name="title" placeholder="Prepare a community proposal" maxLength={180} required /></label><label>Details<textarea name="description" maxLength={2000} /></label><div className="committee-task-form-row">{canManage.data && <label>Assign to<select name="assignedTo" defaultValue=""><option value="">Unassigned</option>{committeeMembers.map((member) => <option key={member.user_id} value={member.user_id}>{displayName(member.user_id)}</option>)}</select></label>}<label>Due date<input type="date" name="dueDate" /></label><button className="button primary" disabled={busy}>Add action item</button></div></form>
-        </section>
-      </article>
-    })}</div>
+    <div className="committee-workspace-list">{committees.data?.rows.map((committee) => <CommitteeWorkspaceCard key={committee.id} tenantId={tenantId} committee={committee} canManage={Boolean(canManage.data)} currentUserId={user?.id ?? ''} busy={busy} onAssign={(event) => void assignMember(committee.id, event)} onAddTask={(event) => void addTask(committee.id, event)} onChangeTask={(task, status) => void changeStatus(task, status)} />)}</div>
     {totalPages > 1 && <nav className="ops-panel ops-form-actions" aria-label="Committee pages">
       <span className="muted">Page {page + 1} of {totalPages} - {committees.data?.totalCount ?? 0} committees</span>
       <div className="finance-review-actions">
