@@ -1,12 +1,12 @@
 import { useDeferredValue, useState, type FormEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
-import { Archive, FilePlus2, FolderPlus, Search, ShieldCheck } from 'lucide-react'
+import { Archive, ChevronLeft, ChevronRight, FilePlus2, FolderPlus, Search, ShieldCheck } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import { supabase } from '../../lib/supabase'
 import {
-  createArchiveFolder, createArchiveUploadIntent, hasPermission, listArchiveFolders,
-  registerArchiveDocument, saveArchiveText, searchArchiveDocuments,
+  ARCHIVE_DOCUMENT_PAGE_SIZE, createArchiveFolder, createArchiveUploadIntent, hasPermission, listArchiveFolders,
+  registerArchiveDocument, saveArchiveText, searchArchiveDocumentPage,
 } from './data'
 import { ocrAdapter } from './ocr-adapter'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
@@ -33,9 +33,10 @@ export function ArchivePage() {
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
   const [folderId, setFolderId] = useState('')
+  const [page, setPage] = useState(0)
   const documents = useQuery({
-    queryKey: ['archive-documents', tenantId, deferredQuery, folderId],
-    queryFn: () => searchArchiveDocuments(tenantId, deferredQuery, folderId),
+    queryKey: ['archive-documents', tenantId, deferredQuery, folderId, page],
+    queryFn: () => searchArchiveDocumentPage(tenantId, deferredQuery, folderId, page),
     enabled: Boolean(tenantId && canRead.data),
   })
   const [draftText, setDraftText] = useState<Record<string, string>>({})
@@ -86,6 +87,7 @@ export function ArchivePage() {
       })
       if (uploadError) throw uploadError
       await registerArchiveDocument(documentId)
+      setPage(0)
       await queryClient.invalidateQueries({ queryKey: ['archive-documents', tenantId] })
       setMessage('File added to the private barangay archive.')
       form.reset()
@@ -108,7 +110,7 @@ export function ArchivePage() {
   }
 
   async function saveText(documentId: string, reviewed: boolean) {
-    const text = draftText[documentId] ?? documents.data?.find((item) => item.id === documentId)?.extracted_text ?? ''
+    const text = draftText[documentId] ?? documents.data?.documents.find((item) => item.id === documentId)?.extracted_text ?? ''
     if (reviewed && !text.trim()) { setError('Add searchable text before marking it reviewed.'); return }
     setBusy(true); setError(''); setMessage('')
     try {
@@ -131,8 +133,8 @@ export function ArchivePage() {
     {message && <div className="ops-success"><Archive size={16} />{message}</div>}{error && <ErrorNotice message={error} />}
     {canRead.data && <>
       <div className="archive-toolbar">
-        <label className="archive-search"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search file names and reviewed text" aria-label="Search archive" /></label>
-        <label className="archive-folder-select">Folder<select value={folderId} onChange={(event) => setFolderId(event.target.value)}><option value="">All folders</option>{folders.data?.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}</select></label>
+        <label className="archive-search"><Search size={17} /><input value={query} onChange={(event) => { setQuery(event.target.value); setPage(0) }} placeholder="Search file names and reviewed text" aria-label="Search archive" /></label>
+        <label className="archive-folder-select">Folder<select value={folderId} onChange={(event) => { setFolderId(event.target.value); setPage(0) }}><option value="">All folders</option>{folders.data?.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}</select></label>
       </div>
       {canManage.data && <form className="ops-panel ops-form archive-upload" onSubmit={(event) => void upload(event)}>
         <div className="ops-panel-heading"><div><h2>Add a file</h2><p>Original uploads stay private. Supported formats: PDF, JPEG, and PNG up to 20 MB.</p></div><FilePlus2 size={19} /></div>
@@ -144,8 +146,8 @@ export function ArchivePage() {
         </div>
         <div className="ops-form-actions"><span className="field-hint">OCR provider: {ocrAdapter.provider}. Searchable text can be added manually and reviewed.</span><button className="button primary" disabled={busy}>{busy ? 'Uploading...' : 'Upload file'}</button></div>
       </form>}
-      {documents.isPending ? <LoadingNotice /> : documents.error ? <ErrorNotice message={documents.error.message} /> : documents.data?.length ?
-        <div className="archive-document-list">{documents.data.map((item) => <article className="ops-panel archive-document" key={item.id}>
+      {documents.isPending ? <LoadingNotice /> : documents.error ? <ErrorNotice message={documents.error.message} /> : documents.data?.documents.length ?
+        <div className="archive-document-list">{documents.data.documents.map((item) => <article className="ops-panel archive-document" key={item.id}>
           <div className="archive-document-top"><div className="archive-file-icon"><Archive size={19} /></div><div className="archive-file-details"><strong>{item.file_name}</strong><p>{item.description || item.category}</p><small>{item.category} · {fileSize(item.file_size)} · {new Date(item.created_at).toLocaleDateString()}</small></div><StatusPill status={item.text_status.replaceAll('_', ' ')} /></div>
           <div className="archive-document-actions"><button className="button outline" onClick={() => void openFile(item.storage_path)}>Open private file</button>{canManage.data && <span className="field-hint">Manual text entry</span>}</div>
           {canManage.data && <details className="archive-text-editor"><summary>Searchable text <span className="field-hint">{ocrAdapter.available ? 'OCR available' : 'OCR not configured'}</span></summary>
@@ -154,7 +156,8 @@ export function ArchivePage() {
             <div className="archive-text-actions"><button className="button outline" disabled={busy} onClick={() => void saveText(item.id, false)}>Save draft text</button><button className="button primary" disabled={busy || !(draftText[item.id] ?? item.extracted_text).trim()} onClick={() => void saveText(item.id, true)}>Mark reviewed</button></div>
           </details>}
         </article>)}</div> : <EmptyNotice title="No archive files found" detail={query ? 'Try another search term or folder.' : 'Files uploaded for this barangay will appear here.'} />}
-      <p className="archive-limit-note">Search displays the newest 200 matching files. Private links expire after one minute.</p>
+      {documents.data && documents.data.total > ARCHIVE_DOCUMENT_PAGE_SIZE && <nav className="ops-form-actions" aria-label="Archive document pages"><button type="button" className="button outline" disabled={page === 0 || documents.isFetching} onClick={() => setPage((current) => Math.max(0, current - 1))}><ChevronLeft size={15} />Previous</button><span className="field-hint">Page {page + 1} of {Math.ceil(documents.data.total / ARCHIVE_DOCUMENT_PAGE_SIZE)} · {documents.data.total.toLocaleString()} files</span><button type="button" className="button outline" disabled={(page + 1) * ARCHIVE_DOCUMENT_PAGE_SIZE >= documents.data.total || documents.isFetching} onClick={() => setPage((current) => current + 1)}>Next<ChevronRight size={15} /></button></nav>}
+      <p className="archive-limit-note">Private links expire after one minute. Search results are permission-checked and paginated.</p>
     </>}
   </section>
 }

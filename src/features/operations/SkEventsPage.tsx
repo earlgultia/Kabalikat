@@ -1,23 +1,45 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
-import { CalendarDays, CheckCircle2, MapPin, ShieldAlert } from 'lucide-react'
+import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, MapPin, ShieldAlert } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import { hasPermission } from './data'
-import { completeSkEvent, createSkEvent, listSkEventAudit, listSkEvents, reviewSkEvent, type SkEvent } from './sk-events-data'
+import { completeSkEvent, createSkEvent, listSkEventAudit, listSkEvents, reviewSkEvent, SK_EVENT_HISTORY_PAGE_SIZE, SK_EVENT_PAGE_SIZE, type SkEvent } from './sk-events-data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 import { formatDateTime } from './format'
 
 const eventSchema = z.object({ title: z.string().trim().min(3).max(180), description: z.string().trim().max(2000), location: z.string().trim().min(2).max(240), starts: z.string().min(1), ends: z.string().min(1) })
 
+function SkEventHistory({ tenantId, eventId, enabled }: { tenantId: string; eventId: string; enabled: boolean }) {
+  const [page, setPage] = useState(0)
+  const history = useQuery({ queryKey: ['sk-event-audit', tenantId, eventId, page], queryFn: () => listSkEventAudit(tenantId, eventId, page), enabled })
+  const totalPages = Math.ceil((history.data?.totalCount ?? 0) / SK_EVENT_HISTORY_PAGE_SIZE)
+  if (history.isPending) return <p className="field-hint" role="status">Loading activity…</p>
+  if (history.error) return <p className="account-security-error" role="alert">Activity history could not be loaded.</p>
+  return <>
+    {history.data?.rows.length ? <ol>{history.data.rows.map((entry) => <li key={entry.id}><span><strong>{entry.action.replace('event_', '').replaceAll('_', ' ')}</strong><time dateTime={entry.created_at}>{formatDateTime(entry.created_at)}</time></span>{entry.note && <small>{entry.note}</small>}</li>)}</ol> : <p className="field-hint">No activity has been recorded for this event.</p>}
+    {totalPages > 1 && <div className="finance-review-actions" aria-label="Event history pages"><span className="field-hint">Page {page + 1} of {totalPages}</span><button className="button outline" disabled={page === 0 || history.isFetching} onClick={() => setPage((current) => current - 1)}><ChevronLeft size={15} />Previous</button><button className="button outline" disabled={page + 1 >= totalPages || history.isFetching} onClick={() => setPage((current) => current + 1)}>Next<ChevronRight size={15} /></button></div>}
+  </>
+}
+
+function SkEventActivityDetails({ tenantId, eventId }: { tenantId: string; eventId: string }) {
+  const [open, setOpen] = useState(false)
+  return <details className="sk-event-audit" onToggle={(toggle) => setOpen(toggle.currentTarget.open)}>
+    <summary>Activity history</summary>
+    <SkEventHistory tenantId={tenantId} eventId={eventId} enabled={open} />
+  </details>
+}
+
 export function SkEventsPage() {
   const { membership, user } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
   const queryClient = useQueryClient()
+  const [page, setPage] = useState(0)
+  useEffect(() => setPage(0), [tenantId])
   const canManage = useQuery({ queryKey: ['permission', tenantId, 'sk.event.manage'], queryFn: () => hasPermission(tenantId, 'sk.event.manage'), enabled: Boolean(tenantId) })
   const canReview = useQuery({ queryKey: ['permission', tenantId, 'sk.event.review'], queryFn: () => hasPermission(tenantId, 'sk.event.review'), enabled: Boolean(tenantId) })
-  const events = useQuery({ queryKey: ['sk-events', tenantId], queryFn: () => listSkEvents(tenantId), enabled: Boolean(tenantId) })
-  const audit = useQuery({ queryKey: ['sk-event-audit', tenantId], queryFn: () => listSkEventAudit(tenantId), enabled: Boolean(tenantId) && Boolean(canManage.data || canReview.data) })
+  const events = useQuery({ queryKey: ['sk-events', tenantId, page], queryFn: () => listSkEvents(tenantId, page), enabled: Boolean(tenantId) })
+  const totalPages = Math.ceil((events.data?.totalCount ?? 0) / SK_EVENT_PAGE_SIZE)
   const [showForm, setShowForm] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -33,7 +55,7 @@ export function SkEventsPage() {
     setBusy(true); setError(''); setMessage('')
     try {
       await createSkEvent({ barangayId: tenantId, title: parsed.data.title, description: parsed.data.description, location: parsed.data.location, startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString() })
-      await refresh(); form.reset(); setShowForm(false); setMessage('SK event schedule submitted for Captain review.')
+      setPage(0); await refresh(); form.reset(); setShowForm(false); setMessage('SK event schedule submitted for Captain review.')
     } catch { setError('Unable to create the event schedule. Check the details and try again.') }
     finally { setBusy(false) }
   }
@@ -64,15 +86,22 @@ export function SkEventsPage() {
       <div className="ops-form-actions"><button className="button primary" disabled={busy}>Submit for review</button></div>
     </form>}
     {events.isPending && tenantId && <LoadingNotice />}{events.error && <ErrorNotice message="Unable to load SK event schedules." />}
-    {events.data?.length === 0 && <div className="ops-empty"><CalendarDays size={22} /><strong>No SK events scheduled</strong><p>Published youth programs and events will appear here.</p></div>}
-    <div className="referral-list">{events.data?.map((item) => <article className="ops-panel referral-card" key={item.id}>
+    {events.data?.totalCount === 0 && <div className="ops-empty"><CalendarDays size={22} /><strong>No SK events scheduled</strong><p>Published youth programs and events will appear here.</p></div>}
+    <div className="referral-list">{events.data?.rows.map((item) => <article className="ops-panel referral-card" key={item.id}>
       <div className="referral-card-head"><div><h2>{item.title}</h2><p><MapPin size={14} />{item.location}</p></div><StatusPill status={item.status} /></div>
       {item.description && <p className="referral-summary">{item.description}</p>}
       <div className="referral-meta"><span><strong>Starts</strong>{formatDateTime(item.starts_at)}</span><span><strong>Ends</strong>{formatDateTime(item.ends_at)}</span></div>
       {item.review_note && <p className="field-hint">Review note: {item.review_note}</p>}
-      {(canManage.data || canReview.data) && <details className="sk-event-audit"><summary>Activity history</summary>{audit.isPending && <p className="field-hint" role="status">Loading activity…</p>}{audit.error && <p className="account-security-error" role="alert">Activity history could not be loaded.</p>}{audit.data && <ol>{audit.data.filter((entry) => entry.event_id === item.id).map((entry) => <li key={entry.id}><span><strong>{entry.action.replace('event_', '').replaceAll('_', ' ')}</strong><time dateTime={entry.created_at}>{formatDateTime(entry.created_at)}</time></span>{entry.note && <small>{entry.note}</small>}</li>)}{audit.data.every((entry) => entry.event_id !== item.id) && !audit.isPending && <li><small>No activity is available in the recent history.</small></li>}</ol>}</details>}
+      {(canManage.data || canReview.data) && <SkEventActivityDetails tenantId={tenantId} eventId={item.id} />}
       {canReview.data && item.status === 'draft' && <div className="ops-form-actions"><button className="button primary" disabled={busy || item.created_by === user?.id} title={item.created_by === user?.id ? 'The creator cannot approve their own schedule.' : undefined} onClick={() => void act(item, 'approve')}>Publish</button><button className="button outline" disabled={busy} onClick={() => void act(item, 'reject')}>Return with reason</button></div>}
       {canManage.data && item.status === 'published' && new Date(item.ends_at).getTime() <= Date.now() && <div className="ops-form-actions"><button className="button outline" disabled={busy} onClick={() => void act(item, 'complete')}>Mark complete</button></div>}
     </article>)}</div>
+    {totalPages > 1 && <nav className="ops-panel ops-form-actions" aria-label="SK event pages">
+      <span className="muted">Page {page + 1} of {totalPages} · {events.data?.totalCount ?? 0} events</span>
+      <div className="finance-review-actions">
+        <button className="button outline" disabled={page === 0 || events.isFetching} onClick={() => setPage((current) => current - 1)}><ChevronLeft size={16} />Previous</button>
+        <button className="button outline" disabled={page + 1 >= totalPages || events.isFetching} onClick={() => setPage((current) => current + 1)}>Next<ChevronRight size={16} /></button>
+      </div>
+    </nav>}
   </section>
 }

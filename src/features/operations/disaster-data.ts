@@ -10,7 +10,7 @@ export type DisasterEmergencyResource = {
   address: string | null; details: string; status: 'draft' | 'published' | 'archived'; published_at: string | null; created_at: string
 }
 export type DisasterEmergencyResourceActivity = {
-  resource_id: string; resource_name: string; action: string; actor_name: string; note: string; created_at: string
+  resource_id: string; resource_name: string; action: string; actor_name: string; note: string; created_at: string; total_count: number
 }
 
 function client() {
@@ -19,6 +19,9 @@ function client() {
 }
 
 export const DISASTER_ADVISORY_PAGE_SIZE = 20
+export const DISASTER_ADVISORY_HISTORY_PAGE_SIZE = 25
+export const DISASTER_RESOURCE_HISTORY_PAGE_SIZE = 25
+export const DISASTER_RESOURCE_PAGE_SIZE = 20
 
 const advisoryColumns = 'id,advisory_type,severity,title,affected_area,instructions,status,expires_at,resolution_note,created_by,published_at,created_at'
 
@@ -42,24 +45,34 @@ export async function listRecentDisasterAdvisories(tenantId: string): Promise<Di
   return (data ?? []) as DisasterAdvisory[]
 }
 
-export async function listDisasterAdvisoryEvents(tenantId: string, advisoryIds: string[]): Promise<DisasterAdvisoryEvent[]> {
-  if (advisoryIds.length === 0) return []
-  const { data, error } = await client().from('disaster_advisory_events').select('id,advisory_id,action,note,created_at')
-    .eq('barangay_id', tenantId).in('advisory_id', advisoryIds).order('created_at')
+export async function listDisasterAdvisoryEventsPage(tenantId: string, advisoryId: string, page: number) {
+  const from = Math.max(0, page) * DISASTER_ADVISORY_HISTORY_PAGE_SIZE
+  const { data, error, count } = await client().from('disaster_advisory_events').select('id,advisory_id,action,note,created_at', { count: 'exact' })
+    .eq('barangay_id', tenantId).eq('advisory_id', advisoryId)
+    .order('created_at').order('id').range(from, from + DISASTER_ADVISORY_HISTORY_PAGE_SIZE - 1)
   if (error) throw new Error(error.message)
-  return (data ?? []) as DisasterAdvisoryEvent[]
+  return { events: (data ?? []) as DisasterAdvisoryEvent[], total: count ?? 0 }
 }
 
-export async function listDisasterEmergencyResources(tenantId: string): Promise<DisasterEmergencyResource[]> {
-  const { data, error } = await client().from('disaster_emergency_resources')
-    .select('id,resource_type,name,phone,address,details,status,published_at,created_at')
-    .eq('barangay_id', tenantId).order('resource_type').order('name')
+export async function listDisasterEmergencyResourcesPage(tenantId: string, page: number, search: string, resourceType: string, status: string) {
+  const from = Math.max(0, page) * DISASTER_RESOURCE_PAGE_SIZE
+  const term = search.trim().replace(/[,%()_*"\\]/g, ' ').replace(/\s+/g, ' ').slice(0, 100)
+  let request = client().from('disaster_emergency_resources')
+    .select('id,resource_type,name,phone,address,details,status,published_at,created_at', { count: 'exact' })
+    .eq('barangay_id', tenantId)
+  if (resourceType !== 'all') request = request.eq('resource_type', resourceType)
+  if (status !== 'all') request = request.eq('status', status)
+  if (term) request = request.or(`name.ilike.%${term}%,phone.ilike.%${term}%,address.ilike.%${term}%,details.ilike.%${term}%`)
+  const { data, error, count } = await request.order('resource_type').order('name').order('id')
+    .range(from, from + DISASTER_RESOURCE_PAGE_SIZE - 1)
   if (error) throw new Error(error.message)
-  return (data ?? []) as DisasterEmergencyResource[]
+  return { resources: (data ?? []) as DisasterEmergencyResource[], total: count ?? 0 }
 }
 
-export async function listDisasterEmergencyResourceActivity(tenantId: string): Promise<DisasterEmergencyResourceActivity[]> {
-  const { data, error } = await client().rpc('list_disaster_emergency_resource_activity', { p_barangay_id: tenantId })
+export async function listDisasterEmergencyResourceActivity(tenantId: string, resourceId: string, page: number): Promise<DisasterEmergencyResourceActivity[]> {
+  const { data, error } = await client().rpc('list_disaster_emergency_resource_activity_page', {
+    p_barangay_id: tenantId, p_resource_id: resourceId, p_page: Math.max(0, page),
+  })
   if (error) throw new Error(error.message)
   return (data ?? []) as DisasterEmergencyResourceActivity[]
 }

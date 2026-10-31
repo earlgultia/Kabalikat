@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { CalendarDays, CalendarHeart, Download, MapPin, RefreshCw, Search, ShieldAlert } from 'lucide-react'
+import { CalendarDays, CalendarHeart, ChevronLeft, ChevronRight, Download, MapPin, RefreshCw, Search, ShieldAlert } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
-import { listUpcomingCommunityEvents, type CommunityCalendarItem } from './community-calendar-data'
+import { COMMUNITY_CALENDAR_PAGE_SIZE, listAllCommunityEvents, listCommunityEventPage, type CommunityCalendarItem } from './community-calendar-data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading } from './shared'
 import { formatDateTime } from './format'
 
@@ -11,20 +11,23 @@ export function CommunityCalendarPage() {
   const barangayId = membership?.barangay_id ?? ''
   const [search, setSearch] = useState('')
   const [source, setSource] = useState<'all' | CommunityCalendarItem['source']>('all')
+  const [page, setPage] = useState(0)
+  const [exportBusy, setExportBusy] = useState(false)
+  const [exportError, setExportError] = useState('')
   const events = useQuery({
-    queryKey: ['community-calendar', barangayId],
-    queryFn: () => listUpcomingCommunityEvents(barangayId),
+    queryKey: ['community-calendar', barangayId, page, search, source],
+    queryFn: () => listCommunityEventPage(barangayId, page, search, source),
     enabled: Boolean(barangayId),
     staleTime: 60_000,
   })
-  const term = search.trim().toLocaleLowerCase()
-  const visibleEvents = (events.data ?? []).filter((event) => {
-    const matchesSource = source === 'all' || event.source === source
-    const matchesSearch = !term || [event.title, event.location, event.description].some((value) => value.toLocaleLowerCase().includes(term))
-    return matchesSource && matchesSearch
-  })
+  const visibleEvents = events.data?.events ?? []
+  const totalPages = Math.ceil((events.data?.total ?? 0) / COMMUNITY_CALENDAR_PAGE_SIZE)
 
-  function downloadCalendar() {
+  async function downloadCalendar() {
+    setExportBusy(true)
+    setExportError('')
+    try {
+    const exportEvents = await listAllCommunityEvents(barangayId, search, source)
     const encoder = new TextEncoder()
     const escapeText = (value: string) => value.replace(/\\/g, '\\\\').replace(/\r\n|\r|\n/g, '\\n').replace(/,/g, '\\,').replace(/;/g, '\\;')
     const foldLine = (line: string) => {
@@ -47,7 +50,7 @@ export function CommunityCalendarPage() {
     }
     const toUtc = (value: string) => new Date(value).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z')
     const lines = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//ArkByte Technologies//KABALIKAT//EN','CALSCALE:GREGORIAN','METHOD:PUBLISH']
-    for (const event of visibleEvents) {
+    for (const event of exportEvents) {
       lines.push(
         'BEGIN:VEVENT',
         `UID:${event.id}@kabalikat.local`,
@@ -71,6 +74,11 @@ export function CommunityCalendarPage() {
     link.click()
     link.remove()
     window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : 'Unable to download the community calendar.')
+    } finally {
+      setExportBusy(false)
+    }
   }
 
   return <section className="operation-page">
@@ -79,15 +87,15 @@ export function CommunityCalendarPage() {
     </PageHeading>
     <div className="ops-panel referral-privacy-notice"><ShieldAlert size={18} /><p><strong>Published schedules only.</strong> Drafts, participant registration, attendance lists, and patient information are not shown in this calendar.</p></div>
     {!barangayId && <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to view published community schedules." />}
-    {!!events.data?.length && <div className="community-calendar-filters">
-      <label className="community-calendar-search"><Search size={16} /><input type="search" aria-label="Search community events" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by event or location" /></label>
-      <label>Event type<select value={source} onChange={(event) => setSource(event.target.value as typeof source)}><option value="all">All community events</option><option value="sk">SK programs</option><option value="health">Health outreach</option></select></label>
-      <button className="button outline community-calendar-download" type="button" disabled={!visibleEvents.length} onClick={downloadCalendar}><Download size={15} />Download calendar file</button>
+    {barangayId && <div className="community-calendar-filters">
+      <label className="community-calendar-search"><Search size={16} /><input type="search" aria-label="Search community events" value={search} onChange={(event) => { setSearch(event.target.value); setPage(0) }} placeholder="Search by event or location" /></label>
+      <label>Event type<select value={source} onChange={(event) => { setSource(event.target.value as typeof source); setPage(0) }}><option value="all">All community events</option><option value="sk">SK programs</option><option value="health">Health outreach</option></select></label>
+      <button className="button outline community-calendar-download" type="button" disabled={!events.data?.total || exportBusy} onClick={() => void downloadCalendar()}><Download size={15} />{exportBusy ? 'Preparing…' : 'Download calendar file'}</button>
     </div>}
     {events.isPending && barangayId && <LoadingNotice />}
     {events.error && <ErrorNotice message={events.error.message} onRetry={() => void events.refetch()} retrying={events.isFetching} />}
-    {!events.isPending && !events.error && events.data?.length === 0 && <div className="ops-empty"><CalendarDays size={22} /><strong>No upcoming community events</strong><p>Published SK programs and health outreach schedules will appear here.</p></div>}
-    {events.data && events.data.length > 0 && visibleEvents.length === 0 && <div className="ops-empty"><CalendarDays size={22} /><strong>No matching events</strong><p>Try another event name, location, or event type.</p></div>}
+    {exportError && <ErrorNotice message={exportError} />}
+    {!events.isPending && !events.error && events.data?.total === 0 && <div className="ops-empty"><CalendarDays size={22} /><strong>{search || source !== 'all' ? 'No matching events' : 'No upcoming community events'}</strong><p>{search || source !== 'all' ? 'Try another event name, location, or event type.' : 'Published SK programs and health outreach schedules will appear here.'}</p></div>}
     <div className="community-calendar-list">{visibleEvents.map((event) => <article className="ops-panel community-calendar-card" key={`${event.source}-${event.id}`}>
       <header><span className={`community-calendar-type ${event.source}`}>{event.source === 'sk' ? <CalendarDays size={15} /> : <CalendarHeart size={15} />}{event.source === 'sk' ? 'SK program' : 'Health outreach'}</span><time dateTime={event.starts_at}>{formatDateTime(event.starts_at)}</time></header>
       <h2>{event.title}</h2>
@@ -95,5 +103,6 @@ export function CommunityCalendarPage() {
       {event.description && <p className="community-calendar-description">{event.description}</p>}
       <p className="community-calendar-end">Ends {formatDateTime(event.ends_at)}</p>
     </article>)}</div>
+    {totalPages > 1 && <nav className="ops-form-actions" aria-label="Community calendar pages"><button type="button" className="button outline" disabled={page === 0 || events.isFetching} onClick={() => setPage((current) => Math.max(0, current - 1))}><ChevronLeft size={15} />Previous</button><span className="field-hint">Page {page + 1} of {totalPages} · {events.data?.total.toLocaleString()} events</span><button type="button" className="button outline" disabled={page + 1 >= totalPages || events.isFetching} onClick={() => setPage((current) => current + 1)}>Next<ChevronRight size={15} /></button></nav>}
   </section>
 }

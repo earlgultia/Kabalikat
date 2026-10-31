@@ -1,11 +1,12 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
-import { Check, FileText, History, ListChecks, Send, Settings2 } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, FileText, History, ListChecks, Search, Send, Settings2 } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import {
   createDocumentRequest, createDocumentType, hasPermission, listDocumentRequestActivity, listDocumentRequestsPage, listDocumentTypeActivity, listDocumentTypes, revokeIssuedDocument,
-  listResidents, resubmitDocumentRequest, transitionDocumentRequest, updateDocumentType, type DocumentRequestRow, type DocumentTypeRow, DOCUMENT_REQUEST_PAGE_SIZE,
+  listResidents, listResidentsPage, resubmitDocumentRequest, transitionDocumentRequest, updateDocumentType,
+  type DocumentRequestRow, type DocumentTypeRow, type ResidentRow, DOCUMENT_REQUEST_PAGE_SIZE, RESIDENT_PAGE_SIZE,
 } from './data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 
@@ -72,6 +73,10 @@ export function DocumentsPage() {
   const [requestSearch, setRequestSearch] = useState('')
   const [debouncedRequestSearch, setDebouncedRequestSearch] = useState('')
   const [requestPage, setRequestPage] = useState(0)
+  const [residentPage, setResidentPage] = useState(0)
+  const [residentSearch, setResidentSearch] = useState('')
+  const [selectedResidentId, setSelectedResidentId] = useState('')
+  const [selectedResident, setSelectedResident] = useState<ResidentRow | null>(null)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
@@ -92,7 +97,17 @@ export function DocumentsPage() {
     enabled: Boolean(tenantId && visibleRequestIds.length && (canReadRequests.data || (isResident && requests.data?.requests.some((request) => request.resident?.user_id === user?.id)))),
   })
   const types = useQuery({ queryKey: ['document-types', tenantId], queryFn: () => listDocumentTypes(tenantId), enabled: Boolean(tenantId) })
-  const residents = useQuery({ queryKey: ['residents', tenantId], queryFn: () => listResidents(tenantId), enabled: Boolean(tenantId) })
+  const residents = useQuery({
+    queryKey: ['document-resident-picker', tenantId, isResident ? 'self' : residentPage, residentSearch],
+    queryFn: async () => {
+      if (isResident) {
+        const rows = await listResidents(tenantId)
+        return { residents: rows, total: rows.length, verificationStatuses: {} as Record<string, string> }
+      }
+      return listResidentsPage(tenantId, residentPage, residentSearch, 'all')
+    },
+    enabled: Boolean(tenantId),
+  })
   const canReview = useQuery({ queryKey: ['permission', tenantId, 'document.request.review'], queryFn: () => hasPermission(tenantId, 'document.request.review'), enabled: Boolean(tenantId) })
   const canIssue = useQuery({ queryKey: ['permission', tenantId, 'document.issue'], queryFn: () => hasPermission(tenantId, 'document.issue'), enabled: Boolean(tenantId) })
   const canManageTypes = useQuery({ queryKey: ['permission', tenantId, 'document.type.manage'], queryFn: () => hasPermission(tenantId, 'document.type.manage'), enabled: Boolean(tenantId) })
@@ -111,7 +126,7 @@ export function DocumentsPage() {
       setMessage('Request submitted. Reference number: ' + created.reference_number)
       await queryClient.invalidateQueries({ queryKey: ['document-requests', tenantId] })
       await queryClient.invalidateQueries({ queryKey: ['document-request-activity', tenantId] })
-      form.reset(); setOpen(false)
+      form.reset(); setSelectedResidentId(''); setSelectedResident(null); setOpen(false)
     } catch (err) { setError(err instanceof Error ? err.message : 'Unable to submit the request.') }
     finally { setBusy(false) }
   }
@@ -193,16 +208,18 @@ export function DocumentsPage() {
     window.setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
 
-  const ownOrAssignedResidents = residents.data ?? []
+  const ownOrAssignedResidents = residents.data?.residents ?? []
+  const totalResidentPages = Math.ceil((residents.data?.total ?? 0) / RESIDENT_PAGE_SIZE)
   const visibleRequests = requests.data?.requests ?? []
   return <section className="operation-page">
     <PageHeading title="Document services" description="Track applications through review, approval, issuance, and release.">
       {canManageTypes.data && <button className="button outline" onClick={() => setManageTypesOpen((value) => !value)}><Settings2 size={16} />{manageTypesOpen ? 'Close document setup' : 'Manage document types'}</button>}
-      <button className="button primary" onClick={() => { setOpen((value) => !value); setSelectedTypeId('') }} disabled={!enabledTypes.length || !ownOrAssignedResidents.length}><Send size={15} />New request</button>
+      <button className="button primary" onClick={() => { setOpen((value) => !value); setSelectedTypeId('') }} disabled={!enabledTypes.length || (!residents.isPending && !residents.error && !residents.data?.total)}><Send size={15} />New request</button>
     </PageHeading>
     {message && <div className="ops-success"><FileText size={16} />{message}</div>}
     {error && <ErrorNotice message={error} />}
     {(canReadRequests.error || canReview.error || canIssue.error || canManageTypes.error) && <ErrorNotice message="Some document service permissions could not be checked. Related staff controls remain hidden until access can be verified; refresh the page or contact your barangay administrator." />}
+    {residents.error && <ErrorNotice message="Resident records for document requests could not be loaded." onRetry={() => void residents.refetch()} retrying={residents.isFetching} />}
     {isResident && <section className="ops-panel document-type-management" aria-labelledby="resident-document-catalog-title">
       <div className="ops-panel-heading"><div><h2 id="resident-document-catalog-title">Documents you can request</h2><p>Review the purpose and what to bring before starting an application.</p></div><ListChecks size={19} /></div>
       {types.isPending ? <LoadingNotice compact /> : types.error ? <ErrorNotice message={types.error.message} /> : enabledTypes.length ? <div className="document-type-list">{enabledTypes.map((type) => <article key={type.id}>
@@ -212,10 +229,11 @@ export function DocumentsPage() {
     </section>}
     {open && <form className="ops-panel ops-form" onSubmit={(event) => void submit(event)}>
       <div className="ops-panel-heading"><div><h2>Document request</h2><p>The server validates resident access, document availability, and tenant membership.</p></div><FileText size={18} /></div>
-      <div className="ops-form-grid"><label>Resident<select name="residentId" required defaultValue=""><option value="" disabled>Select resident</option>{ownOrAssignedResidents.map((r) => <option key={r.id} value={r.id}>{r.first_name} {r.last_name}</option>)}</select></label>
+      <div className="ops-form-grid"><label>Resident<select name="residentId" required value={selectedResidentId} onChange={(event) => { const value = event.target.value; setSelectedResidentId(value); setSelectedResident(ownOrAssignedResidents.find((resident) => resident.id === value) ?? null) }}><option value="" disabled>Select resident</option>{selectedResident && !ownOrAssignedResidents.some((resident) => resident.id === selectedResident.id) && <option value={selectedResident.id}>{selectedResident.first_name} {selectedResident.last_name}</option>}{ownOrAssignedResidents.map((r) => <option key={r.id} value={r.id}>{r.first_name} {r.last_name}</option>)}</select></label>
         <label>Document type<select name="typeId" required value={selectedTypeId} onChange={(event) => setSelectedTypeId(event.currentTarget.value)}><option value="" disabled>Select document</option>{enabledTypes.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}</select></label>
         {selectedType && <div className="document-type-info span-two"><strong>{selectedType.name}</strong>{selectedType.description && <p>{selectedType.description}</p>}{selectedType.requirements.length > 0 && <><span>Bring these items to the barangay office:</span><ul>{selectedType.requirements.map((requirement) => <li key={requirement}><Check size={14} />{requirement}</li>)}</ul></>}<small>Supporting files are not uploaded through this request form.</small></div>}
         <label className="span-two">Purpose<textarea name="purpose" required minLength={3} maxLength={500} rows={3} placeholder="Explain what the document will be used for." /></label></div>
+      {!isResident && <div className="document-resident-picker"><label className="archive-search"><Search size={16} /><input type="search" aria-label="Search residents" placeholder="Search name, phone, household, or address" value={residentSearch} onChange={(event) => { setResidentSearch(event.target.value); setResidentPage(0) }} /></label>{residents.data && residents.data.total > RESIDENT_PAGE_SIZE && <nav className="ops-form-actions" aria-label="Resident selection pages"><button type="button" className="button outline" disabled={residentPage === 0 || residents.isFetching} onClick={() => setResidentPage((current) => Math.max(0, current - 1))}><ChevronLeft size={15} />Previous residents</button><span className="field-hint">Page {residentPage + 1} of {totalResidentPages} · {residents.data.total.toLocaleString()} residents</span><button type="button" className="button outline" disabled={residentPage + 1 >= totalResidentPages || residents.isFetching} onClick={() => setResidentPage((current) => current + 1)}>More residents<ChevronRight size={15} /></button></nav>}</div>}
       <div className="ops-form-actions"><span className="field-hint">Submitting does not automatically approve or issue the document.</span><button className="button primary" disabled={busy}>{busy ? 'Submitting…' : 'Submit request'}</button></div>
     </form>}
     {manageTypesOpen && canManageTypes.data && <section className="ops-panel document-type-management">

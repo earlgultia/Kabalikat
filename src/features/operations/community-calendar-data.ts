@@ -10,6 +10,34 @@ export type CommunityCalendarItem = {
   source: 'sk' | 'health'
 }
 
+export const COMMUNITY_CALENDAR_PAGE_SIZE = 20
+
+export async function listCommunityEventPage(barangayId: string, page: number, search: string, source: 'all' | CommunityCalendarItem['source']) {
+  const { data, error } = await client().rpc('list_community_calendar_page', {
+    p_barangay_id: barangayId,
+    p_page: page,
+    p_page_size: COMMUNITY_CALENDAR_PAGE_SIZE,
+    p_search: search.trim().slice(0, 100) || null,
+    p_source: source,
+  })
+  if (error) throw new Error(error.message)
+  const rows = (data ?? []) as (CommunityCalendarItem & { total_count: number })[]
+  return {
+    events: rows.map((event) => ({ id: event.id, title: event.title, description: event.description, location: event.location,
+      starts_at: event.starts_at, ends_at: event.ends_at, source: event.source })),
+    total: Number(rows[0]?.total_count ?? 0),
+  }
+}
+
+export async function listAllCommunityEvents(barangayId: string, search: string, source: 'all' | CommunityCalendarItem['source']) {
+  const result: CommunityCalendarItem[] = []
+  for (let page = 0; ; page += 1) {
+    const batch = await listCommunityEventPage(barangayId, page, search, source)
+    result.push(...batch.events)
+    if (result.length >= batch.total || batch.events.length === 0) return result
+  }
+}
+
 function client() {
   if (!supabase) throw new Error('Supabase is not configured.')
   return supabase

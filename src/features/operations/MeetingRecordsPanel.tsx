@@ -1,12 +1,13 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, FileText, Plus, ScrollText } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, FileText, Plus, ScrollText } from 'lucide-react'
 import {
-  approveMeetingResolution, createMeetingResolution, getMeetingMinutes, listMeetingResolutions, saveMeetingMinutes,
+  approveMeetingResolution, createMeetingResolution, getMeetingMinutes, listAllMeetingResolutions,
+  listMeetingResolutionPage, MEETING_RESOLUTION_PAGE_SIZE, saveMeetingMinutes,
 } from './data'
 import { ErrorNotice, LoadingNotice, StatusPill } from './shared'
 import { formatDateTime } from './format'
-import type { AttendanceRow, MemberRow } from './data'
+import type { AttendanceRow, MemberRow, MeetingResolutionRow } from './data'
 
 export function MeetingRecordsPanel({ meetingId, meetingTitle, location, startsAt, agenda, attendance, attendanceLoading, members, canManage }: {
   meetingId: string; meetingTitle: string; location: string; startsAt: string; agenda: string
@@ -14,21 +15,39 @@ export function MeetingRecordsPanel({ meetingId, meetingTitle, location, startsA
 }) {
   const queryClient = useQueryClient()
   const minutes = useQuery({ queryKey: ['meeting-minutes', meetingId], queryFn: () => getMeetingMinutes(meetingId) })
-  const resolutions = useQuery({ queryKey: ['meeting-resolutions', meetingId], queryFn: () => listMeetingResolutions(meetingId) })
+  const [resolutionPage, setResolutionPage] = useState(0)
+  const resolutions = useQuery({ queryKey: ['meeting-resolutions', meetingId, resolutionPage], queryFn: () => listMeetingResolutionPage(meetingId, resolutionPage) })
   const [minutesText, setMinutesText] = useState('')
   const [resolutionTitle, setResolutionTitle] = useState('')
   const [resolutionText, setResolutionText] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const [printResolutions, setPrintResolutions] = useState<MeetingResolutionRow[] | null>(null)
 
   useEffect(() => { setMinutesText(minutes.data?.content ?? '') }, [minutes.data?.content, minutes.data?.updated_at, minutes.data?.id])
+  useEffect(() => {
+    if (printResolutions === null) return
+    const finishPrint = () => setPrintResolutions(null)
+    window.addEventListener('afterprint', finishPrint)
+    const frame = window.requestAnimationFrame(() => window.print())
+    return () => { window.cancelAnimationFrame(frame); window.removeEventListener('afterprint', finishPrint) }
+  }, [printResolutions])
+
+  const printableResolutions = printResolutions ?? resolutions.data?.rows ?? []
 
   async function refresh() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['meeting-minutes', meetingId] }),
       queryClient.invalidateQueries({ queryKey: ['meeting-resolutions', meetingId] }),
     ])
+  }
+
+  async function exportReport() {
+    setError(''); setBusy(true)
+    try { setPrintResolutions(await listAllMeetingResolutions(meetingId)) }
+    catch (err) { setError(err instanceof Error ? err.message : 'Unable to prepare the full meeting report.') }
+    finally { setBusy(false) }
   }
 
   async function persistMinutes(reviewed: boolean) {
@@ -45,7 +64,7 @@ export function MeetingRecordsPanel({ meetingId, meetingTitle, location, startsA
     event.preventDefault(); setError(''); setMessage(''); setBusy(true)
     try {
       await createMeetingResolution(meetingId, resolutionTitle, resolutionText)
-      setResolutionTitle(''); setResolutionText(''); await refresh()
+      setResolutionPage(0); setResolutionTitle(''); setResolutionText(''); await refresh()
       setMessage('Resolution added as a draft. It needs approval before it is official.')
     } catch (err) { setError(err instanceof Error ? err.message : 'Unable to add this resolution.') }
     finally { setBusy(false) }
@@ -61,8 +80,8 @@ export function MeetingRecordsPanel({ meetingId, meetingTitle, location, startsA
 
   return <section className="meeting-records" aria-label="Meeting minutes and resolutions">
     <div className="meeting-records-heading"><div><h3>Minutes & resolutions</h3><p>Keep a clear record of decisions made at this meeting.</p></div>
-      {canManage && <button className="button outline" disabled={minutes.isPending || resolutions.isPending || attendanceLoading}
-        onClick={() => window.print()}><FileText size={15} />{minutes.isPending || resolutions.isPending || attendanceLoading ? 'Preparing report…' : 'Export report PDF'}</button>}
+      {canManage && <button className="button outline" disabled={busy || minutes.isPending || resolutions.isPending || attendanceLoading}
+        onClick={() => void exportReport()}><FileText size={15} />{busy || minutes.isPending || resolutions.isPending || attendanceLoading ? 'Preparing report…' : 'Export report PDF'}</button>}
     </div>
     {message && <div className="ops-success"><Check size={16} />{message}</div>}{error && <ErrorNotice message={error} />}
     <div className="meeting-record-grid">
@@ -82,11 +101,12 @@ export function MeetingRecordsPanel({ meetingId, meetingTitle, location, startsA
           <label>Decision and details<textarea required minLength={3} maxLength={20000} rows={3} value={resolutionText} onChange={(event) => setResolutionText(event.target.value)} /></label>
           <button className="button outline" disabled={busy}><Plus size={15} />Add draft resolution</button>
         </form>}
-        {resolutions.isPending ? <LoadingNotice compact /> : resolutions.error ? <ErrorNotice message={resolutions.error.message} /> : resolutions.data?.length ? <ul className="meeting-resolution-list">{resolutions.data.map((item) => <li key={item.id}>
+        {resolutions.isPending ? <LoadingNotice compact /> : resolutions.error ? <ErrorNotice message={resolutions.error.message} /> : resolutions.data?.rows.length ? <ul className="meeting-resolution-list">{resolutions.data.rows.map((item) => <li key={item.id}>
           <div className="meeting-resolution-top"><strong>{item.resolution_number}</strong><StatusPill status={item.status} /></div><h5>{item.title}</h5><p>{item.content}</p>
           <small className="field-hint">Added {formatDateTime(item.created_at)}{item.approved_at ? ` · Approved ${formatDateTime(item.approved_at)}` : ''}</small>
           {canManage && item.status === 'draft' && <button className="text-action" disabled={busy} onClick={() => void approve(item.id)}>Approve resolution</button>}
         </li>)}</ul> : <p className="field-hint">No resolutions have been recorded.</p>}
+        {resolutions.data && resolutions.data.total > MEETING_RESOLUTION_PAGE_SIZE && <nav className="ops-form-actions" aria-label="Resolution pages"><button type="button" className="button outline" disabled={resolutionPage === 0 || resolutions.isFetching} onClick={() => setResolutionPage((current) => Math.max(0, current - 1))}><ChevronLeft size={15} />Previous</button><span className="field-hint">Page {resolutionPage + 1} of {Math.ceil(resolutions.data.total / MEETING_RESOLUTION_PAGE_SIZE)} · {resolutions.data.total.toLocaleString()} resolutions</span><button type="button" className="button outline" disabled={(resolutionPage + 1) * MEETING_RESOLUTION_PAGE_SIZE >= resolutions.data.total || resolutions.isFetching} onClick={() => setResolutionPage((current) => current + 1)}>Next<ChevronRight size={15} /></button></nav>}
       </section>
     </div>
     <article className="meeting-print-report" id="meeting-print-root">
@@ -94,7 +114,7 @@ export function MeetingRecordsPanel({ meetingId, meetingTitle, location, startsA
       <h2>{meetingTitle}</h2><p>{location} · {formatDateTime(startsAt)}</p>
       {agenda && <section><h3>Agenda</h3><p>{agenda}</p></section>}
       <section><h3>Meeting minutes</h3><p>{minutes.data?.content || 'No minutes have been recorded.'}</p><small>Status: {minutes.data?.status ?? 'not added'}</small></section>
-      <section><h3>Resolutions</h3>{resolutions.data?.length ? resolutions.data.map((resolution) => <div className="meeting-print-resolution" key={resolution.id}>
+      <section><h3>Resolutions</h3>{printableResolutions.length ? printableResolutions.map((resolution) => <div className="meeting-print-resolution" key={resolution.id}>
         <strong>{resolution.resolution_number}: {resolution.title}</strong><p>{resolution.content}</p><small>Status: {resolution.status}</small>
       </div>) : <p>No resolutions have been recorded.</p>}</section>
       <section><h3>Attendance</h3>{attendance.length ? <table><thead><tr><th>Attendee</th><th>Status</th><th>Recorded</th></tr></thead><tbody>{attendance.map((item) => <tr key={item.user_id}>

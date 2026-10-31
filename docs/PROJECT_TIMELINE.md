@@ -1,6 +1,6 @@
 # KABALIKAT Project Timeline and Status
 
-**Status checked:** 29 October 2026  
+**Status checked:** 31 October 2026
 **Estimated implementation completion:** **74%**
 **Current position:** Phase 7 hardening, with remaining Phase 5 and Phase 6 product work.
 
@@ -45,7 +45,7 @@ This is a dependency-based timeline rather than a calendar schedule. No delivery
 
 ## Main remaining work
 
-1. **Verify the database:** The isolated CI workflow applies migrations 0001-0070 and runs pgTAP suites, including role-targeted announcement, resident profile correction, private feedback, public document verification, platform subscription controls, and owner-scoped personal export coverage. Add resident directory and document queue paging/filter coverage to pgTAP and review the first GitHub run. Its status has not been verified in GitHub yet.
+1. **Verify the database:** The isolated CI workflow applies migrations 0001-0091 and runs pgTAP suites, including role-targeted announcement, resident profile correction, private feedback, public document verification, platform subscription controls, and owner-scoped personal export coverage. Add resident directory, document queue, finance paging, archive search paging, meeting resolution/member search, community calendar, platform directory/subscription paging, support queue/thread, and committee member-picker coverage to pgTAP and review the first GitHub run. Its status has not been verified in GitHub yet.
 2. **Complete agreed specialist modules:** Clinical BHW workflows and restricted youth registry/program workflows require explicit data minimization and access rules. Current BHW and SK event features only schedule public community events.
 3. **Decide integration behavior:** Billing, plan enforcement, email/SMS, OCR and AI require product decisions, real providers, server-side secrets, and user-facing failure handling.
 4. **Complete hardening:** Cross-tenant/RLS review, accessibility and performance checks, backup restore, operational monitoring, and incident response procedures.
@@ -56,3 +56,24 @@ The system is **not production-ready** until the database checks, deployment con
 ## Updating this status
 
 Update phase estimates and milestone states when a feature is implemented and its stated verification gate has evidence. Recalculate the overall estimate as the unweighted average of the seven phase estimates above, rounding to the nearest whole percent. Keep the estimate labeled as approximate until the specification is decomposed into a verified task inventory.
+
+
+Finance ledger work: Migration `0082_paginated_financial_transactions.sql` adds a 25-entry paginated UI, current-page linked adjustment/receipt loading, accurate complete budget usage through a permission-checked RPC, and full date-range report exports fetched in bounded batches. Apply and verify the migration before treating database behavior as confirmed.
+
+Community calendar work: Migration `0083_paginated_community_calendar.sql` adds a combined searchable page for upcoming published SK and health events. The interface displays 20 entries per page while ICS downloads include all matching events. Apply and verify the migration before treating database behavior as confirmed.
+
+Archive work: Migration `0084_paginated_archive_search.sql` replaces the UI's capped search path with a permission-checked 25-file page. The archive can now reach all matching results while preserving private storage and short-lived signed downloads. Apply and verify the migration before treating database behavior as confirmed.
+
+Meeting records work: Migration `0085_paginated_meeting_resolutions.sql` adds stable resolution ordering and 25-entry paging in meeting details. PDF export gathers all resolutions before printing so pagination does not truncate the official report. Apply and verify the migration before treating database behavior as confirmed.
+
+Meeting invite work: Migration `0086_paginated_meeting_member_picker.sql` provides a server-side search of active workspace members. Organizers can search and select invitees in 25-entry pages without loading the entire membership directory. Apply and verify the migration before treating database behavior as confirmed.
+
+Platform directory work: Migration `0087_paginated_platform_barangay_directory.sql` moves Super Admin barangay search and status filtering to an admin-checked page query, adds aggregate tenant counts, and keeps CSV export complete through bounded page requests. Apply and verify the migration before treating hosted database behavior as confirmed.
+
+Subscription workspace work: Migration `0088_paginated_platform_subscriptions.sql` adds admin-checked server-side search, status filtering, and 25-row pages, plus aggregate trial, past-due, suspended, and review counts. The overview dashboard no longer downloads the complete subscription table. Filtered CSV export still fetches every matching row in bounded pages. Apply and verify the migration before treating hosted database behavior as confirmed.
+
+Support queue work: Migration `0089_paginated_platform_support_queue.sql` returns the barangay name with each platform support-ticket page under an explicit administrator check. The Super Admin queue no longer fetches all tenant-directory rows to label tickets; requester-scoped reads and existing message/history controls continue using their current RLS policies. Apply and verify the migration before treating hosted database behavior as confirmed.
+
+Support thread work: Migration `0090_paginated_support_threads.sql` adds stable indexes for message and status history paging. Opening a conversation or history now loads the latest 25 entries, with controls to retrieve older entries while maintaining chronological display and existing visibility policies. Apply and verify the migration before treating hosted database behavior as confirmed.
+
+Committee assignment work: Migration `0091_paginated_committee_member_picker.sql` adds a server-side searchable list of active members who are not yet assigned to the selected committee. The picker loads only when opened, pages 25 results, and verifies `committee.manage` in the database. Apply and verify the migration before treating hosted database behavior as confirmed.

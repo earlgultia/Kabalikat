@@ -292,6 +292,9 @@ body { color: var(--ink); background: var(--canvas); font-size: 16px; line-heigh
 .mark-updates-read { flex: 0 0 auto; padding: 7px 9px; border-radius: 7px; color: var(--brand-700); font-size: 11px; font-weight: 700; }
 .mark-updates-read:hover, .mark-updates-read:focus-visible { outline: none; background: var(--brand-tint); }
 .community-updates-list { max-height: min(56vh, 480px); overflow: auto; padding: 7px 10px; }
+.community-updates-load-more { display: flex; justify-content: center; width: calc(100% - 32px); min-height: 42px; margin: 0 16px 12px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 9px; color: var(--brand-700); font-size: 12px; font-weight: 700; }
+.community-updates-load-more:hover:not(:disabled), .community-updates-load-more:focus-visible { outline: none; border-color: var(--brand-700); background: var(--brand-tint); }
+.community-updates-load-more:disabled { cursor: wait; opacity: .65; }
 .community-update-item { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; width: 100%; padding: 12px 10px; border-bottom: 1px solid var(--line); text-align: left; }
 .community-update-item.unread { background: color-mix(in srgb, var(--brand-tint) 46%, transparent); }
 .community-update-item:last-child { border-bottom: 0; }

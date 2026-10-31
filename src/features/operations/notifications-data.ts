@@ -13,17 +13,28 @@ export type CommunityNotificationPreference = {
   enabled: boolean
 }
 
+export const COMMUNITY_NOTIFICATION_PAGE_SIZE = 50
+
+export type CommunityNotificationPage = {
+  rows: CommunityNotification[]
+  totalCount: number
+}
+
 function client() {
   if (!supabase) throw new Error('Supabase is not configured.')
   return supabase
 }
 
-export async function listCommunityNotifications(tenantId: string): Promise<CommunityNotification[]> {
-  const { data, error } = await client().from('community_notifications')
-    .select('id,resource_type,resource_id,created_at,read_at')
-    .eq('barangay_id', tenantId).order('created_at', { ascending: false }).limit(100)
+export async function listCommunityNotificationPage(tenantId: string, page: number): Promise<CommunityNotificationPage> {
+  const from = Math.max(0, page) * COMMUNITY_NOTIFICATION_PAGE_SIZE
+  const to = from + COMMUNITY_NOTIFICATION_PAGE_SIZE - 1
+  const { data, error, count } = await client().from('community_notifications')
+    .select('id,resource_type,resource_id,created_at,read_at', { count: 'exact' })
+    .eq('barangay_id', tenantId)
+    .order('created_at', { ascending: false }).order('id', { ascending: false })
+    .range(from, to)
   if (error) throw new Error(error.message)
-  return (data ?? []) as CommunityNotification[]
+  return { rows: (data ?? []) as CommunityNotification[], totalCount: count ?? 0 }
 }
 
 export async function countUnreadCommunityNotifications(tenantId: string): Promise<number> {

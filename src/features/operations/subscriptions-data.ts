@@ -10,6 +10,13 @@ export type SubscriptionEvent = {
   from_status: string | null; to_status: string; note: string; created_at: string
 }
 
+export const SUBSCRIPTION_EVENT_PAGE_SIZE = 25
+export const SUBSCRIPTION_PAGE_SIZE = 25
+export type SubscriptionSummary = {
+  barangay_count: number; active_trial_count: number; elapsed_trial_count: number
+  past_due_count: number; suspended_count: number; needs_review_count: number
+}
+
 function client() {
   if (!supabase) throw new Error('Supabase is not configured.')
   return supabase
@@ -21,22 +28,34 @@ export async function listSubscriptionPlans(): Promise<SubscriptionPlan[]> {
   return (data ?? []) as SubscriptionPlan[]
 }
 
-export async function listSubscriptionOverview(): Promise<SubscriptionOverviewRow[]> {
-  const { data, error } = await client().rpc('get_platform_subscription_overview')
+export async function listSubscriptionPage(input: { page: number; search: string; status: string }) {
+  const { data, error } = await client().rpc('list_platform_subscription_page', {
+    p_page: Math.max(input.page, 0), p_page_size: SUBSCRIPTION_PAGE_SIZE,
+    p_search: input.search.trim() || null, p_status: input.status,
+  })
   if (error) throw new Error(error.message)
-  return (data ?? []) as SubscriptionOverviewRow[]
+  const rows = (data ?? []) as (SubscriptionOverviewRow & { total_count: number })[]
+  return { rows, total: Number(rows[0]?.total_count ?? 0) }
 }
 
-export async function listSubscriptionEvents(barangayId: string): Promise<SubscriptionEvent[]> {
+export async function getSubscriptionSummary(): Promise<SubscriptionSummary> {
+  const { data, error } = await client().rpc('get_platform_subscription_summary')
+  if (error) throw new Error(error.message)
+  return (data?.[0] ?? { barangay_count: 0, active_trial_count: 0, elapsed_trial_count: 0, past_due_count: 0, suspended_count: 0, needs_review_count: 0 }) as SubscriptionSummary
+}
+
+export async function listSubscriptionEvents(barangayId: string, page: number) {
   const db = client()
   const { data: subscription, error: subscriptionError } = await db.from('subscriptions').select('id').eq('barangay_id', barangayId).maybeSingle()
   if (subscriptionError) throw new Error(subscriptionError.message)
-  if (!subscription) return []
-  const { data, error } = await db.from('subscription_events')
-    .select('id,action,from_plan,to_plan,from_status,to_status,note,created_at')
-    .eq('subscription_id', subscription.id).order('created_at', { ascending: false }).limit(50)
+  if (!subscription) return { events: [] as SubscriptionEvent[], total: 0 }
+  const from = Math.max(0, page) * SUBSCRIPTION_EVENT_PAGE_SIZE
+  const { data, error, count } = await db.from('subscription_events')
+    .select('id,action,from_plan,to_plan,from_status,to_status,note,created_at', { count: 'exact' })
+    .eq('subscription_id', subscription.id).order('created_at', { ascending: false }).order('id', { ascending: false })
+    .range(from, from + SUBSCRIPTION_EVENT_PAGE_SIZE - 1)
   if (error) throw new Error(error.message)
-  return (data ?? []) as SubscriptionEvent[]
+  return { events: (data ?? []) as SubscriptionEvent[], total: count ?? 0 }
 }
 
 export async function setSubscription(input: { barangayId: string; planKey: string; status: string; trialDays: number; graceDays: number; note: string }) {

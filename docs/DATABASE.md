@@ -109,6 +109,48 @@ Migration `0069_paginated_patrol_shifts.sql` adds a security-invoker patrol shif
 
 Migration `0070_paginated_incident_history.sql` adds an owner-checked RPC for bounded resident incident status history. Incident history is now fetched only when opened and paged in 50-entry slices; resident history continues to omit staff response notes and private evidence events.
 
+Migration `0071_paginated_sk_events.sql` adds a stable tenant/start-time index for SK event paging. The client requests 20 rows at a time with an exact count; existing row-level policies continue to determine which drafts and published events each user can see.
+
+Migration `0072_paginated_sk_event_history.sql` adds an index for event-specific audit history paging. Staff history is loaded only when expanded and in 25-entry pages, avoiding the misleading absence of old history caused by a barangay-wide 200-entry cap. Existing row-level policies remain in force.
+
+Migration `0073_paginated_sk_projects.sql` adds a stable tenant/creation index for SK project proposals. The workspace loads 20 proposals at a time and fetches progress updates and staff-only activity/accomplishment data only for the visible project IDs. The new RPCs enforce the existing SK manager/reviewer permissions and reject requests for more than one page of project IDs.
+
+Migration `0074_paginated_emergency_resource_history.sql` adds per-resource audit history paging for the emergency directory. Staff history is fetched only when expanded, in 25-entry pages, and the page function verifies both disaster-management permission and that the requested resource belongs to the supplied barangay.
+
+Migration `0075_paginated_resident_correction_queue.sql` adds stable indexes for the resident profile-correction history and pending staff queue. Residents see their own request history in 20-entry pages; staff review only the pending queue in 20-entry pages. The pending-request check remains separate so an older resident request cannot hide a still-open request.
+
+Migration `0076_paginated_household_lookup.sql` adds stable tenant/household-code ordering for the resident registration household picker. The picker searches and loads 25 households per page only while the authorized new-resident form is open; the selected household remains visible while browsing other pages.
+
+Migration `0077_paginated_community_notifications.sql` adds a recipient-scoped index for deterministic notification inbox paging. The community updates dialog loads 50 notifications at a time and can fetch older rows on demand; the exact total follows existing row-level security.
+
+Migration `0078_paginated_advisory_history.sql` adds stable per-advisory event ordering for the disaster workspace. Advisory history now loads only when opened and shows 25 entries per page with a total count, while existing tenant-scoped read policies remain in force.
+
+Migration `0079_paginated_emergency_resource_directory.sql` adds stable tenant-scoped ordering for the emergency contact and evacuation center directory. The UI searches and filters server-side, loads 20 entries per page, and prints published entries from the current page; existing row-level security still limits residents to published resources.
+
+Migration `0080_paginated_subscription_history.sql` adds stable ordering for platform subscription audit events. Super Admins can now review all changes in 25-entry pages with an exact total; the platform-administrator row policy remains unchanged.
+
+Migration `0081_paginated_finance_export_history.sql` adds stable ordering for finance report export audit records. Finance readers can inspect previous export date ranges, row counts, and timestamps in 20-entry pages under the existing tenant-scoped policy.
+
+Migration `0082_paginated_financial_transactions.sql` adds stable finance ledger ordering and a 25-entry transaction page. Related adjustments and receipts are fetched only for transactions on the visible page. A permission-checked security-invoker RPC returns complete posted expense totals with approved adjustments, so budget balances remain accurate without loading the full ledger. Date-range CSV exports still read every matching transaction and linked adjustment in bounded batches.
+
+Migration `0083_paginated_community_calendar.sql` adds a tenant-scoped, security-invoker page function that merges published upcoming SK and health events, supports server-side search and event-type filters, and returns an exact total. The calendar UI shows 20 events per page; downloading an ICS file fetches all matching events in bounded pages. Existing event RLS policies continue to control schedule visibility.
+
+Migration `0084_paginated_archive_search.sql` adds stable tenant and folder ordering indexes and a permission-checked archive search page function. The archive UI shows 25 matching private files per page and can reach older results beyond the previous 200-file cap; signed file links retain their one-minute expiry.
+
+Migration `0085_paginated_meeting_resolutions.sql` adds stable meeting-specific ordering for resolutions. Meeting details show resolutions in 25-entry pages, while PDF export fetches every resolution in bounded pages before printing the complete report. Existing meeting and attendee row-level policies remain in force.
+
+Migration `0086_paginated_meeting_member_picker.sql` adds a membership-permission-checked search page for active meeting invitees. The meeting form loads 25 matching members at a time and keeps checked invitees selected while browsing pages.
+
+Migration `0087_paginated_platform_barangay_directory.sql` adds platform-admin-only, server-side paging and search for the barangay directory, plus aggregate platform counts. The directory UI loads 25 rows per page and exports all rows matching the current search and status filter in bounded pages.
+
+Migration `0088_paginated_platform_subscriptions.sql` adds platform-admin-only paging and server-side status/search filters for the subscription workspace, along with compact platform-wide review counts. The Super Admin overview and subscriptions workspace use these bounded RPCs; filtered CSV export collects all matches in pages.
+
+Migration `0089_paginated_platform_support_queue.sql` adds an explicitly platform-admin-checked queue page that returns each support ticket with its barangay label. The Super Admin support UI no longer downloads the full barangay directory to label a paginated ticket list. Tenant-facing ticket reads and existing conversation/history RLS are unchanged.
+
+Migration `0090_paginated_support_threads.sql` adds stable descending indexes for support conversation messages and status events. The support UI loads the most recent 25 entries when a thread is opened and allows older messages and status changes to be loaded in additional pages; existing row-level security still controls which entries each user can read.
+
+Migration `0091_paginated_committee_member_picker.sql` adds a `committee.manage`-checked search page for active tenant members not yet assigned to a selected committee. The assignment picker loads 25 matching members only when opened and supports search and paging; membership changes still go through the existing audited assignment RPC.
+
 `supabase/tests/database/0001_foundation.test.sql` through `0008_finance_budgets.test.sql` cover tenant isolation and key early workflows. `0009_role_targeted_announcement_delivery.test.sql` verifies role-targeted announcement delivery, published-post retargeting, duplicate prevention, notification access for the new audience, access revocation for the former audience, and rejection of platform-scoped targets (including malformed legacy targets). `0010_resident_profile_corrections.test.sql` covers resident ownership, cross-resident and cross-barangay isolation, staff approval, official record updates, withdrawal, audit history, and owner-only decision notifications. `0011_private_community_feedback.test.sql` covers linked-resident eligibility, private submissions, hidden author fields, tenant-scoped staff access, response and closure transitions, event history, and owner-only notifications both with and without a staff response. `0012_public_document_verification.test.sql` checks the two-code verification boundary, minimal public disclosure, expiry, revocation, and revocation audit history. `0013_platform_subscription_controls.test.sql` checks platform-admin-only subscription access and changes, tenant RLS boundaries, validated trial windows, and subscription event history. `0014_resident_owned_feedback_export.test.sql` verifies that personal exports remain owner-scoped even when staff permissions provide access to the broader feedback queue. These pgTAP suites require a local Supabase/Postgres test database; the new GitHub Actions workflow starts an isolated database and runs them, but its first CI result is pending.
 
 This schema does not yet implement complete accounting and reconciliation, patient health records, BHW clinical workflows, youth registry/programs, or OCR processing. QR attendance and meeting PDF export are browser features over the current meeting schema. Review and test migrations against a disposable database before using any real records.

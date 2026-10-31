@@ -1,10 +1,9 @@
 import { useState, type FormEvent } from 'react'
-import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
 import { CheckCircle2, Headset, MessageCircle, Search, Send } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
-import { addSupportMessage, createSupportTicket, listSupportEvents, listSupportMessages, listSupportTickets, setSupportTicketStatus, type SupportTicket } from './support-data'
-import { listPlatformBarangays } from './platform-data'
+import { addSupportMessage, createSupportTicket, listPlatformSupportTickets, listSupportEvents, listSupportMessages, listSupportTickets, setSupportTicketStatus, SUPPORT_THREAD_PAGE_SIZE, type SupportTicket } from './support-data'
 import { ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 import { formatDateTime } from './format'
 
@@ -17,23 +16,27 @@ function SupportTicketDetails({ ticket, platformAdmin, currentUserId, busy, onRe
 }) {
   const [conversationOpen, setConversationOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
-  const messages = useQuery({ queryKey: ['support-messages', ticket.id], queryFn: () => listSupportMessages([ticket.id]), enabled: conversationOpen })
-  const events = useQuery({ queryKey: ['support-events', ticket.id], queryFn: () => listSupportEvents([ticket.id]), enabled: historyOpen })
+  const messages = useInfiniteQuery({ queryKey: ['support-messages', ticket.id], queryFn: ({ pageParam }) => listSupportMessages(ticket.id, pageParam), initialPageParam: 0, getNextPageParam: (lastPage, allPages) => allPages.length * SUPPORT_THREAD_PAGE_SIZE < lastPage.total ? allPages.length : undefined, enabled: conversationOpen })
+  const events = useInfiniteQuery({ queryKey: ['support-events', ticket.id], queryFn: ({ pageParam }) => listSupportEvents(ticket.id, pageParam), initialPageParam: 0, getNextPageParam: (lastPage, allPages) => allPages.length * SUPPORT_THREAD_PAGE_SIZE < lastPage.total ? allPages.length : undefined, enabled: historyOpen })
+  const messageItems = messages.data?.pages.flatMap((page) => page.items).reverse() ?? []
+  const eventItems = events.data?.pages.flatMap((page) => page.items).reverse() ?? []
+  const messageCount = messages.data?.pages[0]?.total ?? 0
+  const eventCount = events.data?.pages[0]?.total ?? 0
   const displayAuthor = (authorId: string) => authorId === currentUserId ? 'You' : platformAdmin ? 'Requester' : 'Support team'
 
   return <>
-    <details className="support-conversation" onToggle={(event) => setConversationOpen(event.currentTarget.open)}><summary><MessageCircle size={15} /> Conversation{messages.isPending ? '' : messages.error ? '' : ` (${messages.data?.length ?? 0})`}</summary>
+    <details className="support-conversation" onToggle={(event) => setConversationOpen(event.currentTarget.open)}><summary><MessageCircle size={15} /> Conversation{messages.isPending ? '' : messages.error ? '' : ` (${messageCount})`}</summary>
       {conversationOpen && messages.isPending && <p className="field-hint" role="status">Loading conversation…</p>}
       {conversationOpen && messages.error && <p className="ops-error" role="alert">Conversation could not be loaded. Reopen this section or refresh the page.</p>}
-      {conversationOpen && !messages.isPending && !messages.error && messages.data?.length === 0 && <p className="field-hint">No messages have been added to this request yet.</p>}
-      {conversationOpen && !messages.isPending && !messages.error && Boolean(messages.data?.length) && <ol>{messages.data?.map((entry) => <li className={entry.visibility === 'internal' ? 'support-internal-note' : ''} key={entry.id}><div><strong>{entry.visibility === 'internal' ? 'Internal note' : displayAuthor(entry.author_id)}</strong><span>{formatDateTime(entry.created_at)}</span></div><p>{entry.body}</p></li>)}</ol>}
+      {conversationOpen && !messages.isPending && !messages.error && messageCount === 0 && <p className="field-hint">No messages have been added to this request yet.</p>}
+      {conversationOpen && !messages.isPending && !messages.error && Boolean(messageItems.length) && <><ol>{messageItems.map((entry) => <li className={entry.visibility === 'internal' ? 'support-internal-note' : ''} key={entry.id}><div><strong>{entry.visibility === 'internal' ? 'Internal note' : displayAuthor(entry.author_id)}</strong><span>{formatDateTime(entry.created_at)}</span></div><p>{entry.body}</p></li>)}</ol>{messages.hasNextPage && <button type="button" className="button outline" disabled={messages.isFetchingNextPage} onClick={() => void messages.fetchNextPage()}>{messages.isFetchingNextPage ? 'Loading older messages…' : 'Load older messages'}</button>}</>}
       {(platformAdmin || !['resolved','closed'].includes(ticket.status)) && <form className="support-reply-form" onSubmit={(event) => onReply(ticket, event)}><label>{platformAdmin ? 'Reply or add a note' : 'Reply to support'}<textarea name="body" maxLength={4000} rows={3} required /></label>{platformAdmin && <label className="support-internal-toggle"><input type="checkbox" name="internal" /> Internal note visible to platform administrators only</label>}<button className="button outline" disabled={busy}><Send size={14} />Send</button></form>}
     </details>
-    <details className="incident-history" onToggle={(event) => setHistoryOpen(event.currentTarget.open)}><summary>Status history{events.isPending ? '' : events.error ? '' : ` (${events.data?.length ?? 0})`}</summary>
+    <details className="incident-history" onToggle={(event) => setHistoryOpen(event.currentTarget.open)}><summary>Status history{events.isPending ? '' : events.error ? '' : ` (${eventCount})`}</summary>
       {historyOpen && events.isPending && <p className="field-hint" role="status">Loading status history…</p>}
       {historyOpen && events.error && <p className="ops-error" role="alert">Status history could not be loaded. Reopen this section or refresh the page.</p>}
-      {historyOpen && !events.isPending && !events.error && events.data?.length === 0 && <p className="field-hint">No status history is available.</p>}
-      {historyOpen && !events.isPending && !events.error && Boolean(events.data?.length) && <ol>{events.data?.map((entry) => <li key={entry.id}><strong>{entry.action === 'ticket_created' ? 'Request opened' : `Status changed: ${entry.from_status?.replaceAll('_',' ')} → ${entry.to_status?.replaceAll('_',' ')}`}</strong><span>{formatDateTime(entry.created_at)}</span></li>)}</ol>}
+      {historyOpen && !events.isPending && !events.error && eventCount === 0 && <p className="field-hint">No status history is available.</p>}
+      {historyOpen && !events.isPending && !events.error && Boolean(eventItems.length) && <><ol>{eventItems.map((entry) => <li key={entry.id}><strong>{entry.action === 'ticket_created' ? 'Request opened' : `Status changed: ${entry.from_status?.replaceAll('_',' ')} → ${entry.to_status?.replaceAll('_',' ')}`}</strong><span>{formatDateTime(entry.created_at)}</span></li>)}</ol>{events.hasNextPage && <button type="button" className="button outline" disabled={events.isFetchingNextPage} onClick={() => void events.fetchNextPage()}>{events.isFetchingNextPage ? 'Loading older history…' : 'Load older history'}</button>}</>}
     </details>
   </>
 }
@@ -46,9 +49,8 @@ export function SupportPage({ platformAdmin = false }: { platformAdmin?: boolean
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
   const queryKey = ['support-tickets', platformAdmin ? 'platform' : tenantId, statusFilter, search]
-  const tickets = useInfiniteQuery({ queryKey, queryFn: ({ pageParam }) => listSupportTickets(platformAdmin ? undefined : tenantId, pageParam, statusFilter, search), initialPageParam: 0, getNextPageParam: (lastPage, _pages, lastPageParam) => lastPage.length === 50 ? lastPageParam + 1 : undefined, enabled: platformAdmin || Boolean(tenantId) })
+  const tickets = useInfiniteQuery({ queryKey, queryFn: ({ pageParam }) => platformAdmin ? listPlatformSupportTickets(pageParam, statusFilter, search) : listSupportTickets(tenantId, pageParam, statusFilter, search), initialPageParam: 0, getNextPageParam: (lastPage, _pages, lastPageParam) => lastPage.length === 50 ? lastPageParam + 1 : undefined, enabled: platformAdmin || Boolean(tenantId) })
   const ticketItems = tickets.data?.pages.flat() ?? []
-  const platformBarangays = useQuery({ queryKey: ['platform-barangays'], queryFn: listPlatformBarangays, enabled: platformAdmin, staleTime: 60_000 })
   const [showForm, setShowForm] = useState(false)
   const [busyTicket, setBusyTicket] = useState('')
   const [error, setError] = useState('')
@@ -102,7 +104,7 @@ export function SupportPage({ platformAdmin = false }: { platformAdmin?: boolean
     {ticketItems.length === 0 && !tickets.isPending && !tickets.error && <div className="ops-empty"><Headset size={22} /><strong>{platformAdmin ? 'No support requests' : 'No requests yet'}</strong><p>{platformAdmin ? 'New requests will appear in this queue.' : 'Your support requests and replies will appear here.'}</p></div>}
     <div className="support-ticket-list">{ticketItems.map((ticket) => {
       return <article className="ops-panel support-ticket" key={ticket.id}>
-        <header><div><StatusPill status={ticket.status} /><span className="support-category">{ticket.category.replace('_',' ')}</span></div>{platformAdmin && <small>{platformBarangays.data?.find((barangay) => barangay.id === ticket.barangay_id)?.name ?? `Barangay ${ticket.barangay_id.slice(0,8)}`}</small>}</header>
+        <header><div><StatusPill status={ticket.status} /><span className="support-category">{ticket.category.replace('_',' ')}</span></div>{platformAdmin && <small>{ticket.barangay_name ?? `Barangay ${ticket.barangay_id.slice(0,8)}`}</small>}</header>
         <h2>{ticket.subject}</h2><p className="support-ticket-description">{ticket.description}</p>
         <div className="incident-meta"><span>Opened {formatDateTime(ticket.created_at)}</span><span>Updated {formatDateTime(ticket.updated_at)}</span></div>
         {platformAdmin && <label className="support-status-control">Request status<select value={ticket.status} disabled={busyTicket === ticket.id} onChange={(event) => void changeStatus(ticket.id, event.target.value)}>{statuses.map((status) => <option key={status} value={status}>{status.replaceAll('_',' ')}</option>)}</select></label>}

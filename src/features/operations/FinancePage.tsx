@@ -1,11 +1,11 @@
 import { useState, type FormEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
-import { CheckCircle2, CircleDollarSign, Download, ReceiptText, ShieldCheck } from 'lucide-react'
+import { CheckCircle2, ChevronLeft, ChevronRight, CircleDollarSign, Download, ReceiptText, ShieldCheck } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import {
   approveFinanceBudget, createFinanceBudget, createFinancialTransaction, createFinancialReceiptDownloadUrl, hasPermission,
-  listFinanceBudgetAmendments, listFinanceBudgets, listFinancialAdjustments, listFinancialReceipts, listFinancialTransactions, reviewFinanceBudgetAmendment, reviewFinancialAdjustment, reviewFinancialTransaction,
+  FINANCE_REPORT_EXPORT_PAGE_SIZE, FINANCIAL_TRANSACTION_PAGE_SIZE, listFinanceBudgetAmendments, listFinanceBudgets, listFinanceBudgetUsage, listFinanceReportExportPage, listFinancialAdjustmentsForTransactions, listFinancialReceiptsForTransactions, listFinancialReportRows, listFinancialTransactionPage, reviewFinanceBudgetAmendment, reviewFinancialAdjustment, reviewFinancialTransaction,
   recordFinanceReportExport, requestFinanceBudgetAmendment, requestFinancialAdjustment, uploadFinancialReceipt, voidFinancialTransaction,
 } from './data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
@@ -23,14 +23,19 @@ export function FinancePage() {
   const { membership, user } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
   const queryClient = useQueryClient()
+  const [exportHistoryPage, setExportHistoryPage] = useState(0)
+  const [transactionPage, setTransactionPage] = useState(0)
   const canRead = useQuery({ queryKey: ['permission', tenantId, 'finance.read'], queryFn: () => hasPermission(tenantId, 'finance.read'), enabled: Boolean(tenantId) })
   const canManage = useQuery({ queryKey: ['permission', tenantId, 'finance.manage'], queryFn: () => hasPermission(tenantId, 'finance.manage'), enabled: Boolean(tenantId) })
   const canApprove = useQuery({ queryKey: ['permission', tenantId, 'finance.approve'], queryFn: () => hasPermission(tenantId, 'finance.approve'), enabled: Boolean(tenantId) })
   const budgets = useQuery({ queryKey: ['finance-budgets', tenantId], queryFn: () => listFinanceBudgets(tenantId), enabled: Boolean(tenantId && canRead.data) })
+  const budgetUsage = useQuery({ queryKey: ['finance-budget-usage', tenantId], queryFn: () => listFinanceBudgetUsage(tenantId), enabled: Boolean(tenantId && canRead.data) })
   const amendments = useQuery({ queryKey: ['finance-budget-amendments', tenantId], queryFn: () => listFinanceBudgetAmendments(tenantId), enabled: Boolean(tenantId && canRead.data) })
-  const transactions = useQuery({ queryKey: ['financial-transactions', tenantId], queryFn: () => listFinancialTransactions(tenantId), enabled: Boolean(tenantId && canRead.data) })
-  const adjustments = useQuery({ queryKey: ['financial-adjustments', tenantId], queryFn: () => listFinancialAdjustments(tenantId), enabled: Boolean(tenantId && canRead.data) })
-  const receipts = useQuery({ queryKey: ['financial-receipts', tenantId], queryFn: () => listFinancialReceipts(tenantId), enabled: Boolean(tenantId && canRead.data) })
+  const transactions = useQuery({ queryKey: ['financial-transactions', tenantId, transactionPage], queryFn: () => listFinancialTransactionPage(tenantId, transactionPage), enabled: Boolean(tenantId && canRead.data) })
+  const transactionIds = transactions.data?.transactions.map((item) => item.id) ?? []
+  const adjustments = useQuery({ queryKey: ['financial-adjustments', tenantId, transactionIds], queryFn: () => listFinancialAdjustmentsForTransactions(tenantId, transactionIds), enabled: Boolean(tenantId && canRead.data && transactionIds.length) })
+  const receipts = useQuery({ queryKey: ['financial-receipts', tenantId, transactionIds], queryFn: () => listFinancialReceiptsForTransactions(tenantId, transactionIds), enabled: Boolean(tenantId && canRead.data && transactionIds.length) })
+  const reportExports = useQuery({ queryKey: ['finance-report-exports', tenantId, exportHistoryPage], queryFn: () => listFinanceReportExportPage(tenantId, exportHistoryPage), enabled: Boolean(tenantId && canRead.data) })
   const [budgetForm, setBudgetForm] = useState(false)
   const [transactionForm, setTransactionForm] = useState(false)
   const [amendmentBudget, setAmendmentBudget] = useState('')
@@ -45,6 +50,7 @@ export function FinancePage() {
   async function refresh() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['finance-budgets', tenantId] }),
+      queryClient.invalidateQueries({ queryKey: ['finance-budget-usage', tenantId] }),
       queryClient.invalidateQueries({ queryKey: ['finance-budget-amendments', tenantId] }),
       queryClient.invalidateQueries({ queryKey: ['financial-transactions', tenantId] }),
       queryClient.invalidateQueries({ queryKey: ['financial-adjustments', tenantId] }),
@@ -73,7 +79,7 @@ export function FinancePage() {
     setBusy(true)
     try {
       await createFinancialTransaction({ budgetId: parsed.data.budgetId, type: parsed.data.type, category: parsed.data.category, description: parsed.data.description, amount: parsed.data.amount, date: parsed.data.date })
-      await refresh(); form.reset(); setTransactionForm(false); setMessage('Transaction submitted for independent review.')
+      await refresh(); setTransactionPage(0); form.reset(); setTransactionForm(false); setMessage('Transaction submitted for independent review.')
     } catch (err) { setError(err instanceof Error ? err.message : 'Unable to submit the transaction.') }
     finally { setBusy(false) }
   }
@@ -177,13 +183,14 @@ export function FinancePage() {
 
   async function exportFinanceReport() {
     if (!reportFrom || !reportTo || reportTo < reportFrom) { setError('Choose a valid report date range.'); return }
-      const transactionRows = (transactions.data ?? []).filter((item) => item.transaction_date >= reportFrom && item.transaction_date <= reportTo)
-      const byId = new Map(transactionRows.map((item) => [item.id, item]))
-      const adjustmentRows = (adjustments.data ?? []).filter((item) => byId.has(item.transaction_id))
-      const rowCount = transactionRows.length + adjustmentRows.length
     setBusy(true); setError(''); setMessage('')
     try {
+      const { transactions: transactionRows, adjustments: adjustmentRows } = await listFinancialReportRows(tenantId, reportFrom, reportTo)
+      const byId = new Map(transactionRows.map((item) => [item.id, item]))
+      const rowCount = transactionRows.length + adjustmentRows.length
       await recordFinanceReportExport(tenantId, reportFrom, reportTo, rowCount)
+      setExportHistoryPage(0)
+      await queryClient.invalidateQueries({ queryKey: ['finance-report-exports', tenantId] })
       const csv = encodeCsv([
         ['Date', 'Budget', 'Type', 'Category', 'Description', 'Amount PHP', 'Status', 'Submitted by', 'Reviewed by', 'Review note', 'Void reason'],
         ...transactionRows.map((item) => [item.transaction_date, item.budget?.name ?? '', item.transaction_type, item.category,
@@ -203,10 +210,7 @@ export function FinancePage() {
   }
 
   const approvedBudgets = budgets.data?.filter((budget) => budget.status === 'approved') ?? []
-  const postedExpenses = (budgetId: string) => (transactions.data ?? []).filter((item) => item.budget_id === budgetId && item.transaction_type === 'expense' && item.status === 'posted').reduce((sum, item) => {
-    const approvedChange = (adjustments.data ?? []).filter((adjustment) => adjustment.transaction_id === item.id && adjustment.status === 'approved').reduce((total, adjustment) => total + Number(adjustment.amount_change), 0)
-    return sum + Number(item.amount) + approvedChange
-  }, 0)
+  const postedExpenses = (budgetId: string) => Number(budgetUsage.data?.find((row) => row.budget_id === budgetId)?.posted_expense_total ?? 0)
 
   return <section className="operation-page">
     <PageHeading title="Budgets & finance" description="Submit annual budgets and financial entries with separate review and approval controls.">
@@ -223,8 +227,16 @@ export function FinancePage() {
         <div><h2 id="finance-report-title">Financial report</h2><p>Export transactions for a date range. Each export is recorded for audit.</p></div>
         <label>From<input type="date" value={reportFrom} max={reportTo} onChange={(event) => setReportFrom(event.target.value)} /></label>
         <label>To<input type="date" value={reportTo} min={reportFrom} onChange={(event) => setReportTo(event.target.value)} /></label>
-        <button className="button outline" disabled={busy || transactions.isPending || adjustments.isPending || Boolean(transactions.error || adjustments.error)} onClick={() => void exportFinanceReport()}><Download size={16} />Export CSV</button>
+        <button className="button outline" disabled={busy} onClick={() => void exportFinanceReport()}><Download size={16} />Export CSV</button>
         <small>Includes transaction status, reviewer notes, and void reasons for the selected dates.</small>
+      </section>
+      <section className="ops-panel finance-export-history" aria-labelledby="finance-export-history-title">
+        <div className="ops-panel-heading"><div><h2 id="finance-export-history-title">Report export history</h2><p>Audited CSV exports created in this barangay workspace.</p></div><ShieldCheck size={18} /></div>
+        {reportExports.isPending && <LoadingNotice compact />}
+        {reportExports.error && <ErrorNotice message="Finance export history could not be loaded." onRetry={() => void reportExports.refetch()} retrying={reportExports.isFetching} />}
+        {reportExports.data?.total === 0 && !reportExports.isPending && <p className="field-hint">No finance reports have been exported yet.</p>}
+        {reportExports.data && reportExports.data.exports.length > 0 && <ol className="finance-export-history-list">{reportExports.data.exports.map((entry) => <li key={entry.id}><div><strong>{entry.date_from} to {entry.date_to}</strong><time dateTime={entry.created_at}>{formatDateTime(entry.created_at)}</time></div><span>{Number(entry.row_count).toLocaleString()} transaction and adjustment rows</span></li>)}</ol>}
+        {reportExports.data && reportExports.data.total > FINANCE_REPORT_EXPORT_PAGE_SIZE && <nav className="ops-form-actions" aria-label="Finance export history pages"><button type="button" className="button outline" disabled={exportHistoryPage === 0 || reportExports.isFetching} onClick={() => setExportHistoryPage((current) => Math.max(0, current - 1))}><ChevronLeft size={15} />Previous</button><span className="field-hint">Page {exportHistoryPage + 1} of {Math.ceil(reportExports.data.total / FINANCE_REPORT_EXPORT_PAGE_SIZE)} · {reportExports.data.total} exports</span><button type="button" className="button outline" disabled={(exportHistoryPage + 1) * FINANCE_REPORT_EXPORT_PAGE_SIZE >= reportExports.data.total || reportExports.isFetching} onClick={() => setExportHistoryPage((current) => current + 1)}>Next<ChevronRight size={15} /></button></nav>}
       </section>
       {budgetForm && canManage.data && <form className="ops-panel ops-form finance-form" onSubmit={(event) => void submitBudget(event)}>
         <div className="ops-panel-heading"><div><h2>Submit an annual budget</h2><p>A different authorized reviewer must approve it before transactions can use it.</p></div><CircleDollarSign size={18} /></div>
@@ -238,6 +250,7 @@ export function FinancePage() {
         <div className="ops-form-actions"><button className="button primary" disabled={busy}>{busy ? 'Submitting…' : 'Submit for review'}</button></div>
       </form>}
       <div className="ops-section-title"><h2>Annual budgets</h2><p>Expenses are capped at the approved amount. Posted transactions remain in the audit history.</p></div>
+      {budgetUsage.error && <ErrorNotice message="Posted expense totals could not be loaded. Budget remaining amounts may be unavailable until this is resolved." onRetry={() => void budgetUsage.refetch()} retrying={budgetUsage.isFetching} />}
       {budgets.isPending ? <LoadingNotice /> : budgets.error ? <ErrorNotice message={budgets.error.message} /> : budgets.data?.length ? <div className="finance-budget-list">{budgets.data.map((budget) => {
         const spent = postedExpenses(budget.id)
         return <article className="ops-panel finance-budget" key={budget.id}>
@@ -252,7 +265,7 @@ export function FinancePage() {
         </article>
       })}</div> : <EmptyNotice title="No budgets submitted" detail="Annual budgets submitted by your Treasurer will appear here." />}
       <div className="ops-section-title"><h2>Financial entries</h2><p>Only approved transactions count toward posted expenses.</p></div>
-      {transactions.isPending ? <LoadingNotice /> : transactions.error ? <ErrorNotice message={transactions.error.message} /> : transactions.data?.length ? <div className="ops-panel finance-transaction-list">{transactions.data.map((item) => <article className="finance-transaction" key={item.id}>
+      {transactions.isPending ? <LoadingNotice /> : transactions.error ? <ErrorNotice message={transactions.error.message} /> : transactions.data?.transactions.length ? <div className="ops-panel finance-transaction-list">{transactions.data.transactions.map((item) => <article className="finance-transaction" key={item.id}>
         <div className="finance-transaction-main"><div><strong>{item.description}</strong><p>{item.category} · {item.budget?.name ?? 'Budget'} · {new Date(`${item.transaction_date}T00:00:00`).toLocaleDateString()}</p></div><div className="finance-transaction-amount"><strong className={item.transaction_type === 'income' ? 'finance-income' : ''}>{item.transaction_type === 'expense' ? '−' : '+'}{currency.format(Number(item.amount))}</strong><StatusPill status={item.status} /></div></div>
         {item.review_note && <p className="finance-review-note">Review note: {item.review_note}</p>}
         {item.void_reason && <p className="finance-review-note">Voided {item.voided_at ? formatDateTime(item.voided_at) : ''}: {item.void_reason}</p>}
@@ -269,6 +282,7 @@ export function FinancePage() {
         {canApprove.data && item.status === 'submitted' && item.submitted_by !== user?.id && <div className="finance-review-actions"><button className="button outline" disabled={busy} onClick={() => void reviewTransaction(item.id, false)}>Reject</button><button className="button primary" disabled={busy} onClick={() => void reviewTransaction(item.id, true)}>Approve & post</button></div>}
         {canApprove.data && item.status === 'posted' && item.submitted_by !== user?.id && <div className="finance-review-actions"><button className="button outline danger-action" disabled={busy} onClick={() => void voidTransaction(item.id)}>Void with reason</button></div>}
       </article>)}</div> : <EmptyNotice title="No financial entries" detail="Entries submitted against approved budgets will appear here." />}
+      {transactions.data && transactions.data.total > FINANCIAL_TRANSACTION_PAGE_SIZE && <nav className="ops-form-actions" aria-label="Financial entry pages"><button type="button" className="button outline" disabled={transactionPage === 0 || transactions.isFetching} onClick={() => setTransactionPage((current) => Math.max(0, current - 1))}><ChevronLeft size={15} />Previous</button><span className="field-hint">Page {transactionPage + 1} of {Math.ceil(transactions.data.total / FINANCIAL_TRANSACTION_PAGE_SIZE)} · {transactions.data.total.toLocaleString()} entries</span><button type="button" className="button outline" disabled={(transactionPage + 1) * FINANCIAL_TRANSACTION_PAGE_SIZE >= transactions.data.total || transactions.isFetching} onClick={() => setTransactionPage((current) => current + 1)}>Next<ChevronRight size={15} /></button></nav>}
       <p className="archive-limit-note">Detailed reconciliation reports are a future addition. CSV exports include the selected transaction records and are logged for audit.</p>
     </>}
   </section>

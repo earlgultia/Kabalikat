@@ -258,9 +258,16 @@ export async function getOwnResidentDataExport(tenantId: string): Promise<Reside
   }
 }
 
-export function listHouseholds(tenantId: string) {
-  return rows<HouseholdRow>(client().from('households')
-    .select('id,household_code,address_line,purok').eq('barangay_id', tenantId).order('household_code'))
+export const HOUSEHOLD_PAGE_SIZE = 25
+
+export async function listHouseholdsPage(tenantId: string, page: number, search: string) {
+  const from = Math.max(0, page) * HOUSEHOLD_PAGE_SIZE
+  const term = search.trim().replace(/[^a-zA-Z0-9\s-]/g, ' ').replace(/\s+/g, ' ').slice(0, 80)
+  let request = client().from('households').select('id,household_code,address_line,purok', { count: 'exact' }).eq('barangay_id', tenantId)
+  if (term) request = request.or(`household_code.ilike.%${term}%,address_line.ilike.%${term}%`)
+  const { data, count, error } = await request.order('household_code').order('id').range(from, from + HOUSEHOLD_PAGE_SIZE - 1)
+  if (error) throw new Error(error.message)
+  return { households: (data ?? []) as HouseholdRow[], totalCount: count ?? 0 }
 }
 
 export function registerResident(input: {
@@ -283,10 +290,18 @@ export function verifyResident(residentId: string, status: 'verified' | 'rejecte
   return rpc<string>('verify_residency', { p_resident_id: residentId, p_status: status, p_reason: reason || null })
 }
 
-export function listResidentProfileChangeRequests(tenantId: string) {
-  return rows<ResidentProfileChangeRequest>(client().from('resident_profile_change_requests')
-    .select('id,resident_id,proposed_first_name,proposed_last_name,proposed_phone,request_note,status,review_reason,created_at,reviewed_at,resident:residents(first_name,last_name)')
-    .eq('barangay_id', tenantId).order('created_at', { ascending: false }))
+export const RESIDENT_CORRECTION_PAGE_SIZE = 20
+
+export async function listResidentProfileChangeRequests(tenantId: string, page: number, pendingOnly: boolean) {
+  const from = Math.max(0, page) * RESIDENT_CORRECTION_PAGE_SIZE
+  let query = client().from('resident_profile_change_requests')
+    .select('id,resident_id,proposed_first_name,proposed_last_name,proposed_phone,request_note,status,review_reason,created_at,reviewed_at,resident:residents(first_name,last_name)', { count: 'exact' })
+    .eq('barangay_id', tenantId)
+  if (pendingOnly) query = query.eq('status', 'pending')
+  const { data, count, error } = await query.order('created_at', { ascending: false }).order('id', { ascending: false })
+    .range(from, from + RESIDENT_CORRECTION_PAGE_SIZE - 1)
+  if (error) throw new Error(error.message)
+  return { requests: (data ?? []) as unknown as ResidentProfileChangeRequest[], totalCount: count ?? 0 }
 }
 
 export function submitResidentProfileChange(input: {
@@ -476,6 +491,17 @@ export function listTenantMembers(tenantId: string) {
     .eq('barangay_id', tenantId).eq('status', 'active'))
 }
 
+export const MEETING_MEMBER_PAGE_SIZE = 25
+
+export async function listMeetingMemberPage(tenantId: string, page: number, search: string) {
+  const { data, error } = await client().rpc('list_meeting_member_page', {
+    p_barangay_id: tenantId, p_page: page, p_page_size: MEETING_MEMBER_PAGE_SIZE, p_search: search.trim().slice(0, 100) || null,
+  })
+  if (error) throw new Error(error.message)
+  const rows = (data ?? []) as { user_id: string; display_name: string | null; role_label: string; total_count: number }[]
+  return { members: rows.map(({ user_id, display_name, role_label }) => ({ user_id, display_name, role_label })), total: Number(rows[0]?.total_count ?? 0) }
+}
+
 export function createMeeting(input: {
   tenantId: string; title: string; location: string; startsAt: string; endsAt: string; agenda: string; attendeeIds: string[]
 }) {
@@ -525,10 +551,25 @@ export async function getMeetingMinutes(meetingId: string) {
   return data as MeetingMinutesRow | null
 }
 
-export function listMeetingResolutions(meetingId: string) {
-  return rows<MeetingResolutionRow>(client().from('meeting_resolutions')
-    .select('id,resolution_number,title,content,status,created_at,approved_at')
-    .eq('meeting_id', meetingId).order('created_at', { ascending: false }))
+export const MEETING_RESOLUTION_PAGE_SIZE = 25
+
+export async function listMeetingResolutionPage(meetingId: string, page: number) {
+  const from = Math.max(0, page) * MEETING_RESOLUTION_PAGE_SIZE
+  const { data, error, count } = await client().from('meeting_resolutions')
+    .select('id,resolution_number,title,content,status,created_at,approved_at', { count: 'exact' })
+    .eq('meeting_id', meetingId).order('created_at', { ascending: false }).order('id', { ascending: false })
+    .range(from, from + MEETING_RESOLUTION_PAGE_SIZE - 1)
+  if (error) throw new Error(error.message)
+  return { rows: (data ?? []) as MeetingResolutionRow[], total: count ?? 0 }
+}
+
+export async function listAllMeetingResolutions(meetingId: string) {
+  const result: MeetingResolutionRow[] = []
+  for (let page = 0; ; page += 1) {
+    const batch = await listMeetingResolutionPage(meetingId, page)
+    result.push(...batch.rows)
+    if (result.length >= batch.total || batch.rows.length === 0) return result
+  }
 }
 
 export function saveMeetingMinutes(meetingId: string, content: string, reviewed: boolean) {
@@ -549,6 +590,14 @@ export function listFinanceBudgets(tenantId: string) {
     .eq('barangay_id', tenantId).order('fiscal_year', { ascending: false }).order('name'))
 }
 
+export type FinanceBudgetUsageRow = { budget_id: string; posted_expense_total: number }
+
+export async function listFinanceBudgetUsage(tenantId: string): Promise<FinanceBudgetUsageRow[]> {
+  const { data, error } = await client().rpc('list_finance_budget_usage', { p_barangay_id: tenantId })
+  if (error) throw new Error(error.message)
+  return (data ?? []) as FinanceBudgetUsageRow[]
+}
+
 export function listFinanceBudgetAmendments(tenantId: string) {
   return rows<FinanceBudgetAmendmentRow>(client().from('finance_budget_amendments')
     .select('id,budget_id,requested_amount,reason,status,requested_by,reviewed_by,review_note,created_at')
@@ -563,16 +612,67 @@ export function reviewFinanceBudgetAmendment(amendmentId: string, approve: boole
   return rpc<void>('review_finance_budget_amendment', { p_amendment_id: amendmentId, p_approve: approve, p_note: note || null })
 }
 
-export function listFinancialTransactions(tenantId: string) {
-  return rows<FinancialTransactionRow>(client().from('financial_transactions')
-    .select('id,budget_id,transaction_type,category,description,amount,transaction_date,status,submitted_by,reviewed_by,review_note,created_at,void_reason,voided_at,budget:finance_budgets(name,fiscal_year)')
-    .eq('barangay_id', tenantId).order('transaction_date', { ascending: false }))
+export const FINANCIAL_TRANSACTION_PAGE_SIZE = 25
+
+const financialTransactionColumns = 'id,budget_id,transaction_type,category,description,amount,transaction_date,status,submitted_by,reviewed_by,review_note,created_at,void_reason,voided_at,budget:finance_budgets(name,fiscal_year)'
+const financialAdjustmentColumns = 'id,transaction_id,amount_change,reason,status,requested_by,reviewed_by,review_note,created_at'
+
+export async function listFinancialTransactionPage(tenantId: string, page: number) {
+  const from = Math.max(0, page) * FINANCIAL_TRANSACTION_PAGE_SIZE
+  const { data, error, count } = await client().from('financial_transactions')
+    .select(financialTransactionColumns, { count: 'exact' }).eq('barangay_id', tenantId)
+    .order('transaction_date', { ascending: false }).order('id', { ascending: false })
+    .range(from, from + FINANCIAL_TRANSACTION_PAGE_SIZE - 1)
+  if (error) throw new Error(error.message)
+  return { transactions: (data ?? []) as unknown as FinancialTransactionRow[], total: count ?? 0 }
 }
 
-export function listFinancialAdjustments(tenantId: string) {
-  return rows<FinancialAdjustmentRow>(client().from('financial_adjustments')
-    .select('id,transaction_id,amount_change,reason,status,requested_by,reviewed_by,review_note,created_at')
-    .eq('barangay_id', tenantId).order('created_at', { ascending: false }))
+export async function listFinancialAdjustmentsForTransactions(tenantId: string, transactionIds: string[]): Promise<FinancialAdjustmentRow[]> {
+  if (!transactionIds.length) return []
+  const pageSize = 500
+  const result: FinancialAdjustmentRow[] = []
+  for (let page = 0; ; page += 1) {
+    const { data, error } = await client().from('financial_adjustments').select(financialAdjustmentColumns)
+      .eq('barangay_id', tenantId).in('transaction_id', transactionIds)
+      .order('created_at', { ascending: false }).order('id', { ascending: false })
+      .range(page * pageSize, (page + 1) * pageSize - 1)
+    if (error) throw new Error(error.message)
+    const batch = (data ?? []) as FinancialAdjustmentRow[]
+    result.push(...batch)
+    if (batch.length < pageSize) break
+  }
+  return result
+}
+
+export async function listFinancialReceiptsForTransactions(tenantId: string, transactionIds: string[]): Promise<FinancialReceiptRow[]> {
+  if (!transactionIds.length) return []
+  const { data, error } = await client().from('financial_receipts')
+    .select('id,transaction_id,file_name,mime_type,file_size,storage_path,created_at')
+    .eq('barangay_id', tenantId).in('transaction_id', transactionIds).order('created_at', { ascending: false })
+  if (error) throw new Error(error.message)
+  return (data ?? []) as FinancialReceiptRow[]
+}
+
+export async function listFinancialReportRows(tenantId: string, dateFrom: string, dateTo: string) {
+  const batchSize = 500
+  const transactions: FinancialTransactionRow[] = []
+  for (let page = 0; ; page += 1) {
+    const from = page * batchSize
+    const { data, error } = await client().from('financial_transactions')
+      .select(financialTransactionColumns).eq('barangay_id', tenantId)
+      .gte('transaction_date', dateFrom).lte('transaction_date', dateTo)
+      .order('transaction_date', { ascending: false }).order('id', { ascending: false })
+      .range(from, from + batchSize - 1)
+    if (error) throw new Error(error.message)
+    const batch = (data ?? []) as unknown as FinancialTransactionRow[]
+    transactions.push(...batch)
+    if (batch.length < batchSize) break
+  }
+  const adjustments: FinancialAdjustmentRow[] = []
+  for (let offset = 0; offset < transactions.length; offset += 200) {
+    adjustments.push(...await listFinancialAdjustmentsForTransactions(tenantId, transactions.slice(offset, offset + 200).map((item) => item.id)))
+  }
+  return { transactions, adjustments }
 }
 
 export function requestFinancialAdjustment(transactionId: string, amountChange: number, reason: string) {
@@ -608,16 +708,22 @@ export function voidFinancialTransaction(transactionId: string, reason: string) 
   return rpc<void>('void_financial_transaction', { p_transaction_id: transactionId, p_reason: reason })
 }
 
-export function listFinancialReceipts(tenantId: string) {
-  return rows<FinancialReceiptRow>(client().from('financial_receipts')
-    .select('id,transaction_id,file_name,mime_type,file_size,storage_path,created_at')
-    .eq('barangay_id', tenantId).order('created_at', { ascending: false }))
-}
-
 export function recordFinanceReportExport(tenantId: string, dateFrom: string, dateTo: string, rowCount: number) {
   return rpc<string>('record_finance_report_export', {
     p_barangay_id: tenantId, p_date_from: dateFrom, p_date_to: dateTo, p_row_count: rowCount,
   })
+}
+
+export const FINANCE_REPORT_EXPORT_PAGE_SIZE = 20
+
+export async function listFinanceReportExportPage(tenantId: string, page: number) {
+  const from = Math.max(0, page) * FINANCE_REPORT_EXPORT_PAGE_SIZE
+  const { data, error, count } = await client().from('finance_report_exports')
+    .select('id,date_from,date_to,row_count,created_at', { count: 'exact' })
+    .eq('barangay_id', tenantId).order('created_at', { ascending: false }).order('id', { ascending: false })
+    .range(from, from + FINANCE_REPORT_EXPORT_PAGE_SIZE - 1)
+  if (error) throw new Error(error.message)
+  return { exports: data ?? [], total: count ?? 0 }
 }
 
 export async function uploadFinancialReceipt(transactionId: string, file: File) {
@@ -660,10 +766,21 @@ export function listArchiveFolders(tenantId: string) {
     .select('id,parent_id,name').eq('barangay_id', tenantId).order('name'))
 }
 
-export function searchArchiveDocuments(tenantId: string, query: string, folderId: string) {
-  return rpc<ArchiveDocumentRow[]>('search_archive_documents', {
+export const ARCHIVE_DOCUMENT_PAGE_SIZE = 25
+
+export async function searchArchiveDocumentPage(tenantId: string, query: string, folderId: string, page: number) {
+  const result = await rpc<(ArchiveDocumentRow & { total_count: number })[]>('search_archive_document_page', {
     p_barangay_id: tenantId, p_query: query || null, p_folder_id: folderId || null,
-  }).then((result) => result ?? [])
+    p_page: page, p_page_size: ARCHIVE_DOCUMENT_PAGE_SIZE,
+  })
+  const rows = result ?? []
+  return {
+    documents: rows.map((document) => ({ id: document.id, folder_id: document.folder_id, file_name: document.file_name,
+      description: document.description, category: document.category, mime_type: document.mime_type,
+      file_size: document.file_size, storage_path: document.storage_path, extracted_text: document.extracted_text,
+      text_status: document.text_status, created_at: document.created_at })),
+    total: Number(rows[0]?.total_count ?? 0),
+  }
 }
 
 export function createArchiveFolder(tenantId: string, name: string, parentId: string | null) {

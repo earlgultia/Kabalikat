@@ -1,11 +1,11 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
-import { CalendarDays, CheckCircle2, ClipboardList } from 'lucide-react'
+import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Search } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import {
-  createMeeting, hasPermission, listAttendance, listMeetingAttendees, listMeetingPage, listTenantMembers,
-  markAttendance, recordAttendance, updateMeetingStatus, MEETING_PAGE_SIZE,
+  createMeeting, hasPermission, listAttendance, listMeetingAttendees, listMeetingMemberPage, listMeetingPage, listTenantMembers,
+  markAttendance, recordAttendance, updateMeetingStatus, MEETING_MEMBER_PAGE_SIZE, MEETING_PAGE_SIZE,
 } from './data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 import { formatDateTime } from './format'
@@ -25,15 +25,30 @@ export function MeetingsPage() {
   const tenantId = membership?.barangay_id ?? ''
   const queryClient = useQueryClient()
   const [page, setPage] = useState(0)
+  const [selectedAttendees, setSelectedAttendees] = useState<string[]>([])
+  const [memberPage, setMemberPage] = useState(0)
+  const [memberSearch, setMemberSearch] = useState('')
+  const [open, setOpen] = useState(false)
+  const [selectedMeeting, setSelectedMeeting] = useState('')
+  useEffect(() => {
+    setPage(0)
+    setSelectedMeeting('')
+    setSelectedAttendees([])
+    setOpen(false)
+    setMemberPage(0)
+    setMemberSearch('')
+  }, [tenantId])
   const meetings = useQuery({ queryKey: ['meetings', tenantId, page], queryFn: () => listMeetingPage(tenantId, page), enabled: Boolean(tenantId) })
   const canManage = useQuery({ queryKey: ['permission', tenantId, 'meeting.manage'], queryFn: () => hasPermission(tenantId, 'meeting.manage'), enabled: Boolean(tenantId) })
   const canManageAttendance = useQuery({ queryKey: ['permission', tenantId, 'attendance.manage'], queryFn: () => hasPermission(tenantId, 'attendance.manage'), enabled: Boolean(tenantId) })
   const canSelectAttendees = useQuery({ queryKey: ['permission', tenantId, 'membership.read'], queryFn: () => hasPermission(tenantId, 'membership.read'), enabled: Boolean(tenantId) })
-  const members = useQuery({ queryKey: ['tenant-members', tenantId], queryFn: () => listTenantMembers(tenantId), enabled: Boolean(tenantId && canSelectAttendees.data) })
-  const [selectedAttendees, setSelectedAttendees] = useState<string[]>([])
-  const [open, setOpen] = useState(false)
+  const members = useQuery({ queryKey: ['tenant-members', tenantId], queryFn: () => listTenantMembers(tenantId), enabled: Boolean(tenantId && canSelectAttendees.data && selectedMeeting) })
+  const memberDirectory = useQuery({
+    queryKey: ['meeting-member-directory', tenantId, memberPage, memberSearch],
+    queryFn: () => listMeetingMemberPage(tenantId, memberPage, memberSearch),
+    enabled: Boolean(tenantId && canSelectAttendees.data && open),
+  })
   const [busy, setBusy] = useState(false)
-  const [selectedMeeting, setSelectedMeeting] = useState('')
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const attendance = useQuery({
@@ -69,6 +84,15 @@ export function MeetingsPage() {
     finally { setBusy(false) }
   }
 
+  function toggleMeetingForm() {
+    if (!open) {
+      setSelectedMeeting('')
+      setMemberPage(0)
+      setMemberSearch('')
+    }
+    setOpen((value) => !value)
+  }
+
   async function checkIn(id: string) {
     try {
       await markAttendance(id)
@@ -102,7 +126,7 @@ export function MeetingsPage() {
 
   return <section className="operation-page">
     <PageHeading title="Meetings & attendance" description="Schedule meetings, share agendas with eligible members, and record attendance.">
-      {canManage.data && <button className="button primary" onClick={() => setOpen((value) => !value)}><CalendarDays size={16} />Schedule meeting</button>}
+      {canManage.data && <button className="button primary" onClick={toggleMeetingForm}><CalendarDays size={16} />Schedule meeting</button>}
     </PageHeading>
     {!tenantId && <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to view meetings and attendance." />}
     {Boolean(tenantId) && (canManage.isPending || canManageAttendance.isPending || canSelectAttendees.isPending) && <LoadingNotice compact />}
@@ -113,8 +137,12 @@ export function MeetingsPage() {
       <div className="ops-form-grid"><label>Meeting title<input name="title" required maxLength={180} /></label><label>Location<input name="location" required maxLength={180} /></label>
         <label>Starts<input name="startsAt" type="datetime-local" required /></label><label>Ends <span className="field-hint">Optional</span><input name="endsAt" type="datetime-local" /></label>
         <label className="span-two">Agenda<textarea name="agenda" rows={3} maxLength={5000} /></label></div>
-      {canSelectAttendees.data && <div className="attendee-picker"><strong>Invite active members <span className="field-hint">Optional</span></strong>
-        {members.isPending ? <LoadingNotice compact /> : members.error ? <p className="field-hint">Member names are not available to this role. You will be added as an attendee.</p> : <div className="attendee-list">{(members.data ?? []).filter((m) => m.user_id !== user?.id).map((member) => <label key={member.user_id}><input type="checkbox" checked={selectedAttendees.includes(member.user_id)} onChange={(event) => setSelectedAttendees((current) => event.target.checked ? [...current, member.user_id] : current.filter((id) => id !== member.user_id))} /><span>{member.profile?.display_name || 'Member'} · {member.role?.label ?? 'official'}</span></label>)}</div>}
+      {canSelectAttendees.data && <div className="attendee-picker"><strong>Invite active members <span className="field-hint">Optional · {selectedAttendees.length}/100 selected · selections stay checked as you browse</span></strong>
+        <label className="archive-search meeting-member-search"><Search size={16} /><input type="search" aria-label="Search active members" placeholder="Search by name or role" value={memberSearch} onChange={(event) => { setMemberSearch(event.target.value); setMemberPage(0) }} /></label>
+        {memberDirectory.isPending ? <LoadingNotice compact /> : memberDirectory.error ? <ErrorNotice message="Active members could not be loaded." onRetry={() => void memberDirectory.refetch()} retrying={memberDirectory.isFetching} /> : <>
+          <div className="attendee-list">{memberDirectory.data?.members.filter((member) => member.user_id !== user?.id).map((member) => <label key={member.user_id}><input type="checkbox" checked={selectedAttendees.includes(member.user_id)} disabled={!selectedAttendees.includes(member.user_id) && selectedAttendees.length >= 100} onChange={(event) => setSelectedAttendees((current) => event.target.checked ? [...current, member.user_id] : current.filter((id) => id !== member.user_id))} /><span>{member.display_name || 'Member'} · {member.role_label}</span></label>)}</div>
+          {memberDirectory.data && memberDirectory.data.total > MEETING_MEMBER_PAGE_SIZE && <nav className="ops-form-actions" aria-label="Active member pages"><button type="button" className="button outline" disabled={memberPage === 0 || memberDirectory.isFetching} onClick={() => setMemberPage((current) => Math.max(0, current - 1))}><ChevronLeft size={15} />Previous</button><span className="field-hint">Page {memberPage + 1} of {Math.ceil(memberDirectory.data.total / MEETING_MEMBER_PAGE_SIZE)} · {memberDirectory.data.total.toLocaleString()} members</span><button type="button" className="button outline" disabled={(memberPage + 1) * MEETING_MEMBER_PAGE_SIZE >= memberDirectory.data.total || memberDirectory.isFetching} onClick={() => setMemberPage((current) => current + 1)}>Next<ChevronRight size={15} /></button></nav>}
+        </>}
       </div>}
       <div className="ops-form-actions"><span className="field-hint">Attendance self-check-in opens 30 minutes before start and closes 30 minutes after end.</span><button className="button primary" disabled={busy}>{busy ? 'Saving…' : 'Create meeting'}</button></div>
     </form>}

@@ -13,7 +13,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-On Windows PowerShell, use `Copy-Item .env.example .env.local` for the copy step. Apply migrations `0001_foundation.sql` through `0070_paginated_incident_history.sql` in order to a disposable development Supabase project. The project must have Supabase Auth and Storage enabled. No seed data or privileged credentials are included.
+On Windows PowerShell, use `Copy-Item .env.example .env.local` for the copy step. Apply migrations `0001_foundation.sql` through `0091_paginated_committee_member_picker.sql` in order to a disposable development Supabase project. The project must have Supabase Auth and Storage enabled. No seed data or privileged credentials are included.
 
 Without the environment variables the app renders a clear configuration notice and disables sign in. Apply migrations with the Supabase CLI after linking a project, or through the Supabase SQL editor. Do not point early development at a production database.
 
@@ -23,7 +23,7 @@ Invitation links are copied and delivered manually by an authorized operator. A 
 
 ## Provision the first platform administrator
 
-The application intentionally has no public Super Admin registration. Provision the first platform administrator through the Supabase Dashboard and SQL Editor after migrations `0001_foundation.sql` through `0070_paginated_incident_history.sql` have been applied.
+The application intentionally has no public Super Admin registration. Provision the first platform administrator through the Supabase Dashboard and SQL Editor after migrations `0001_foundation.sql` through `0091_paginated_committee_member_picker.sql` have been applied.
 
 1. In the Supabase Dashboard for the intended project, open **Authentication → Users** and invite the administrator's individually controlled email address. The administrator should set their own password from the invitation flow. Do not use a shared/default password.
 2. After the account appears in the Auth users list, open **SQL Editor** for the same project and run the following. Replace the sample email with the exact invited account email:

@@ -10,6 +10,7 @@ export type SkProjectUpdateRow = {
 }
 export type SkAccomplishment = { id: string; project_id: string; title: string; summary: string; status: 'submitted' | 'published' | 'returned'; created_by: string | null; created_at: string; published_at: string | null; review_note: string | null }
 export type SkProjectActivity = { project_id: string; action: string; details: string; actor_name: string; created_at: string }
+export const SK_PROJECT_PAGE_SIZE = 20
 
 function client() {
   if (!supabase) throw new Error('Supabase is not configured.')
@@ -29,15 +30,20 @@ function rpc<T>(name: string, args: Record<string, unknown>) {
   })
 }
 
-export function listSkProjects(tenantId: string) {
-  return rows<SkProjectRow>(client().from('sk_projects')
-    .select('id,title,description,proposed_budget,planned_start,planned_end,status,created_by,reviewed_by,review_note,created_at')
-    .eq('barangay_id', tenantId).order('created_at', { ascending: false }))
+export async function listSkProjects(tenantId: string, page: number) {
+  const from = Math.max(0, page) * SK_PROJECT_PAGE_SIZE
+  const { data, count, error } = await client().from('sk_projects')
+    .select('id,title,description,proposed_budget,planned_start,planned_end,status,created_by,reviewed_by,review_note,created_at', { count: 'exact' })
+    .eq('barangay_id', tenantId).order('created_at', { ascending: false }).order('id', { ascending: false })
+    .range(from, from + SK_PROJECT_PAGE_SIZE - 1)
+  if (error) throw new Error(error.message)
+  return { rows: (data ?? []) as SkProjectRow[], totalCount: count ?? 0 }
 }
 
-export function listSkProjectUpdates(tenantId: string) {
+export function listSkProjectUpdates(tenantId: string, projectIds: string[]) {
+  if (!projectIds.length) return Promise.resolve([] as SkProjectUpdateRow[])
   return rows<SkProjectUpdateRow>(client().from('sk_project_updates')
-    .select('id,project_id,update_type,title,details,created_at').eq('barangay_id', tenantId).order('created_at', { ascending: false }))
+    .select('id,project_id,update_type,title,details,created_at').eq('barangay_id', tenantId).in('project_id', projectIds).order('created_at', { ascending: false }).order('id', { ascending: false }))
 }
 
 export async function listSkAccomplishments(tenantId: string): Promise<SkAccomplishment[]> {
@@ -46,8 +52,16 @@ export async function listSkAccomplishments(tenantId: string): Promise<SkAccompl
   return (data ?? []) as SkAccomplishment[]
 }
 
-export async function listSkProjectActivity(tenantId: string): Promise<SkProjectActivity[]> {
-  const { data, error } = await client().rpc('list_sk_project_activity', { p_barangay_id: tenantId })
+export async function listSkAccomplishmentsForProjects(tenantId: string, projectIds: string[]): Promise<SkAccomplishment[]> {
+  if (!projectIds.length) return []
+  const { data, error } = await client().rpc('list_sk_accomplishments_for_projects', { p_barangay_id: tenantId, p_project_ids: projectIds })
+  if (error) throw new Error(error.message)
+  return (data ?? []) as SkAccomplishment[]
+}
+
+export async function listSkProjectActivity(tenantId: string, projectIds: string[]): Promise<SkProjectActivity[]> {
+  if (!projectIds.length) return []
+  const { data, error } = await client().rpc('list_sk_project_activity_for_projects', { p_barangay_id: tenantId, p_project_ids: projectIds })
   if (error) throw new Error(error.message)
   return (data ?? []) as SkProjectActivity[]
 }

@@ -7,8 +7,10 @@ export type CommitteeTaskRow = {
   assigned_to: string | null; due_date: string | null; created_at: string
 }
 export type AssignableMemberRow = { user_id: string; display_name: string; role_label: string }
+export type AssignableMemberPage = { rows: AssignableMemberRow[]; totalCount: number }
 export type CommitteePage = { rows: CommitteeRow[]; totalCount: number }
 export const COMMITTEE_PAGE_SIZE = 20
+export const COMMITTEE_MEMBER_PAGE_SIZE = 25
 
 function client() {
   if (!supabase) throw new Error('Supabase is not configured.')
@@ -43,10 +45,14 @@ export function listCommitteeTasks(tenantId: string, committeeIds: string[]) {
   return read<CommitteeTaskRow>(client().from('committee_tasks').select('id,committee_id,title,description,status,assigned_to,due_date,created_at').eq('barangay_id', tenantId).in('committee_id', committeeIds).order('due_date').order('id'))
 }
 
-export async function listAssignableCommitteeMembers(tenantId: string) {
-  const { data, error } = await client().rpc('get_committee_assignable_members', { p_barangay_id: tenantId })
+export async function listAssignableCommitteeMembers(tenantId: string, committeeId: string, page: number, search: string): Promise<AssignableMemberPage> {
+  const { data, error } = await client().rpc('list_committee_assignable_member_page', {
+    p_barangay_id: tenantId, p_committee_id: committeeId, p_page: page,
+    p_page_size: COMMITTEE_MEMBER_PAGE_SIZE, p_search: search.trim() || null,
+  })
   if (error) throw new Error(error.message)
-  return (data ?? []) as AssignableMemberRow[]
+  const rows = (data ?? []) as (AssignableMemberRow & { total_count: number })[]
+  return { rows, totalCount: Number(rows[0]?.total_count ?? 0) }
 }
 
 function rpc<T>(name: string, args: Record<string, unknown>) {
