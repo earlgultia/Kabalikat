@@ -1,15 +1,17 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, ChevronLeft, ChevronRight, FileText, Plus, ScrollText } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, FileText, History, Plus, ScrollText } from 'lucide-react'
 import {
   approveMeetingResolution, createMeetingResolution, getMeetingMinutes, listAllMeetingResolutions,
-  listMeetingResolutionPage, MEETING_RESOLUTION_PAGE_SIZE, saveMeetingMinutes,
+  listAllMeetingStatusHistory, listMeetingResolutionPage, listMeetingStatusHistoryPage, MEETING_RESOLUTION_PAGE_SIZE,
+  MEETING_STATUS_HISTORY_PAGE_SIZE, saveMeetingMinutes,
 } from './data'
 import { ErrorNotice, LoadingNotice, StatusPill } from './shared'
 import { formatDateTime } from './format'
-import type { AttendanceRow, MemberRow, MeetingResolutionRow } from './data'
+import type { AttendanceRow, MemberRow, MeetingResolutionRow, MeetingStatusEventRow } from './data'
 
-export function MeetingRecordsPanel({ meetingId, meetingTitle, location, startsAt, agenda, attendance, attendanceLoading, members, canManage }: {
+export function MeetingRecordsPanel({ tenantId, meetingId, meetingTitle, location, startsAt, agenda, attendance, attendanceLoading, members, canManage, currentUserId }: {
+  tenantId: string; currentUserId?: string
   meetingId: string; meetingTitle: string; location: string; startsAt: string; agenda: string
   attendance: AttendanceRow[]; attendanceLoading: boolean; members: MemberRow[]; canManage: boolean
 }) {
@@ -24,11 +26,19 @@ export function MeetingRecordsPanel({ meetingId, meetingTitle, location, startsA
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [printResolutions, setPrintResolutions] = useState<MeetingResolutionRow[] | null>(null)
+  const [printStatusHistory, setPrintStatusHistory] = useState<MeetingStatusEventRow[] | null>(null)
+  const [statusHistoryOpen, setStatusHistoryOpen] = useState(false)
+  const [statusHistoryPage, setStatusHistoryPage] = useState(0)
+  const statusHistory = useQuery({
+    queryKey: ['meeting-status-history', tenantId, meetingId, statusHistoryPage],
+    queryFn: () => listMeetingStatusHistoryPage(tenantId, meetingId, statusHistoryPage),
+    enabled: Boolean(canManage && statusHistoryOpen),
+  })
 
   useEffect(() => { setMinutesText(minutes.data?.content ?? '') }, [minutes.data?.content, minutes.data?.updated_at, minutes.data?.id])
   useEffect(() => {
     if (printResolutions === null) return
-    const finishPrint = () => setPrintResolutions(null)
+    const finishPrint = () => { setPrintResolutions(null); setPrintStatusHistory(null) }
     window.addEventListener('afterprint', finishPrint)
     const frame = window.requestAnimationFrame(() => window.print())
     return () => { window.cancelAnimationFrame(frame); window.removeEventListener('afterprint', finishPrint) }
@@ -45,7 +55,13 @@ export function MeetingRecordsPanel({ meetingId, meetingTitle, location, startsA
 
   async function exportReport() {
     setError(''); setBusy(true)
-    try { setPrintResolutions(await listAllMeetingResolutions(meetingId)) }
+    try {
+      const [allResolutions, allStatusEvents] = await Promise.all([
+        listAllMeetingResolutions(meetingId), listAllMeetingStatusHistory(tenantId, meetingId),
+      ])
+      setPrintStatusHistory(allStatusEvents)
+      setPrintResolutions(allResolutions)
+    }
     catch (err) { setError(err instanceof Error ? err.message : 'Unable to prepare the full meeting report.') }
     finally { setBusy(false) }
   }
@@ -83,6 +99,20 @@ export function MeetingRecordsPanel({ meetingId, meetingTitle, location, startsA
       {canManage && <button className="button outline" disabled={busy || minutes.isPending || resolutions.isPending || attendanceLoading}
         onClick={() => void exportReport()}><FileText size={15} />{busy || minutes.isPending || resolutions.isPending || attendanceLoading ? 'Preparing report…' : 'Export report PDF'}</button>}
     </div>
+    {canManage && <details className="meeting-status-history" onToggle={(event) => setStatusHistoryOpen(event.currentTarget.open)}>
+      <summary><History size={15} />Status change history{statusHistory.data ? ` (${statusHistory.data.total})` : ''}</summary>
+      {statusHistoryOpen && <>
+        {statusHistory.isPending ? <LoadingNotice compact /> : statusHistory.error ? <ErrorNotice message="Meeting status history could not be loaded." onRetry={() => void statusHistory.refetch()} retrying={statusHistory.isFetching} /> : statusHistory.data?.rows.length ? <ol>{statusHistory.data.rows.map((entry) => <li key={entry.id}>
+          <div><strong>{entry.from_status ? `${entry.from_status.replaceAll('_', ' ')} → ` : ''}{entry.to_status.replaceAll('_', ' ')}</strong><time dateTime={entry.created_at}>{formatDateTime(entry.created_at)}</time></div>
+          <small>{entry.actor_id === currentUserId ? 'Changed by you' : 'Changed by an authorized meeting manager'}{entry.reason ? ` · ${entry.reason}` : ''}</small>
+        </li>)}</ol> : <p className="field-hint">No meeting status changes have been recorded.</p>}
+        {statusHistory.data && statusHistory.data.total > MEETING_STATUS_HISTORY_PAGE_SIZE && <nav className="ops-form-actions" aria-label="Meeting status history pages">
+          <button type="button" className="button outline" disabled={statusHistoryPage === 0 || statusHistory.isFetching} onClick={() => setStatusHistoryPage((current) => Math.max(0, current - 1))}><ChevronLeft size={15} />Previous</button>
+          <span className="field-hint">Page {statusHistoryPage + 1} of {Math.ceil(statusHistory.data.total / MEETING_STATUS_HISTORY_PAGE_SIZE)} · {statusHistory.data.total.toLocaleString()} changes</span>
+          <button type="button" className="button outline" disabled={(statusHistoryPage + 1) * MEETING_STATUS_HISTORY_PAGE_SIZE >= statusHistory.data.total || statusHistory.isFetching} onClick={() => setStatusHistoryPage((current) => current + 1)}>Next<ChevronRight size={15} /></button>
+        </nav>}
+      </>}
+    </details>}
     {message && <div className="ops-success"><Check size={16} />{message}</div>}{error && <ErrorNotice message={error} />}
     <div className="meeting-record-grid">
       <section className="meeting-record-card">
@@ -117,6 +147,9 @@ export function MeetingRecordsPanel({ meetingId, meetingTitle, location, startsA
       <section><h3>Resolutions</h3>{printableResolutions.length ? printableResolutions.map((resolution) => <div className="meeting-print-resolution" key={resolution.id}>
         <strong>{resolution.resolution_number}: {resolution.title}</strong><p>{resolution.content}</p><small>Status: {resolution.status}</small>
       </div>) : <p>No resolutions have been recorded.</p>}</section>
+      <section><h3>Status history</h3>{(printStatusHistory ?? []).length ? <table><thead><tr><th>Change</th><th>When</th><th>Reason</th></tr></thead><tbody>{(printStatusHistory ?? []).map((entry) => <tr key={entry.id}>
+        <td>{entry.from_status ? `${entry.from_status.replaceAll('_', ' ')} → ` : ''}{entry.to_status.replaceAll('_', ' ')}</td><td>{formatDateTime(entry.created_at)}</td><td>{entry.reason || '—'}</td>
+      </tr>)}</tbody></table> : <p>No status changes have been recorded.</p>}</section>
       <section><h3>Attendance</h3>{attendance.length ? <table><thead><tr><th>Attendee</th><th>Status</th><th>Recorded</th></tr></thead><tbody>{attendance.map((item) => <tr key={item.user_id}>
         <td>{members.find((member) => member.user_id === item.user_id)?.profile?.display_name || 'Attendee'}</td><td>{item.status}</td><td>{formatDateTime(item.recorded_at)}</td>
       </tr>)}</tbody></table> : <p>No attendance has been recorded.</p>}</section>

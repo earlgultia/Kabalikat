@@ -12,12 +12,17 @@ export const SK_EVENT_HISTORY_PAGE_SIZE = 25
 
 function client() { if (!supabase) throw new Error('Supabase is not configured.'); return supabase }
 
-export async function listSkEvents(barangayId: string, page: number) {
-  const from = Math.max(0, page) * SK_EVENT_PAGE_SIZE
-  const { data, count, error } = await client().from('sk_events').select('*', { count: 'exact' })
-    .eq('barangay_id', barangayId).order('starts_at').order('id').range(from, from + SK_EVENT_PAGE_SIZE - 1)
+export async function listSkEvents(barangayId: string, page: number, search: string, status: 'all' | SkEvent['status']) {
+  const { data, error } = await client().rpc('list_sk_event_page', {
+    p_barangay_id: barangayId,
+    p_page: page,
+    p_page_size: SK_EVENT_PAGE_SIZE,
+    p_search: search.trim().slice(0, 100) || null,
+    p_status: status,
+  })
   if (error) throw new Error(error.message)
-  return { rows: (data ?? []) as SkEvent[], totalCount: count ?? 0 }
+  const rows = (data ?? []) as (SkEvent & { total_count: number })[]
+  return { rows, totalCount: Number(rows[0]?.total_count ?? 0) }
 }
 
 export async function listSkEventAudit(barangayId: string, eventId: string, page: number) {

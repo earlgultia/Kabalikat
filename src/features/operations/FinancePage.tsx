@@ -5,7 +5,7 @@ import { CheckCircle2, ChevronLeft, ChevronRight, CircleDollarSign, Download, Re
 import { useAuth } from '../../auth/AuthProvider'
 import {
   approveFinanceBudget, createFinanceBudget, createFinancialTransaction, createFinancialReceiptDownloadUrl, hasPermission,
-  FINANCE_REPORT_EXPORT_PAGE_SIZE, FINANCIAL_TRANSACTION_PAGE_SIZE, listFinanceBudgetAmendments, listFinanceBudgets, listFinanceBudgetUsage, listFinanceReportExportPage, listFinancialAdjustmentsForTransactions, listFinancialReceiptsForTransactions, listFinancialReportRows, listFinancialTransactionPage, reviewFinanceBudgetAmendment, reviewFinancialAdjustment, reviewFinancialTransaction,
+  FINANCE_BUDGET_AMENDMENT_PAGE_SIZE, FINANCE_BUDGET_PAGE_SIZE, FINANCE_REPORT_EXPORT_PAGE_SIZE, FINANCIAL_TRANSACTION_PAGE_SIZE, listFinanceBudgetAmendmentPage, listFinanceBudgetPage, listFinanceBudgetUsageForPage, listFinanceReportExportPage, listFinancialAdjustmentsForTransactions, listFinancialReceiptsForTransactions, listFinancialReportRows, listFinancialTransactionPage, reviewFinanceBudgetAmendment, reviewFinancialAdjustment, reviewFinancialTransaction,
   recordFinanceReportExport, requestFinanceBudgetAmendment, requestFinancialAdjustment, uploadFinancialReceipt, voidFinancialTransaction,
 } from './data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
@@ -25,19 +25,24 @@ export function FinancePage() {
   const queryClient = useQueryClient()
   const [exportHistoryPage, setExportHistoryPage] = useState(0)
   const [transactionPage, setTransactionPage] = useState(0)
+  const [budgetPage, setBudgetPage] = useState(0)
+  const [budgetPickerPage, setBudgetPickerPage] = useState(0)
+  const [amendmentPage, setAmendmentPage] = useState(0)
+  const [transactionForm, setTransactionForm] = useState(false)
   const canRead = useQuery({ queryKey: ['permission', tenantId, 'finance.read'], queryFn: () => hasPermission(tenantId, 'finance.read'), enabled: Boolean(tenantId) })
   const canManage = useQuery({ queryKey: ['permission', tenantId, 'finance.manage'], queryFn: () => hasPermission(tenantId, 'finance.manage'), enabled: Boolean(tenantId) })
   const canApprove = useQuery({ queryKey: ['permission', tenantId, 'finance.approve'], queryFn: () => hasPermission(tenantId, 'finance.approve'), enabled: Boolean(tenantId) })
-  const budgets = useQuery({ queryKey: ['finance-budgets', tenantId], queryFn: () => listFinanceBudgets(tenantId), enabled: Boolean(tenantId && canRead.data) })
-  const budgetUsage = useQuery({ queryKey: ['finance-budget-usage', tenantId], queryFn: () => listFinanceBudgetUsage(tenantId), enabled: Boolean(tenantId && canRead.data) })
-  const amendments = useQuery({ queryKey: ['finance-budget-amendments', tenantId], queryFn: () => listFinanceBudgetAmendments(tenantId), enabled: Boolean(tenantId && canRead.data) })
+  const budgets = useQuery({ queryKey: ['finance-budgets', tenantId, budgetPage], queryFn: () => listFinanceBudgetPage(tenantId, budgetPage), enabled: Boolean(tenantId && canRead.data) })
+  const budgetPicker = useQuery({ queryKey: ['finance-budget-picker', tenantId, budgetPickerPage], queryFn: () => listFinanceBudgetPage(tenantId, budgetPickerPage), enabled: Boolean(tenantId && canRead.data && transactionForm) })
+  const visibleBudgetIds = budgets.data?.budgets.map((budget) => budget.id) ?? []
+  const budgetUsage = useQuery({ queryKey: ['finance-budget-usage', tenantId, visibleBudgetIds], queryFn: () => listFinanceBudgetUsageForPage(tenantId, visibleBudgetIds), enabled: Boolean(tenantId && canRead.data && visibleBudgetIds.length) })
+  const amendments = useQuery({ queryKey: ['finance-budget-amendments', tenantId, amendmentPage], queryFn: () => listFinanceBudgetAmendmentPage(tenantId, amendmentPage), enabled: Boolean(tenantId && canRead.data) })
   const transactions = useQuery({ queryKey: ['financial-transactions', tenantId, transactionPage], queryFn: () => listFinancialTransactionPage(tenantId, transactionPage), enabled: Boolean(tenantId && canRead.data) })
   const transactionIds = transactions.data?.transactions.map((item) => item.id) ?? []
   const adjustments = useQuery({ queryKey: ['financial-adjustments', tenantId, transactionIds], queryFn: () => listFinancialAdjustmentsForTransactions(tenantId, transactionIds), enabled: Boolean(tenantId && canRead.data && transactionIds.length) })
   const receipts = useQuery({ queryKey: ['financial-receipts', tenantId, transactionIds], queryFn: () => listFinancialReceiptsForTransactions(tenantId, transactionIds), enabled: Boolean(tenantId && canRead.data && transactionIds.length) })
   const reportExports = useQuery({ queryKey: ['finance-report-exports', tenantId, exportHistoryPage], queryFn: () => listFinanceReportExportPage(tenantId, exportHistoryPage), enabled: Boolean(tenantId && canRead.data) })
   const [budgetForm, setBudgetForm] = useState(false)
-  const [transactionForm, setTransactionForm] = useState(false)
   const [amendmentBudget, setAmendmentBudget] = useState('')
   const [adjustmentTransaction, setAdjustmentTransaction] = useState('')
   const [busy, setBusy] = useState(false)
@@ -50,6 +55,7 @@ export function FinancePage() {
   async function refresh() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['finance-budgets', tenantId] }),
+      queryClient.invalidateQueries({ queryKey: ['finance-budget-picker', tenantId] }),
       queryClient.invalidateQueries({ queryKey: ['finance-budget-usage', tenantId] }),
       queryClient.invalidateQueries({ queryKey: ['finance-budget-amendments', tenantId] }),
       queryClient.invalidateQueries({ queryKey: ['financial-transactions', tenantId] }),
@@ -209,12 +215,12 @@ export function FinancePage() {
     finally { setBusy(false) }
   }
 
-  const approvedBudgets = budgets.data?.filter((budget) => budget.status === 'approved') ?? []
+  const approvedBudgets = budgetPicker.data?.budgets.filter((budget) => budget.status === 'approved') ?? []
   const postedExpenses = (budgetId: string) => Number(budgetUsage.data?.find((row) => row.budget_id === budgetId)?.posted_expense_total ?? 0)
 
   return <section className="operation-page">
     <PageHeading title="Budgets & finance" description="Submit annual budgets and financial entries with separate review and approval controls.">
-      {canManage.data && <><button className="button outline" onClick={() => setBudgetForm((open) => !open)}>New budget</button><button className="button primary" disabled={!approvedBudgets.length} onClick={() => setTransactionForm((open) => !open)}><ReceiptText size={16} />Add transaction</button></>}
+      {canManage.data && <><button className="button outline" onClick={() => setBudgetForm((open) => !open)}>New budget</button><button className="button primary" disabled={!budgets.data?.total} onClick={() => setTransactionForm((open) => !open)}><ReceiptText size={16} />Add transaction</button></>}
     </PageHeading>
     {message && <div className="ops-success"><CheckCircle2 size={16} />{message}</div>}{error && <ErrorNotice message={error} />}
     {!tenantId && <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to view budgets and financial records." />}
@@ -243,27 +249,37 @@ export function FinancePage() {
         <div className="ops-form-grid"><label>Fiscal year<input name="fiscalYear" type="number" min="2000" max="2200" defaultValue={new Date().getFullYear()} required /></label><label>Budget name<input name="name" minLength={3} maxLength={120} placeholder="General operations" required /></label><label>Approved amount (PHP)<input name="amount" type="number" min="0.01" step="0.01" required /></label></div>
         <div className="ops-form-actions"><button className="button primary" disabled={busy}>{busy ? 'Submitting…' : 'Submit budget'}</button></div>
       </form>}
-      {canManage.data && !approvedBudgets.length && !transactionForm && <p className="finance-next-step">Approve an annual budget before submitting financial entries.</p>}
+      {canManage.data && !budgets.data?.total && !transactionForm && <p className="finance-next-step">Submit and approve an annual budget before adding financial entries.</p>}
       {transactionForm && canManage.data && <form className="ops-panel ops-form finance-form" onSubmit={(event) => void submitTransaction(event)}>
         <div className="ops-panel-heading"><div><h2>Submit a financial transaction</h2><p>Entries are submitted for independent review and cannot be edited after submission.</p></div><ReceiptText size={18} /></div>
-        <div className="ops-form-grid"><label>Approved budget<select name="budgetId" required defaultValue=""><option value="" disabled>Select budget</option>{approvedBudgets.map((budget) => <option key={budget.id} value={budget.id}>{budget.fiscal_year} · {budget.name}</option>)}</select></label><label>Type<select name="type"><option value="expense">Expense</option><option value="income">Income</option></select></label><label>Category<input name="category" maxLength={80} placeholder="Supplies" required /></label><label>Amount (PHP)<input name="amount" type="number" min="0.01" step="0.01" required /></label><label>Date<input name="date" type="date" defaultValue={localDate} required /></label><label className="span-two">Description<input name="description" minLength={3} maxLength={1000} required /></label></div>
+        {budgetPicker.isPending ? <LoadingNotice compact /> : budgetPicker.error ? <ErrorNotice message="Approved budgets could not be loaded." onRetry={() => void budgetPicker.refetch()} retrying={budgetPicker.isFetching} /> : <>
+          <div className="ops-form-grid"><label>Approved budget<select name="budgetId" required defaultValue=""><option value="" disabled>{approvedBudgets.length ? 'Select budget' : 'No approved budgets on this page'}</option>{approvedBudgets.map((budget) => <option key={budget.id} value={budget.id}>{budget.fiscal_year} · {budget.name}</option>)}</select></label><label>Type<select name="type"><option value="expense">Expense</option><option value="income">Income</option></select></label><label>Category<input name="category" maxLength={80} placeholder="Supplies" required /></label><label>Amount (PHP)<input name="amount" type="number" min="0.01" step="0.01" required /></label><label>Date<input name="date" type="date" defaultValue={localDate} required /></label><label className="span-two">Description<input name="description" minLength={3} maxLength={1000} required /></label></div>
+          {budgetPicker.data && budgetPicker.data.total > FINANCE_BUDGET_PAGE_SIZE && <nav className="ops-form-actions" aria-label="Approved budget options"><button type="button" className="button outline" disabled={budgetPickerPage === 0 || budgetPicker.isFetching} onClick={() => setBudgetPickerPage((current) => Math.max(0, current - 1))}><ChevronLeft size={15} />Previous budgets</button><span className="field-hint">Page {budgetPickerPage + 1} of {Math.ceil(budgetPicker.data.total / FINANCE_BUDGET_PAGE_SIZE)}</span><button type="button" className="button outline" disabled={(budgetPickerPage + 1) * FINANCE_BUDGET_PAGE_SIZE >= budgetPicker.data.total || budgetPicker.isFetching} onClick={() => setBudgetPickerPage((current) => current + 1)}>More budgets<ChevronRight size={15} /></button></nav>}
+        </>}
         <div className="ops-form-actions"><button className="button primary" disabled={busy}>{busy ? 'Submitting…' : 'Submit for review'}</button></div>
       </form>}
       <div className="ops-section-title"><h2>Annual budgets</h2><p>Expenses are capped at the approved amount. Posted transactions remain in the audit history.</p></div>
       {budgetUsage.error && <ErrorNotice message="Posted expense totals could not be loaded. Budget remaining amounts may be unavailable until this is resolved." onRetry={() => void budgetUsage.refetch()} retrying={budgetUsage.isFetching} />}
-      {budgets.isPending ? <LoadingNotice /> : budgets.error ? <ErrorNotice message={budgets.error.message} /> : budgets.data?.length ? <div className="finance-budget-list">{budgets.data.map((budget) => {
+      {budgets.isPending ? <LoadingNotice /> : budgets.error ? <ErrorNotice message={budgets.error.message} /> : budgets.data?.budgets.length ? <div className="finance-budget-list">{budgets.data.budgets.map((budget) => {
         const spent = postedExpenses(budget.id)
         return <article className="ops-panel finance-budget" key={budget.id}>
           <div className="finance-budget-head"><div><small>FY {budget.fiscal_year}</small><h3>{budget.name}</h3></div><StatusPill status={budget.status} /></div>
           <div className="finance-budget-amount"><strong>{currency.format(Number(budget.amount))}</strong><span>Approved budget</span></div>
           {budget.status === 'approved' && <div className="finance-budget-usage"><div><span>Posted expenses</span><strong>{currency.format(spent)}</strong></div><div className="finance-budget-track"><span style={{ width: `${Math.min(100, spent / Number(budget.amount) * 100)}%` }} /></div><small>{currency.format(Math.max(0, Number(budget.amount) - spent))} remaining</small></div>}
-          {amendments.data?.filter((amendment) => amendment.budget_id === budget.id).map((amendment) => <div className="finance-amendment" key={amendment.id}><div><StatusPill status={amendment.status} /><strong>Requested amount: {currency.format(Number(amendment.requested_amount))}</strong></div><p>{amendment.reason}</p>{amendment.review_note && <small>Review: {amendment.review_note}</small>}{canApprove.data && amendment.status === 'pending' && amendment.requested_by !== user?.id && <div className="finance-review-actions"><button className="button outline" disabled={busy} onClick={() => void reviewAmendment(amendment.id, false)}>Reject</button><button className="button primary" disabled={busy} onClick={() => void reviewAmendment(amendment.id, true)}>Approve change</button></div>}</div>)}
-          {canManage.data && budget.status === 'approved' && !amendments.data?.some((amendment) => amendment.budget_id === budget.id && amendment.status === 'pending') && <button className="button outline" disabled={busy} onClick={() => setAmendmentBudget(amendmentBudget === budget.id ? '' : budget.id)}>Request amount change</button>}
+          {canManage.data && budget.status === 'approved' && !budget.has_pending_amendment && <button className="button outline" disabled={busy} onClick={() => setAmendmentBudget(amendmentBudget === budget.id ? '' : budget.id)}>Request amount change</button>}
           {amendmentBudget === budget.id && <form className="finance-amendment-form" onSubmit={(event) => void submitAmendment(budget.id, event)}><label>Revised amount (PHP)<input name="amount" type="number" min="0.01" max="999999999999.99" step="0.01" defaultValue={budget.amount} required /></label><label>Reason<textarea name="reason" minLength={3} maxLength={1000} required /></label><button className="button primary" disabled={busy}>Submit for approval</button></form>}
           {canApprove.data && budget.status === 'draft' && budget.created_by !== user?.id && <button className="button primary" disabled={busy} onClick={() => void approveBudget(budget.id)}>Approve budget</button>}
           {budget.status === 'draft' && <p className="field-hint">Awaiting independent review. Created {formatDateTime(budget.created_at)}.</p>}
         </article>
       })}</div> : <EmptyNotice title="No budgets submitted" detail="Annual budgets submitted by your Treasurer will appear here." />}
+      {budgets.data && budgets.data.total > FINANCE_BUDGET_PAGE_SIZE && <nav className="ops-form-actions" aria-label="Annual budget pages"><button type="button" className="button outline" disabled={budgetPage === 0 || budgets.isFetching} onClick={() => setBudgetPage((current) => Math.max(0, current - 1))}><ChevronLeft size={15} />Previous</button><span className="field-hint">Page {budgetPage + 1} of {Math.ceil(budgets.data.total / FINANCE_BUDGET_PAGE_SIZE)} · {budgets.data.total.toLocaleString()} budgets</span><button type="button" className="button outline" disabled={(budgetPage + 1) * FINANCE_BUDGET_PAGE_SIZE >= budgets.data.total || budgets.isFetching} onClick={() => setBudgetPage((current) => current + 1)}>Next<ChevronRight size={15} /></button></nav>}
+      <section className="ops-panel finance-export-history" aria-labelledby="finance-amendment-history-title">
+        <div className="ops-panel-heading"><div><h2 id="finance-amendment-history-title">Budget amendment reviews</h2><p>Recent amount change requests, shown 25 at a time.</p></div><ShieldCheck size={18} /></div>
+        {amendments.isPending && <LoadingNotice compact />}
+        {amendments.error && <ErrorNotice message="Budget amendment history could not be loaded." onRetry={() => void amendments.refetch()} retrying={amendments.isFetching} />}
+        {amendments.data?.amendments.length ? <ol className="finance-export-history-list">{amendments.data.amendments.map((amendment) => <li key={amendment.id}><div><strong>FY {amendment.fiscal_year} · {amendment.budget_name}</strong><time dateTime={amendment.created_at}>{formatDateTime(amendment.created_at)}</time></div><span><StatusPill status={amendment.status} /> Requested amount: {currency.format(Number(amendment.requested_amount))}<br />{amendment.reason}</span>{amendment.review_note && <small>Review: {amendment.review_note}</small>}{canApprove.data && amendment.status === 'pending' && amendment.requested_by !== user?.id && <div className="finance-review-actions"><button className="button outline" disabled={busy} onClick={() => void reviewAmendment(amendment.id, false)}>Reject</button><button className="button primary" disabled={busy} onClick={() => void reviewAmendment(amendment.id, true)}>Approve change</button></div>}</li>)}</ol> : !amendments.isPending && !amendments.error && <p className="field-hint">No budget amendments have been submitted.</p>}
+        {amendments.data && amendments.data.total > FINANCE_BUDGET_AMENDMENT_PAGE_SIZE && <nav className="ops-form-actions" aria-label="Budget amendment pages"><button type="button" className="button outline" disabled={amendmentPage === 0 || amendments.isFetching} onClick={() => setAmendmentPage((current) => Math.max(0, current - 1))}><ChevronLeft size={15} />Previous</button><span className="field-hint">Page {amendmentPage + 1} of {Math.ceil(amendments.data.total / FINANCE_BUDGET_AMENDMENT_PAGE_SIZE)} · {amendments.data.total.toLocaleString()} requests</span><button type="button" className="button outline" disabled={(amendmentPage + 1) * FINANCE_BUDGET_AMENDMENT_PAGE_SIZE >= amendments.data.total || amendments.isFetching} onClick={() => setAmendmentPage((current) => current + 1)}>Next<ChevronRight size={15} /></button></nav>}
+      </section>
       <div className="ops-section-title"><h2>Financial entries</h2><p>Only approved transactions count toward posted expenses.</p></div>
       {transactions.isPending ? <LoadingNotice /> : transactions.error ? <ErrorNotice message={transactions.error.message} /> : transactions.data?.transactions.length ? <div className="ops-panel finance-transaction-list">{transactions.data.transactions.map((item) => <article className="finance-transaction" key={item.id}>
         <div className="finance-transaction-main"><div><strong>{item.description}</strong><p>{item.category} · {item.budget?.name ?? 'Budget'} · {new Date(`${item.transaction_date}T00:00:00`).toLocaleDateString()}</p></div><div className="finance-transaction-amount"><strong className={item.transaction_type === 'income' ? 'finance-income' : ''}>{item.transaction_type === 'expense' ? '−' : '+'}{currency.format(Number(item.amount))}</strong><StatusPill status={item.status} /></div></div>

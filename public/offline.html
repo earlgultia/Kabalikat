@@ -19,8 +19,24 @@
     <main>
       <img src="/icons/kabalikat-heart-v3-192.png" alt="" />
       <h1>You’re offline</h1>
-      <p>KABALIKAT needs an internet connection to sign in and load secure barangay records. Reconnect, then try again.</p>
-      <button type="button" onclick="location.reload()">Try again</button>
+      <p id="connection-message" role="status" aria-live="polite">KABALIKAT needs an internet connection to sign in and load secure barangay records. Reconnect, then try again.</p>
+      <button id="retry-button" type="button" onclick="location.reload()">Try again</button>
     </main>
+    <script>
+      const connectionMessage = document.getElementById('connection-message')
+      const retryButton = document.getElementById('retry-button')
+      function updateConnectionMessage() {
+        if (navigator.onLine) {
+          connectionMessage.textContent = 'Connection detected. Reload to try signing in and loading current records.'
+          retryButton.textContent = 'Reconnect and reload'
+        } else {
+          connectionMessage.textContent = 'KABALIKAT needs an internet connection to sign in and load secure barangay records. Reconnect, then try again.'
+          retryButton.textContent = 'Try again'
+        }
+      }
+      window.addEventListener('online', updateConnectionMessage)
+      window.addEventListener('offline', updateConnectionMessage)
+      updateConnectionMessage()
+    </script>
   </body>
 </html>

@@ -22,19 +22,19 @@ const CommunityCalendarPage = lazy(() => import('./CommunityCalendarPage').then(
 const CommunityFeedbackPage = lazy(() => import('./CommunityFeedbackPage').then((module) => ({ default: module.CommunityFeedbackPage })))
 const SupportPage = lazy(() => import('./SupportPage').then((module) => ({ default: module.SupportPage })))
 
-function page(component: ComponentType) {
+function page<Props extends object>(component: ComponentType<Props>, props?: Props) {
   const Page = component
-  return <Suspense fallback={<div className="ops-loading" role="status">Loading workspace…</div>}><Page /></Suspense>
+  return <Suspense fallback={<div className="ops-loading" role="status">Loading workspace…</div>}><Page {...(props ?? {} as Props)} /></Suspense>
 }
 
 export type OperationSection = 'residents' | 'invitations' | 'documents' | 'announcements' | 'meetings' | 'archive' | 'finance' | 'committees' | 'projects' | 'referrals' | 'health-outreach' | 'sk-events' | 'sk-projects' | 'sk-accomplishments' | 'incidents' | 'patrols' | 'advisories' | 'community-calendar' | 'feedback' | 'support'
 
-export function OperationsSection({ section }: { section: OperationSection }) {
+export function OperationsSection({ section, focusId, onFocusHandled }: { section: OperationSection; focusId?: string; onFocusHandled?: () => void }) {
   switch (section) {
-    case 'residents': return page(ResidentsPage)
+    case 'residents': return page(ResidentsPage, { focusId, onFocusHandled })
     case 'invitations': return page(InvitationsPage)
-    case 'documents': return page(DocumentsPage)
-    case 'announcements': return page(AnnouncementsPage)
+    case 'documents': return page(DocumentsPage, { focusId, onFocusHandled })
+    case 'announcements': return page(AnnouncementsPage, { focusId, onFocusHandled })
     case 'meetings': return page(MeetingsPage)
     case 'archive': return page(ArchivePage)
     case 'finance': return page(FinancePage)
@@ -47,9 +47,9 @@ export function OperationsSection({ section }: { section: OperationSection }) {
     case 'sk-events': return page(SkEventsPage)
     case 'incidents': return page(IncidentsPage)
     case 'patrols': return page(PatrolPage)
-    case 'advisories': return page(DisasterAdvisoriesPage)
+    case 'advisories': return page(DisasterAdvisoriesPage, { focusId, onFocusHandled })
     case 'community-calendar': return page(CommunityCalendarPage)
-    case 'feedback': return page(CommunityFeedbackPage)
+    case 'feedback': return page(CommunityFeedbackPage, { focusId, onFocusHandled })
     case 'support': return page(SupportPage)
   }
 }

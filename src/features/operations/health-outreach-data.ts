@@ -24,16 +24,17 @@ function client() {
   return supabase
 }
 
-export async function listHealthCampaigns(barangayId: string, page: number): Promise<HealthCampaignPage> {
-  const from = page * HEALTH_CAMPAIGN_PAGE_SIZE
-  const { data, error, count } = await client().from('health_outreach_campaigns')
-    .select('*', { count: 'exact' })
-    .eq('barangay_id', barangayId)
-    .order('starts_at')
-    .order('id')
-    .range(from, from + HEALTH_CAMPAIGN_PAGE_SIZE - 1)
+export async function listHealthCampaigns(barangayId: string, page: number, search: string, status: 'all' | HealthCampaign['status']): Promise<HealthCampaignPage> {
+  const { data, error } = await client().rpc('list_health_outreach_campaign_page', {
+    p_barangay_id: barangayId,
+    p_page: page,
+    p_page_size: HEALTH_CAMPAIGN_PAGE_SIZE,
+    p_search: search.trim().slice(0, 100) || null,
+    p_status: status,
+  })
   if (error) throw new Error(error.message)
-  return { rows: (data ?? []) as HealthCampaign[], totalCount: count ?? 0 }
+  const rows = (data ?? []) as (HealthCampaign & { total_count: number })[]
+  return { rows, totalCount: Number(rows[0]?.total_count ?? 0) }
 }
 
 async function rpc(name: string, args: Record<string, unknown>) {

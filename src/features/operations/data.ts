@@ -53,6 +53,7 @@ export type DocumentTypeActivityRow = {
   activity_id: string; document_type_id: string; document_type_name: string; action: 'created' | 'updated'
   actor_name: string; previous_values: Record<string, unknown> | null; new_values: Record<string, unknown>; created_at: string
 }
+export type DocumentTypeActivityPage = { rows: DocumentTypeActivityRow[]; totalCount: number }
 export type DocumentRequestRow = {
   id: string; reference_number: string; purpose: string; status: string; submitted_at: string; rejection_reason: string | null
   document_type: { name: string } | null
@@ -71,6 +72,9 @@ export type MeetingRow = {
 }
 export type AttendanceRow = { user_id: string; status: string; source: string; recorded_at: string }
 export type MeetingAttendeeRow = { user_id: string }
+export type MeetingStatusEventRow = {
+  id: string; from_status: string | null; to_status: string; reason: string | null; actor_id: string | null; created_at: string
+}
 export type MeetingMinutesRow = { id: string; content: string; status: 'draft' | 'reviewed'; updated_at: string }
 export type MeetingResolutionRow = {
   id: string; resolution_number: string; title: string; content: string
@@ -86,6 +90,7 @@ export type ArchiveDocumentRow = {
 export type FinanceBudgetRow = {
   id: string; fiscal_year: number; name: string; amount: number; status: 'draft' | 'approved'
   created_by: string; approved_by: string | null; created_at: string; approved_at: string | null
+  has_pending_amendment?: boolean
 }
 export type FinancialTransactionRow = {
   id: string; budget_id: string; transaction_type: 'income' | 'expense'; category: string; description: string
@@ -98,6 +103,7 @@ export type FinancialReceiptRow = { id: string; transaction_id: string; file_nam
 export type FinanceBudgetAmendmentRow = {
   id: string; budget_id: string; requested_amount: number; reason: string; status: 'pending' | 'approved' | 'rejected'
   requested_by: string; reviewed_by: string | null; review_note: string | null; created_at: string
+  budget_name?: string; fiscal_year?: number
 }
 export type WorkspaceDashboardMetrics = {
   residents: number | null; pending_documents: number | null; upcoming_meetings: number | null
@@ -124,6 +130,23 @@ async function rpc<T>(name: string, args: Record<string, unknown>): Promise<T> {
   const { data, error } = await client().rpc(name, args)
   if (error) throw new Error(error.message)
   return data as T
+}
+
+const PERSONAL_EXPORT_BATCH_SIZE = 500
+
+async function readAllPages<T>(queryPage: (from: number, to: number) => PromiseLike<{
+  data: unknown
+  error: { message: string } | null
+}>): Promise<T[]> {
+  const result: T[] = []
+  for (let page = 0; ; page += 1) {
+    const from = page * PERSONAL_EXPORT_BATCH_SIZE
+    const { data, error } = await queryPage(from, from + PERSONAL_EXPORT_BATCH_SIZE - 1)
+    if (error) throw new Error(error.message)
+    const batch = (data ?? []) as T[]
+    result.push(...batch)
+    if (batch.length < PERSONAL_EXPORT_BATCH_SIZE) return result
+  }
 }
 
 export function hasPermission(tenantId: string, permission: string) {
@@ -170,7 +193,8 @@ export async function listResidentsPage(tenantId: string, page: number, search: 
   }
 }
 
-export async function getOwnResidentDataExport(tenantId: string): Promise<ResidentPersonalDataExport> {
+export async function getOwnResidentDataExport(tenantId: string, onProgress?: (message: string) => void): Promise<ResidentPersonalDataExport> {
+  onProgress?.('Checking your account and resident profile…')
   const supabaseClient = client()
   const { data: userData, error: userError } = await supabaseClient.auth.getUser()
   if (userError || !userData.user) throw new Error('Sign in again to download your data.')
@@ -180,38 +204,74 @@ export async function getOwnResidentDataExport(tenantId: string): Promise<Reside
   if (residentError) throw new Error(residentError.message)
   if (!resident) throw new Error('No resident profile is linked to this account in the selected barangay.')
 
-  const { data: ownedVerifications, error: ownVerificationError } = await supabaseClient.from('residency_verifications')
+  onProgress?.('Gathering your residency history…')
+  const ownedVerifications = await readAllPages<{ status: string; created_at: string }>((from, to) => supabaseClient.from('residency_verifications')
     .select('status,created_at').eq('barangay_id', tenantId).eq('resident_id', resident.id)
-  if (ownVerificationError) throw new Error(ownVerificationError.message)
-  const { data: ownedRequests, error: ownRequestsError } = await supabaseClient.from('document_requests')
+    .order('created_at', { ascending: false }).order('id', { ascending: false }).range(from, to))
+  onProgress?.('Gathering your document requests…')
+  const ownedRequests = await readAllPages<{
+    reference_number: string; purpose: string; status: string; submitted_at: string
+    document_type: { name: string } | { name: string }[] | null
+    issued: { issuance_number: string; issued_at: string; expires_at: string | null; verification_status: string } | { issuance_number: string; issued_at: string; expires_at: string | null; verification_status: string }[] | null
+  }>((from, to) => supabaseClient.from('document_requests')
     .select('reference_number,purpose,status,submitted_at,document_type:document_types(name),issued:issued_documents(issuance_number,issued_at,expires_at,verification_status)')
-    .eq('barangay_id', tenantId).eq('resident_id', resident.id).order('submitted_at', { ascending: false })
-  if (ownRequestsError) throw new Error(ownRequestsError.message)
-  const { data: ownCorrections, error: ownCorrectionsError } = await supabaseClient.from('resident_profile_change_requests')
+    .eq('barangay_id', tenantId).eq('resident_id', resident.id).order('submitted_at', { ascending: false }).order('id', { ascending: false }).range(from, to))
+  onProgress?.('Gathering your profile correction requests…')
+  const ownCorrections = await readAllPages<{
+    proposed_first_name: string | null; proposed_last_name: string | null; proposed_phone: string | null
+    request_note: string | null; status: string; review_reason: string | null; created_at: string; reviewed_at: string | null
+  }>((from, to) => supabaseClient.from('resident_profile_change_requests')
     .select('proposed_first_name,proposed_last_name,proposed_phone,request_note,status,review_reason,created_at,reviewed_at')
-    .eq('barangay_id', tenantId).eq('resident_id', resident.id).order('created_at', { ascending: false })
-  if (ownCorrectionsError) throw new Error(ownCorrectionsError.message)
+    .eq('barangay_id', tenantId).eq('resident_id', resident.id).order('created_at', { ascending: false }).order('id', { ascending: false }).range(from, to))
 
   const { data: incidentPermission, error: incidentPermissionError } = await supabaseClient.rpc('has_tenant_permission', {
     p_barangay_id: tenantId, p_permission: 'incident.report',
   })
   if (incidentPermissionError) throw new Error(incidentPermissionError.message)
   const ownIncidents = incidentPermission
-    ? await rows<{
+    ? await (async () => {
+      onProgress?.('Gathering your incident reports…')
+      return readAllPages<{
         id: string; category: string; severity: string; location: string; summary: string; details: string
         status: string; resolution_note: string | null; created_at: string
-      }>(supabaseClient.from('incidents')
+      }>((from, to) => supabaseClient.from('incidents')
         .select('id,category,severity,location,summary,details,status,resolution_note,created_at')
-        .eq('barangay_id', tenantId).eq('created_by', userData.user.id).order('created_at', { ascending: false }))
+        .eq('barangay_id', tenantId).eq('created_by', userData.user.id).order('created_at', { ascending: false }).order('id', { ascending: false }).range(from, to))
+    })()
     : []
-  const ownIncidentEvents = incidentPermission
-    ? await rpc<Array<{ incident_id: string; action: string; created_at: string }>>('get_own_incident_status_events', { p_barangay_id: tenantId })
-    : []
-  const ownFeedback = await rpc<Array<{
+  const ownIncidentEvents: Array<{ incident_id: string; action: string; created_at: string }> = []
+  if (incidentPermission) {
+    for (let index = 0; index < ownIncidents.length; index += 1) {
+      const incident = ownIncidents[index]
+      onProgress?.(`Gathering incident history ${index + 1} of ${ownIncidents.length}…`)
+      for (let page = 0; ; page += 1) {
+        const rows = await rpc<Array<{ incident_id: string; action: string; created_at: string; total_count: number }>>(
+          'get_own_incident_status_events_page', { p_barangay_id: tenantId, p_incident_id: incident.id, p_page: page, p_page_size: 100 },
+        )
+        ownIncidentEvents.push(...rows.map(({ incident_id, action, created_at }) => ({ incident_id, action, created_at })))
+        if (rows.length < 100) break
+      }
+    }
+  }
+  const ownFeedback: Array<{
     id: string; category: string; subject: string; message: string; status: string
     staff_response: string | null; created_at: string; updated_at: string
     history: Array<{ action: string; note: string; created_at: string }>
-  }>>('get_own_community_feedback_export', { p_barangay_id: tenantId })
+  }> = []
+  onProgress?.('Gathering your private feedback and responses…')
+  for (let page = 0; ; page += 1) {
+    const rows = await rpc<Array<{
+      id: string; category: string; subject: string; message: string; status: string
+      staff_response: string | null; created_at: string; updated_at: string
+      history: Array<{ action: string; note: string; created_at: string }>; total_count: number
+    }>>('get_own_community_feedback_export_page', { p_barangay_id: tenantId, p_page: page, p_page_size: 50 })
+    ownFeedback.push(...rows.map((row) => {
+      const { total_count, ...feedback } = row
+      void total_count
+      return feedback
+    }))
+    if (!rows.length || ownFeedback.length >= Number(rows[0]?.total_count ?? 0)) break
+  }
 
   const household = Array.isArray(resident.household) ? resident.household[0] : resident.household
   return {
@@ -304,6 +364,25 @@ export async function listResidentProfileChangeRequests(tenantId: string, page: 
   return { requests: (data ?? []) as unknown as ResidentProfileChangeRequest[], totalCount: count ?? 0 }
 }
 
+export async function findResidentProfileChangePage(tenantId: string, requestId: string, pendingOnly = false) {
+  const { data: target, error: targetError } = await client().from('resident_profile_change_requests')
+    .select('created_at,id,status').eq('barangay_id', tenantId).eq('id', requestId).maybeSingle()
+  if (targetError) throw new Error(targetError.message)
+  if (!target || (pendingOnly && target.status !== 'pending')) return null
+  const base = () => {
+    let query = client().from('resident_profile_change_requests').select('id', { count: 'exact', head: true }).eq('barangay_id', tenantId)
+    if (pendingOnly) query = query.eq('status', 'pending')
+    return query
+  }
+  const [newerTime, sameTime] = await Promise.all([
+    base().gt('created_at', target.created_at),
+    base().eq('created_at', target.created_at).gt('id', target.id),
+  ])
+  if (newerTime.error) throw new Error(newerTime.error.message)
+  if (sameTime.error) throw new Error(sameTime.error.message)
+  return Math.floor(((newerTime.count ?? 0) + (sameTime.count ?? 0)) / RESIDENT_CORRECTION_PAGE_SIZE)
+}
+
 export function submitResidentProfileChange(input: {
   residentId: string; firstName: string | null; lastName: string | null; phone: string | null; note: string
 }) {
@@ -364,8 +443,15 @@ export function listDocumentTypes(tenantId: string) {
     .select('id,code,name,description,requirements,public_request_enabled').eq('barangay_id', tenantId).order('name'))
 }
 
-export function listDocumentTypeActivity(tenantId: string) {
-  return rpc<DocumentTypeActivityRow[]>('list_document_type_activity', { p_barangay_id: tenantId })
+export const DOCUMENT_TYPE_ACTIVITY_PAGE_SIZE = 25
+
+export async function listDocumentTypeActivity(tenantId: string, page: number): Promise<DocumentTypeActivityPage> {
+  const { data, error } = await client().rpc('list_document_type_activity_page', {
+    p_barangay_id: tenantId, p_page: page, p_page_size: DOCUMENT_TYPE_ACTIVITY_PAGE_SIZE,
+  })
+  if (error) throw new Error(error.message)
+  const rows = (data ?? []) as Array<DocumentTypeActivityRow & { total_count: number }>
+  return { rows, totalCount: Number(rows[0]?.total_count ?? 0) }
 }
 
 export function createDocumentType(input: {
@@ -403,6 +489,21 @@ export async function listDocumentRequestsPage(tenantId: string, page: number, s
     .eq('barangay_id', tenantId).in('id', orderedIds))
   const byId = new Map(requests.map((request) => [request.id, request]))
   return { requests: orderedIds.map((id) => byId.get(id)).filter((request): request is DocumentRequestRow => Boolean(request)), total: Number(pageRows[0]?.total_count ?? 0) }
+}
+
+export async function findDocumentRequestPage(tenantId: string, requestId: string) {
+  const { data: target, error: targetError } = await client().from('document_requests')
+    .select('submitted_at,id').eq('barangay_id', tenantId).eq('id', requestId).maybeSingle()
+  if (targetError) throw new Error(targetError.message)
+  if (!target) return null
+  const base = () => client().from('document_requests').select('id', { count: 'exact', head: true }).eq('barangay_id', tenantId)
+  const [newerTime, sameTime] = await Promise.all([
+    base().gt('submitted_at', target.submitted_at),
+    base().eq('submitted_at', target.submitted_at).gt('id', target.id),
+  ])
+  if (newerTime.error) throw new Error(newerTime.error.message)
+  if (sameTime.error) throw new Error(sameTime.error.message)
+  return Math.floor(((newerTime.count ?? 0) + (sameTime.count ?? 0)) / DOCUMENT_REQUEST_PAGE_SIZE)
 }
 
 export async function listDocumentRequestActivity(tenantId: string, requestIds: string[]): Promise<DocumentRequestActivityRow[]> {
@@ -446,10 +547,29 @@ export async function listAnnouncementPage(tenantId: string, page: number) {
   return { announcements: (data ?? []) as AnnouncementRow[], total: count ?? 0 }
 }
 
-export function listRecentAnnouncements(tenantId: string) {
-  return rows<AnnouncementRow>(client().from('announcements')
-    .select('id,title,body,audience,audience_role_id,status,published_at,expires_at,created_at')
-    .eq('barangay_id', tenantId).order('created_at', { ascending: false }).order('id', { ascending: false }).limit(100))
+export async function findAnnouncementPage(tenantId: string, announcementId: string) {
+  const db = client()
+  const { data: target, error: targetError } = await db.from('announcements').select('created_at')
+    .eq('barangay_id', tenantId).eq('id', announcementId).maybeSingle()
+  if (targetError) throw new Error(targetError.message)
+  if (!target) return null
+  const { count, error } = await db.from('announcements').select('id', { count: 'exact', head: true })
+    .eq('barangay_id', tenantId)
+    .or(`created_at.gt.${target.created_at},and(created_at.eq.${target.created_at},id.gt.${announcementId})`)
+  if (error) throw new Error(error.message)
+  return Math.floor((count ?? 0) / ANNOUNCEMENT_PAGE_SIZE)
+}
+
+export const ANNOUNCEMENT_UPDATES_PAGE_SIZE = 50
+
+export async function listRecentAnnouncements(tenantId: string, page: number) {
+  const from = Math.max(0, page) * ANNOUNCEMENT_UPDATES_PAGE_SIZE
+  const { data, error, count } = await client().from('announcements')
+    .select('id,title,body,audience,audience_role_id,status,published_at,expires_at,created_at', { count: 'exact' })
+    .eq('barangay_id', tenantId).order('created_at', { ascending: false }).order('id', { ascending: false })
+    .range(from, from + ANNOUNCEMENT_UPDATES_PAGE_SIZE - 1)
+  if (error) throw new Error(error.message)
+  return { announcements: (data ?? []) as AnnouncementRow[], totalCount: count ?? 0 }
 }
 
 export function listAnnouncementAudienceRoles() {
@@ -475,20 +595,14 @@ export function updateAnnouncementStatus(id: string, status: 'published' | 'arch
 
 export const MEETING_PAGE_SIZE = 20
 
-export async function listMeetingPage(tenantId: string, page: number) {
-  const from = Math.max(0, page) * MEETING_PAGE_SIZE
-  const { data, error, count } = await client().from('meetings')
-    .select('id,title,location,starts_at,ends_at,agenda,status', { count: 'exact' })
-    .eq('barangay_id', tenantId).order('starts_at', { ascending: false }).order('id', { ascending: false })
-    .range(from, from + MEETING_PAGE_SIZE - 1)
+export async function listMeetingPage(tenantId: string, page: number, search = '', status = 'all') {
+  const { data, error } = await client().rpc('list_meeting_schedule_page', {
+    p_barangay_id: tenantId, p_page: page, p_page_size: MEETING_PAGE_SIZE,
+    p_search: search.trim().slice(0, 100) || null, p_status: status,
+  })
   if (error) throw new Error(error.message)
-  return { meetings: (data ?? []) as MeetingRow[], total: count ?? 0 }
-}
-
-export function listTenantMembers(tenantId: string) {
-  return rows<MemberRow>(client().from('barangay_memberships')
-    .select('user_id,role:role_definitions(label),profile:profiles(display_name)')
-    .eq('barangay_id', tenantId).eq('status', 'active'))
+  const rows = (data ?? []) as (MeetingRow & { total_count: number })[]
+  return { meetings: rows, total: Number(rows[0]?.total_count ?? 0) }
 }
 
 export const MEETING_MEMBER_PAGE_SIZE = 25
@@ -502,6 +616,13 @@ export async function listMeetingMemberPage(tenantId: string, page: number, sear
   return { members: rows.map(({ user_id, display_name, role_label }) => ({ user_id, display_name, role_label })), total: Number(rows[0]?.total_count ?? 0) }
 }
 
+export async function listMeetingAttendeeMembers(meetingId: string): Promise<MemberRow[]> {
+  const { data, error } = await client().rpc('list_meeting_attendee_members', { p_meeting_id: meetingId })
+  if (error) throw new Error(error.message)
+  return ((data ?? []) as { user_id: string; display_name: string; role_label: string | null }[])
+    .map(({ user_id, display_name, role_label }) => ({ user_id, profile: { display_name }, role: role_label ? { label: role_label } : null }))
+}
+
 export function createMeeting(input: {
   tenantId: string; title: string; location: string; startsAt: string; endsAt: string; agenda: string; attendeeIds: string[]
 }) {
@@ -512,6 +633,16 @@ export function createMeeting(input: {
   })
 }
 
+export async function updateMeetingDetails(meetingId: string, input: {
+  title: string; location: string; startsAt: string; endsAt: string | null; agenda: string
+}) {
+  const { error } = await client().from('meetings').update({
+    title: input.title, location: input.location, starts_at: input.startsAt,
+    ends_at: input.endsAt, agenda: input.agenda,
+  }).eq('id', meetingId)
+  if (error) throw new Error(error.message)
+}
+
 export function listAttendance(meetingId: string) {
   return rows<AttendanceRow>(client().from('attendance_records')
     .select('user_id,status,source,recorded_at').eq('meeting_id', meetingId).order('recorded_at'))
@@ -520,6 +651,30 @@ export function listAttendance(meetingId: string) {
 export function listMeetingAttendees(meetingId: string) {
   return rows<MeetingAttendeeRow>(client().from('meeting_attendees')
     .select('user_id').eq('meeting_id', meetingId).order('user_id'))
+}
+
+export const MEETING_STATUS_HISTORY_PAGE_SIZE = 25
+
+export async function listMeetingStatusHistoryPage(tenantId: string, meetingId: string, page: number) {
+  const from = Math.max(page, 0) * MEETING_STATUS_HISTORY_PAGE_SIZE
+  const { data, error, count } = await client().from('meeting_events')
+    .select('id,from_status,to_status,reason,actor_id,created_at', { count: 'exact' })
+    .eq('barangay_id', tenantId).eq('meeting_id', meetingId)
+    .order('created_at', { ascending: false }).order('id', { ascending: false })
+    .range(from, from + MEETING_STATUS_HISTORY_PAGE_SIZE - 1)
+  if (error) throw new Error(error.message)
+  return { rows: (data ?? []) as MeetingStatusEventRow[], total: count ?? 0 }
+}
+
+export async function listAllMeetingStatusHistory(tenantId: string, meetingId: string) {
+  const result: MeetingStatusEventRow[] = []
+  let page = 0
+  while (true) {
+    const current = await listMeetingStatusHistoryPage(tenantId, meetingId, page)
+    result.push(...current.rows)
+    if (result.length >= current.total || current.rows.length < MEETING_STATUS_HISTORY_PAGE_SIZE) return result
+    page += 1
+  }
 }
 
 export function markAttendance(meetingId: string) {
@@ -584,24 +739,45 @@ export function approveMeetingResolution(resolutionId: string) {
   return rpc<void>('approve_meeting_resolution', { p_resolution_id: resolutionId })
 }
 
-export function listFinanceBudgets(tenantId: string) {
-  return rows<FinanceBudgetRow>(client().from('finance_budgets')
-    .select('id,fiscal_year,name,amount,status,created_by,approved_by,created_at,approved_at')
-    .eq('barangay_id', tenantId).order('fiscal_year', { ascending: false }).order('name'))
+export const FINANCE_BUDGET_PAGE_SIZE = 20
+
+export async function listFinanceBudgetPage(tenantId: string, page: number) {
+  const { data, error } = await client().rpc('list_finance_budget_page', {
+    p_barangay_id: tenantId, p_page: Math.max(page, 0), p_page_size: FINANCE_BUDGET_PAGE_SIZE,
+  })
+  if (error) throw new Error(error.message)
+  const rows = (data ?? []) as Array<FinanceBudgetRow & { has_pending_amendment: boolean; total_count: number }>
+  return { budgets: rows.map((row) => {
+    const { total_count, ...budget } = row
+    void total_count
+    return budget
+  }), total: Number(rows[0]?.total_count ?? 0) }
 }
 
 export type FinanceBudgetUsageRow = { budget_id: string; posted_expense_total: number }
 
-export async function listFinanceBudgetUsage(tenantId: string): Promise<FinanceBudgetUsageRow[]> {
-  const { data, error } = await client().rpc('list_finance_budget_usage', { p_barangay_id: tenantId })
+export async function listFinanceBudgetUsageForPage(tenantId: string, budgetIds: string[]): Promise<FinanceBudgetUsageRow[]> {
+  if (!budgetIds.length) return []
+  const { data, error } = await client().rpc('list_finance_budget_usage_for_page', {
+    p_barangay_id: tenantId, p_budget_ids: budgetIds,
+  })
   if (error) throw new Error(error.message)
   return (data ?? []) as FinanceBudgetUsageRow[]
 }
 
-export function listFinanceBudgetAmendments(tenantId: string) {
-  return rows<FinanceBudgetAmendmentRow>(client().from('finance_budget_amendments')
-    .select('id,budget_id,requested_amount,reason,status,requested_by,reviewed_by,review_note,created_at')
-    .eq('barangay_id', tenantId).order('created_at', { ascending: false }))
+export const FINANCE_BUDGET_AMENDMENT_PAGE_SIZE = 25
+
+export async function listFinanceBudgetAmendmentPage(tenantId: string, page: number) {
+  const { data, error } = await client().rpc('list_finance_budget_amendment_page', {
+    p_barangay_id: tenantId, p_page: Math.max(page, 0), p_page_size: FINANCE_BUDGET_AMENDMENT_PAGE_SIZE,
+  })
+  if (error) throw new Error(error.message)
+  const rows = (data ?? []) as Array<FinanceBudgetAmendmentRow & { budget_name: string; fiscal_year: number; total_count: number }>
+  return { amendments: rows.map((row) => {
+    const { total_count, ...amendment } = row
+    void total_count
+    return amendment
+  }), total: Number(rows[0]?.total_count ?? 0) }
 }
 
 export function requestFinanceBudgetAmendment(budgetId: string, amount: number, reason: string) {
@@ -761,9 +937,15 @@ export async function onboardBarangay(input: {
   return result[0]
 }
 
-export function listArchiveFolders(tenantId: string) {
-  return rows<ArchiveFolderRow>(client().from('archive_folders')
-    .select('id,parent_id,name').eq('barangay_id', tenantId).order('name'))
+export const ARCHIVE_FOLDER_PAGE_SIZE = 50
+
+export async function listArchiveFolderPage(tenantId: string, page: number) {
+  const from = Math.max(0, page) * ARCHIVE_FOLDER_PAGE_SIZE
+  const { data, error, count } = await client().from('archive_folders')
+    .select('id,parent_id,name', { count: 'exact' }).eq('barangay_id', tenantId)
+    .order('name').order('id').range(from, from + ARCHIVE_FOLDER_PAGE_SIZE - 1)
+  if (error) throw new Error(error.message)
+  return { folders: (data ?? []) as ArchiveFolderRow[], total: count ?? 0 }
 }
 
 export const ARCHIVE_DOCUMENT_PAGE_SIZE = 25

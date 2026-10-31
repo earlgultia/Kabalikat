@@ -23,19 +23,37 @@ export async function listCommunityFeedback(tenantId: string, page: number, stat
   const term = search.trim()
   if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(term)) query = query.eq('id', term)
   else if (term) query = query.ilike('subject', `%${term.replace(/[\\%_]/g, '\\$&')}%`)
-  const { data, error } = await query.order('created_at', { ascending: false }).range(page * 100, (page + 1) * 100 - 1)
+  const { data, error } = await query.order('created_at', { ascending: false }).order('id', { ascending: false }).range(page * 100, (page + 1) * 100 - 1)
   if (error) throw new Error(error.message)
   return (data ?? []) as CommunityFeedback[]
 }
 
-export async function listCommunityFeedbackEvents(tenantId: string, feedbackIds: string[]): Promise<CommunityFeedbackEvent[]> {
-  if (!feedbackIds.length) return []
-  const { data, error } = await client().from('community_feedback_events')
-    .select('id,feedback_id,action,created_at')
-    .eq('barangay_id', tenantId).in('feedback_id', feedbackIds)
-    .order('created_at', { ascending: true })
+export async function findCommunityFeedbackPage(tenantId: string, feedbackId: string) {
+  const { data: target, error: targetError } = await client().from('community_feedback')
+    .select('created_at,id').eq('barangay_id', tenantId).eq('id', feedbackId).maybeSingle()
+  if (targetError) throw new Error(targetError.message)
+  if (!target) return null
+  const base = () => client().from('community_feedback').select('id', { count: 'exact', head: true }).eq('barangay_id', tenantId)
+  const [newerTime, sameTime] = await Promise.all([
+    base().gt('created_at', target.created_at),
+    base().eq('created_at', target.created_at).gt('id', target.id),
+  ])
+  if (newerTime.error) throw new Error(newerTime.error.message)
+  if (sameTime.error) throw new Error(sameTime.error.message)
+  return Math.floor(((newerTime.count ?? 0) + (sameTime.count ?? 0)) / 100)
+}
+
+export const COMMUNITY_FEEDBACK_HISTORY_PAGE_SIZE = 25
+
+export async function listCommunityFeedbackEventPage(tenantId: string, feedbackId: string, page: number) {
+  const from = Math.max(0, page) * COMMUNITY_FEEDBACK_HISTORY_PAGE_SIZE
+  const { data, error, count } = await client().from('community_feedback_events')
+    .select('id,feedback_id,action,created_at', { count: 'exact' })
+    .eq('barangay_id', tenantId).eq('feedback_id', feedbackId)
+    .order('created_at', { ascending: true }).order('id', { ascending: true })
+    .range(from, from + COMMUNITY_FEEDBACK_HISTORY_PAGE_SIZE - 1)
   if (error) throw new Error(error.message)
-  return (data ?? []) as CommunityFeedbackEvent[]
+  return { events: (data ?? []) as CommunityFeedbackEvent[], total: count ?? 0 }
 }
 
 export async function submitCommunityFeedback(input: { tenantId: string; category: string; subject: string; message: string }) {

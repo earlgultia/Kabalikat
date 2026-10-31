@@ -1,11 +1,11 @@
 import { useDeferredValue, useState, type FormEvent } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
 import { Archive, ChevronLeft, ChevronRight, FilePlus2, FolderPlus, Search, ShieldCheck } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import { supabase } from '../../lib/supabase'
 import {
-  ARCHIVE_DOCUMENT_PAGE_SIZE, createArchiveFolder, createArchiveUploadIntent, hasPermission, listArchiveFolders,
+  ARCHIVE_DOCUMENT_PAGE_SIZE, createArchiveFolder, createArchiveUploadIntent, hasPermission, listArchiveFolderPage,
   registerArchiveDocument, saveArchiveText, searchArchiveDocumentPage,
 } from './data'
 import { ocrAdapter } from './ocr-adapter'
@@ -29,7 +29,13 @@ export function ArchivePage() {
   const queryClient = useQueryClient()
   const canRead = useQuery({ queryKey: ['permission', tenantId, 'archive.read'], queryFn: () => hasPermission(tenantId, 'archive.read'), enabled: Boolean(tenantId) })
   const canManage = useQuery({ queryKey: ['permission', tenantId, 'archive.manage'], queryFn: () => hasPermission(tenantId, 'archive.manage'), enabled: Boolean(tenantId) })
-  const folders = useQuery({ queryKey: ['archive-folders', tenantId], queryFn: () => listArchiveFolders(tenantId), enabled: Boolean(tenantId && canRead.data) })
+  const folders = useInfiniteQuery({
+    queryKey: ['archive-folders', tenantId], queryFn: ({ pageParam }) => listArchiveFolderPage(tenantId, pageParam),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) => allPages.reduce((total, page) => total + page.folders.length, 0) < lastPage.total ? allPages.length : undefined,
+    enabled: Boolean(tenantId && canRead.data),
+  })
+  const folderRows = folders.data?.pages.flatMap((page) => page.folders) ?? []
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
   const [folderId, setFolderId] = useState('')
@@ -134,13 +140,15 @@ export function ArchivePage() {
     {canRead.data && <>
       <div className="archive-toolbar">
         <label className="archive-search"><Search size={17} /><input value={query} onChange={(event) => { setQuery(event.target.value); setPage(0) }} placeholder="Search file names and reviewed text" aria-label="Search archive" /></label>
-        <label className="archive-folder-select">Folder<select value={folderId} onChange={(event) => { setFolderId(event.target.value); setPage(0) }}><option value="">All folders</option>{folders.data?.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}</select></label>
+        <label className="archive-folder-select">Folder<select value={folderId} onChange={(event) => { setFolderId(event.target.value); setPage(0) }}><option value="">All folders</option>{folderRows.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}</select></label>
+        {folders.hasNextPage && <button type="button" className="button outline" disabled={folders.isFetchingNextPage} onClick={() => void folders.fetchNextPage()}>{folders.isFetchingNextPage ? 'Loading folders…' : 'Load more folders'}</button>}
+        {folders.error && <ErrorNotice message="Some archive folders could not be loaded." onRetry={() => void folders.refetch()} retrying={folders.isFetching} />}
       </div>
       {canManage.data && <form className="ops-panel ops-form archive-upload" onSubmit={(event) => void upload(event)}>
         <div className="ops-panel-heading"><div><h2>Add a file</h2><p>Original uploads stay private. Supported formats: PDF, JPEG, and PNG up to 20 MB.</p></div><FilePlus2 size={19} /></div>
         <div className="ops-form-grid">
           <label className="span-two">Choose file<input name="file" type="file" accept="application/pdf,image/jpeg,image/png" required /></label>
-          <label>Folder<select name="folderId" defaultValue={folderId}><option value="">Archive root</option>{folders.data?.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}</select></label>
+          <label>Folder<select name="folderId" defaultValue={folderId}><option value="">Archive root</option>{folderRows.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}</select>{folders.hasNextPage && <button type="button" className="text-action" disabled={folders.isFetchingNextPage} onClick={() => void folders.fetchNextPage()}>{folders.isFetchingNextPage ? 'Loading folders…' : 'Load more folders'}</button>}</label>
           <label>Category<input name="category" defaultValue="General" required maxLength={60} /></label>
           <label className="span-two">Description <span className="field-hint">Optional</span><input name="description" maxLength={1000} /></label>
         </div>

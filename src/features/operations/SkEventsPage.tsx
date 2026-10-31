@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
-import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, MapPin, ShieldAlert } from 'lucide-react'
+import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, MapPin, Search, ShieldAlert } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import { hasPermission } from './data'
 import { completeSkEvent, createSkEvent, listSkEventAudit, listSkEvents, reviewSkEvent, SK_EVENT_HISTORY_PAGE_SIZE, SK_EVENT_PAGE_SIZE, type SkEvent } from './sk-events-data'
@@ -35,10 +35,20 @@ export function SkEventsPage() {
   const tenantId = membership?.barangay_id ?? ''
   const queryClient = useQueryClient()
   const [page, setPage] = useState(0)
-  useEffect(() => setPage(0), [tenantId])
+  const [searchInput, setSearchInput] = useState('')
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'all' | SkEvent['status']>('all')
+  useEffect(() => { setPage(0); setSearchInput(''); setSearch(''); setStatusFilter('all') }, [tenantId])
+  useEffect(() => {
+    const timeout = window.setTimeout(() => { setSearch(searchInput.trim()); setPage(0) }, 250)
+    return () => window.clearTimeout(timeout)
+  }, [searchInput])
   const canManage = useQuery({ queryKey: ['permission', tenantId, 'sk.event.manage'], queryFn: () => hasPermission(tenantId, 'sk.event.manage'), enabled: Boolean(tenantId) })
   const canReview = useQuery({ queryKey: ['permission', tenantId, 'sk.event.review'], queryFn: () => hasPermission(tenantId, 'sk.event.review'), enabled: Boolean(tenantId) })
-  const events = useQuery({ queryKey: ['sk-events', tenantId, page], queryFn: () => listSkEvents(tenantId, page), enabled: Boolean(tenantId) })
+  const events = useQuery({ queryKey: ['sk-events', tenantId, page, search, statusFilter], queryFn: () => listSkEvents(tenantId, page, search, statusFilter), enabled: Boolean(tenantId) })
+  useEffect(() => {
+    if (!events.isPending && !events.isError && page > 0 && events.data?.rows.length === 0) setPage((current) => Math.max(0, current - 1))
+  }, [events.data?.rows.length, events.isError, events.isPending, page])
   const totalPages = Math.ceil((events.data?.totalCount ?? 0) / SK_EVENT_PAGE_SIZE)
   const [showForm, setShowForm] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -85,8 +95,12 @@ export function SkEventsPage() {
       <div className="ops-form-grid"><label>Event title<input name="title" minLength={3} maxLength={180} required placeholder="Youth community clean-up" /></label><label>Location<input name="location" minLength={2} maxLength={240} required placeholder="Venue or meeting point" /></label><label>Starts<input name="starts" type="datetime-local" required /></label><label>Ends<input name="ends" type="datetime-local" required /></label><label className="span-two">Public event details<textarea name="description" maxLength={2000} placeholder="General schedule and logistics only. Do not include names or personal details." /></label></div>
       <div className="ops-form-actions"><button className="button primary" disabled={busy}>Submit for review</button></div>
     </form>}
-    {events.isPending && tenantId && <LoadingNotice />}{events.error && <ErrorNotice message="Unable to load SK event schedules." />}
-    {events.data?.totalCount === 0 && <div className="ops-empty"><CalendarDays size={22} /><strong>No SK events scheduled</strong><p>Published youth programs and events will appear here.</p></div>}
+    {Boolean(tenantId) && <div className="health-outreach-filters">
+      <label className="archive-search"><Search size={16} /><input type="search" aria-label="Search SK events" maxLength={100} placeholder="Search event, location, or details" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} /></label>
+      <label>Status<select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value as typeof statusFilter); setPage(0) }}><option value="all">All statuses</option><option value="draft">Awaiting review</option><option value="published">Published</option><option value="completed">Completed</option><option value="cancelled">Returned or cancelled</option></select></label>
+    </div>}
+    {events.isPending && tenantId && <LoadingNotice />}{events.error && <ErrorNotice message="Unable to load SK event schedules." onRetry={() => void events.refetch()} retrying={events.isFetching} />}
+    {events.data?.totalCount === 0 && <div className="ops-empty"><CalendarDays size={22} /><strong>{search || statusFilter !== 'all' ? 'No matching SK events' : 'No SK events scheduled'}</strong><p>{search || statusFilter !== 'all' ? 'Try another search or status.' : 'Published youth programs and events will appear here.'}</p></div>}
     <div className="referral-list">{events.data?.rows.map((item) => <article className="ops-panel referral-card" key={item.id}>
       <div className="referral-card-head"><div><h2>{item.title}</h2><p><MapPin size={14} />{item.location}</p></div><StatusPill status={item.status} /></div>
       {item.description && <p className="referral-summary">{item.description}</p>}

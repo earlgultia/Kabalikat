@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, ExternalLink, MapPin, Megaphone, Phone, Plus, Printer, ShieldCheck } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import { hasPermission } from './data'
-import { archiveDisasterEmergencyResource, createDisasterAdvisory, listDisasterAdvisoryPage, listDisasterAdvisoryEventsPage, listDisasterEmergencyResourceActivity, listDisasterEmergencyResourcesPage, publishDisasterAdvisory, publishDisasterEmergencyResource, resolveDisasterAdvisory, saveDisasterEmergencyResource, type DisasterAdvisory, type DisasterEmergencyResource, DISASTER_ADVISORY_HISTORY_PAGE_SIZE, DISASTER_ADVISORY_PAGE_SIZE, DISASTER_RESOURCE_HISTORY_PAGE_SIZE, DISASTER_RESOURCE_PAGE_SIZE } from './disaster-data'
+import { archiveDisasterEmergencyResource, createDisasterAdvisory, findDisasterAdvisoryPage, listDisasterAdvisoryPage, listDisasterAdvisoryEventsPage, listDisasterEmergencyResourceActivity, listDisasterEmergencyResourcesPage, publishDisasterAdvisory, publishDisasterEmergencyResource, resolveDisasterAdvisory, saveDisasterEmergencyResource, type DisasterAdvisory, type DisasterEmergencyResource, DISASTER_ADVISORY_HISTORY_PAGE_SIZE, DISASTER_ADVISORY_PAGE_SIZE, DISASTER_RESOURCE_HISTORY_PAGE_SIZE, DISASTER_RESOURCE_PAGE_SIZE } from './disaster-data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 import { formatDateTime } from './format'
 
@@ -59,7 +59,7 @@ function AdvisoryHistory({ tenantId, advisoryId }: { tenantId: string; advisoryI
   </details>
 }
 
-export function DisasterAdvisoriesPage() {
+export function DisasterAdvisoriesPage({ focusId, onFocusHandled }: { focusId?: string; onFocusHandled?: () => void }) {
   const { membership } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
   const queryClient = useQueryClient()
@@ -80,6 +80,38 @@ export function DisasterAdvisoriesPage() {
     queryFn: () => listDisasterAdvisoryPage(tenantId, page, debouncedAdvisorySearch, advisorySeverityFilter, canManage.data ? advisoryStatusFilter : 'all'),
     enabled,
   })
+  const [focusReadyId, setFocusReadyId] = useState('')
+  const [focusError, setFocusError] = useState('')
+  useEffect(() => {
+    if (!focusId || !tenantId) return
+    let active = true
+    setFocusReadyId('')
+    setFocusError('')
+    setPage(0)
+    void findDisasterAdvisoryPage(tenantId, focusId).then((targetPage) => {
+      if (!active) return
+      if (targetPage === null) {
+        setFocusError('This advisory is no longer available in your workspace.')
+        onFocusHandled?.()
+        return
+      }
+      setPage(targetPage)
+      setFocusReadyId(focusId)
+    }).catch(() => {
+      if (!active) return
+      setFocusError('The selected advisory could not be opened. Please try again.')
+      onFocusHandled?.()
+    })
+    return () => { active = false }
+  }, [focusId, tenantId, onFocusHandled])
+  useEffect(() => {
+    if (!focusId || focusReadyId !== focusId || !advisories.data?.advisories.some((item) => item.id === focusId)) return
+    const target = document.getElementById(`advisory-${focusId}`)
+    if (!target) return
+    target.focus({ preventScroll: true })
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    onFocusHandled?.()
+  }, [focusId, focusReadyId, advisories.data, onFocusHandled])
   const [showForm, setShowForm] = useState(false)
   const [showResourceForm, setShowResourceForm] = useState(false)
   const [editingResource, setEditingResource] = useState<DisasterEmergencyResource | null>(null)
@@ -199,6 +231,7 @@ export function DisasterAdvisoriesPage() {
     {(canManage.error || canRead.error) && <ErrorNotice message="Your disaster workspace access could not be checked. Refresh the page or contact your barangay administrator." />}
     {!canManage.isPending && !canRead.isPending && !canManage.error && !canRead.error && !enabled && <EmptyNotice title="Disaster workspace access is not enabled" detail="Ask your barangay administrator for disaster read or management access if you need to view local advisories and emergency resources." />}
     {message && <div className="ops-success"><CheckCircle2 size={16} />{message}</div>}{error && <ErrorNotice message={error} />}
+    {focusError && <div className="account-security-error" role="alert">{focusError}</div>}
     <section className="ops-panel emergency-resource-panel">
       <div className="ops-panel-heading"><div><h2>Emergency contacts and evacuation centers</h2><p>Use verified contact details and locations published by your barangay.</p></div><ShieldCheck size={19} /></div>
       <button className="button outline emergency-resource-print-button" disabled={resources.isPending || !visibleResources.some((resource) => resource.status === 'published')} onClick={printEmergencyDirectory}><Printer size={15} />Print published entries on this page</button>
@@ -241,7 +274,7 @@ export function DisasterAdvisoriesPage() {
     {advisories.data?.total ? visibleAdvisories.length ? null : <p className="field-hint">No advisories are available on this page. Return to the previous page.</p> : null}
     <div className="advisory-list">{visibleAdvisories.map((advisory) => {
       const expired = advisory.expires_at ? new Date(advisory.expires_at).getTime() <= Date.now() : false
-      return <article className={`ops-panel advisory-card advisory-${advisory.severity}`} key={advisory.id}>
+      return <article id={`advisory-${advisory.id}`} tabIndex={-1} className={`ops-panel advisory-card advisory-${advisory.severity}`} key={advisory.id}>
         <header><div><StatusPill status={expired ? 'expired' : advisory.status} /><span className={`incident-severity severity-${advisory.severity === 'emergency' ? 'urgent' : advisory.severity === 'warning' ? 'high' : advisory.severity === 'watch' ? 'moderate' : 'low'}`}>{advisory.severity}</span></div><small>{advisory.advisory_type}</small></header>
         <h2>{advisory.title}</h2><p className="advisory-area">Affected area: {advisory.affected_area}</p>
         <p className="advisory-instructions">{advisory.instructions}</p>

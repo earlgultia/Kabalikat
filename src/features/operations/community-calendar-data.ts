@@ -29,11 +29,12 @@ export async function listCommunityEventPage(barangayId: string, page: number, s
   }
 }
 
-export async function listAllCommunityEvents(barangayId: string, search: string, source: 'all' | CommunityCalendarItem['source']) {
+export async function listAllCommunityEvents(barangayId: string, search: string, source: 'all' | CommunityCalendarItem['source'], onProgress?: (message: string) => void) {
   const result: CommunityCalendarItem[] = []
   for (let page = 0; ; page += 1) {
     const batch = await listCommunityEventPage(barangayId, page, search, source)
     result.push(...batch.events)
+    onProgress?.(`Gathering calendar events: ${result.length.toLocaleString()} of ${batch.total.toLocaleString()}`)
     if (result.length >= batch.total || batch.events.length === 0) return result
   }
 }

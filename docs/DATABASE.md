@@ -157,6 +157,32 @@ Migration `0093_paginated_referral_destinations.sql` adds a `referrals.create`-c
 
 Migration `0094_paginated_tanod_assignment_picker.sql` replaces the unbounded incident and patrol Tanod directory RPCs with a searchable 25-row page. The picker checks the specific management permission, returns only active Tanods in the selected barangay, and preserves a currently assigned Tanod in the options.
 
+Migration `0095_meeting_scoped_attendee_directory.sql` replaces the meeting UI's full barangay member directory read with the roster for the selected meeting only. The RPC requires `meeting.manage` and returns only attendee IDs, display names, and current role labels for that meeting.
+
+Migration `0096_paginated_document_type_activity.sql` replaces the unbounded document configuration audit RPC with a permission-checked 25-entry page and a stable tenant history index. The document setup UI loads the history only when opened and provides older-page navigation.
+
+Migration `0097_paginated_sk_accomplishments.sql` adds separate permission-aware pages for published summaries and the internal review queue, plus a lightweight publication-year list. Public members can read published summaries only; staff-only fields and review rows remain restricted. CSV export fetches every matching published row in bounded pages.
+
+Migration `0098_paginated_project_progress_history.sql` adds stable, permission-preserving page functions for barangay and SK project updates and SK project audit activity. Project cards now fetch progress only when its history is opened; activity records are separately permission-checked and paged.
+
+Migration `0099_paginated_finance_budgets.sql` adds 20-budget and 25-amendment pages, a pending-amendment indicator per budget, and page-scoped expense totals. Finance cards and budget selection now browse pages without downloading the full budget or amendment tables.
+
+Migration `0100_paginated_feedback_history.sql` adds a stable index for private feedback activity history. The feedback page now fetches one item's history only when opened and pages that history in groups of 25 under the existing row-level policies.
+
+Migration `0101_paginated_archive_folders.sql` adds stable folder-name ordering for archive pagination. The folder filter and upload picker load 50 options at a time and can fetch more without dropping already loaded choices.
+
+Migration `0102_complete_resident_data_export.sql` adds an owner-scoped paginated feedback export RPC. The resident data download now reads large owned record sets in batches and retrieves incident histories and feedback with bounded page requests, preserving complete exports without a single oversized response.
+
+Migration `0103_searchable_health_outreach_queue.sql` adds a stable, searchable status-filtered page for health outreach schedules. The outreach screen searches title, location, and details and filters by workflow status; the invoker-security RPC continues to apply existing row-level policies.
+
+Migration `0104_searchable_sk_event_queue.sql` adds a stable, searchable status-filtered page for SK event schedules. The SK event screen searches title, location, and details and filters by workflow status; the invoker-security RPC continues to apply existing row-level policies.
+
+Migration `0105_searchable_patrol_shift_queue.sql` adds a stable, searchable status-filtered page for patrol shifts. The patrol screen searches shift titles and areas, preserves active/scheduled/completed ordering, and applies existing visibility policies through an invoker-security RPC.
+
+Migration `0106_searchable_meeting_schedule.sql` adds server-side text and status filters to the paginated meeting schedule. Search covers the title, location, and agenda; the invoker-security function preserves the existing tenant and attendee row-level policies.
+
+Migration `0107_paginated_meeting_status_history.sql` adds a stable tenant/meeting index for status events. Authorized meeting managers can inspect status changes and recorded reasons in an on-demand 25-entry history; the existing RLS policy continues to control access.
+
 `supabase/tests/database/0001_foundation.test.sql` through `0008_finance_budgets.test.sql` cover tenant isolation and key early workflows. `0009_role_targeted_announcement_delivery.test.sql` verifies role-targeted announcement delivery, published-post retargeting, duplicate prevention, notification access for the new audience, access revocation for the former audience, and rejection of platform-scoped targets (including malformed legacy targets). `0010_resident_profile_corrections.test.sql` covers resident ownership, cross-resident and cross-barangay isolation, staff approval, official record updates, withdrawal, audit history, and owner-only decision notifications. `0011_private_community_feedback.test.sql` covers linked-resident eligibility, private submissions, hidden author fields, tenant-scoped staff access, response and closure transitions, event history, and owner-only notifications both with and without a staff response. `0012_public_document_verification.test.sql` checks the two-code verification boundary, minimal public disclosure, expiry, revocation, and revocation audit history. `0013_platform_subscription_controls.test.sql` checks platform-admin-only subscription access and changes, tenant RLS boundaries, validated trial windows, and subscription event history. `0014_resident_owned_feedback_export.test.sql` verifies that personal exports remain owner-scoped even when staff permissions provide access to the broader feedback queue. These pgTAP suites require a local Supabase/Postgres test database; the new GitHub Actions workflow starts an isolated database and runs them, but its first CI result is pending.
 
 This schema does not yet implement complete accounting and reconciliation, patient health records, BHW clinical workflows, youth registry/programs, or OCR processing. QR attendance and meeting PDF export are browser features over the current meeting schema. Review and test migrations against a disposable database before using any real records.

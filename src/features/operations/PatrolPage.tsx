@@ -1,7 +1,7 @@
-import { useState, type FormEvent, type SyntheticEvent } from 'react'
+import { useEffect, useState, type FormEvent, type SyntheticEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
-import { CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, MapPinned, Route } from 'lucide-react'
+import { CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, MapPinned, Route, Search } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import { hasPermission } from './data'
 import { addPatrolLog, cancelPatrolShift, completePatrolShift, createPatrolShift, listPatrolLogs, listPatrolShifts, PATROL_LOG_PAGE_SIZE, PATROL_SHIFT_PAGE_SIZE, startPatrolShift } from './patrol-data'
@@ -37,7 +37,18 @@ export function PatrolPage() {
   const canAccess = useQuery({ queryKey: ['permission', tenantId, 'patrol.access'], queryFn: () => hasPermission(tenantId, 'patrol.access'), enabled: Boolean(tenantId) })
   const enabled = Boolean(tenantId && (canManage.data || canAccess.data))
   const [page, setPage] = useState(0)
-  const shifts = useQuery({ queryKey: ['patrol-shifts', tenantId, page], queryFn: () => listPatrolShifts(tenantId, page), enabled })
+  const [searchInput, setSearchInput] = useState('')
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'scheduled' | 'active' | 'completed' | 'cancelled'>('all')
+  useEffect(() => { setPage(0); setSearchInput(''); setSearch(''); setStatusFilter('all') }, [tenantId])
+  useEffect(() => {
+    const timeout = window.setTimeout(() => { setSearch(searchInput.trim()); setPage(0) }, 250)
+    return () => window.clearTimeout(timeout)
+  }, [searchInput])
+  const shifts = useQuery({ queryKey: ['patrol-shifts', tenantId, page, search, statusFilter], queryFn: () => listPatrolShifts(tenantId, page, search, statusFilter), enabled })
+  useEffect(() => {
+    if (!shifts.isPending && !shifts.isError && page > 0 && shifts.data?.rows.length === 0) setPage((current) => Math.max(0, current - 1))
+  }, [shifts.data?.rows.length, shifts.isError, shifts.isPending, page])
   const totalPages = Math.ceil((shifts.data?.totalCount ?? 0) / PATROL_SHIFT_PAGE_SIZE)
   const [showForm, setShowForm] = useState(false)
   const [assigneeId, setAssigneeId] = useState('')
@@ -99,8 +110,12 @@ export function PatrolPage() {
       <label className="span-two">Patrol area<input name="area" maxLength={240} placeholder="General area or route description" required /></label>
       <label>Starts<input type="datetime-local" name="start" required /></label><label>Ends<input type="datetime-local" name="end" required /></label>
     </div><div className="ops-form-actions"><button className="button primary" disabled={busy || !assigneeId}>Schedule shift</button></div></form>}
-    {shifts.isPending && enabled && <LoadingNotice />}{shifts.error && <ErrorNotice message={shifts.error.message} />}
-    {shifts.data?.totalCount === 0 && <div className="ops-empty"><Route size={22} /><strong>No patrol shifts</strong><p>Scheduled shifts and your assigned patrols appear here.</p></div>}
+    {enabled && <div className="health-outreach-filters">
+      <label className="archive-search"><Search size={16} /><input type="search" aria-label="Search patrol shifts" maxLength={100} placeholder="Search shift title or patrol area" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} /></label>
+      <label>Status<select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value as typeof statusFilter); setPage(0) }}><option value="all">All statuses</option><option value="scheduled">Scheduled</option><option value="active">Active</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></label>
+    </div>}
+    {shifts.isPending && enabled && <LoadingNotice />}{shifts.error && <ErrorNotice message={shifts.error.message} onRetry={() => void shifts.refetch()} retrying={shifts.isFetching} />}
+    {shifts.data?.totalCount === 0 && <div className="ops-empty"><Route size={22} /><strong>{search || statusFilter !== 'all' ? 'No matching patrol shifts' : 'No patrol shifts'}</strong><p>{search || statusFilter !== 'all' ? 'Try another search or status.' : 'Scheduled shifts and your assigned patrols appear here.'}</p></div>}
     <div className="patrol-list">{shifts.data?.rows.map((shift) => {
       const isAssigned = shift.assigned_to === user?.id
       return <article className="ops-panel patrol-card" key={shift.id}>

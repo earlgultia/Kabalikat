@@ -38,11 +38,28 @@ export async function listDisasterAdvisoryPage(tenantId: string, page: number, s
   return { advisories: (data ?? []) as DisasterAdvisory[], total: count ?? 0 }
 }
 
-export async function listRecentDisasterAdvisories(tenantId: string): Promise<DisasterAdvisory[]> {
-  const { data, error } = await client().from('disaster_advisories').select(advisoryColumns)
-    .eq('barangay_id', tenantId).order('created_at', { ascending: false }).order('id', { ascending: false }).limit(100)
+export async function findDisasterAdvisoryPage(tenantId: string, advisoryId: string) {
+  const db = client()
+  const { data: target, error: targetError } = await db.from('disaster_advisories').select('created_at')
+    .eq('barangay_id', tenantId).eq('id', advisoryId).maybeSingle()
+  if (targetError) throw new Error(targetError.message)
+  if (!target) return null
+  const { count, error } = await db.from('disaster_advisories').select('id', { count: 'exact', head: true })
+    .eq('barangay_id', tenantId)
+    .or(`created_at.gt.${target.created_at},and(created_at.eq.${target.created_at},id.gt.${advisoryId})`)
   if (error) throw new Error(error.message)
-  return (data ?? []) as DisasterAdvisory[]
+  return Math.floor((count ?? 0) / DISASTER_ADVISORY_PAGE_SIZE)
+}
+
+export const RECENT_ADVISORY_PAGE_SIZE = 50
+
+export async function listRecentDisasterAdvisories(tenantId: string, page: number) {
+  const from = Math.max(0, page) * RECENT_ADVISORY_PAGE_SIZE
+  const { data, error, count } = await client().from('disaster_advisories').select(advisoryColumns, { count: 'exact' })
+    .eq('barangay_id', tenantId).order('created_at', { ascending: false }).order('id', { ascending: false })
+    .range(from, from + RECENT_ADVISORY_PAGE_SIZE - 1)
+  if (error) throw new Error(error.message)
+  return { advisories: (data ?? []) as DisasterAdvisory[], totalCount: count ?? 0 }
 }
 
 export async function listDisasterAdvisoryEventsPage(tenantId: string, advisoryId: string, page: number) {

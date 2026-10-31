@@ -4,9 +4,10 @@ import { z } from 'zod'
 import { CheckCircle2, ChevronLeft, ChevronRight, FileCheck2, FolderKanban } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import { hasPermission } from './data'
-import { addSkProjectUpdate, listSkAccomplishmentsForProjects, listSkProjectActivity, listSkProjectUpdates, listSkProjects, reviewSkAccomplishment, reviewSkProject, SK_PROJECT_PAGE_SIZE, submitSkAccomplishment, submitSkProject, updateSkProjectStatus } from './sk-data'
+import { addSkProjectUpdate, listSkAccomplishmentsForProjects, listSkProjects, reviewSkAccomplishment, reviewSkProject, SK_PROJECT_PAGE_SIZE, submitSkAccomplishment, submitSkProject, updateSkProjectStatus } from './sk-data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 import { formatDateTime } from './format'
+import { ProjectProgressHistory, SkProjectActivityHistory } from './ProjectHistory'
 
 const projectSchema = z.object({ title: z.string().trim().min(3).max(180), description: z.string().trim().min(3).max(4000), budget: z.coerce.number().min(0).max(999999999999.99), start: z.string(), end: z.string() })
 const updateSchema = z.object({ type: z.enum(['milestone','progress']), title: z.string().trim().min(3).max(180), details: z.string().trim().max(3000) })
@@ -24,9 +25,7 @@ export function SkProjectsPage() {
   const enabled = Boolean(tenantId && (canManage.data || canReview.data))
   const projects = useQuery({ queryKey: ['sk-projects', tenantId, page], queryFn: () => listSkProjects(tenantId, page), enabled })
   const projectIds = projects.data?.rows.map((project) => project.id) ?? []
-  const updates = useQuery({ queryKey: ['sk-project-updates', tenantId, projectIds], queryFn: () => listSkProjectUpdates(tenantId, projectIds), enabled: enabled && projectIds.length > 0 })
   const accomplishments = useQuery({ queryKey: ['sk-accomplishments', tenantId, projectIds], queryFn: () => listSkAccomplishmentsForProjects(tenantId, projectIds), enabled: enabled && projectIds.length > 0 })
-  const activity = useQuery({ queryKey: ['sk-project-activity', tenantId, projectIds], queryFn: () => listSkProjectActivity(tenantId, projectIds), enabled: enabled && projectIds.length > 0 })
   const totalPages = Math.ceil((projects.data?.totalCount ?? 0) / SK_PROJECT_PAGE_SIZE)
   const [showForm, setShowForm] = useState(false)
   const [updateProject, setUpdateProject] = useState('')
@@ -38,9 +37,8 @@ export function SkProjectsPage() {
   async function refresh() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['sk-projects', tenantId] }),
-      queryClient.invalidateQueries({ queryKey: ['sk-project-updates', tenantId] }),
+      queryClient.invalidateQueries({ queryKey: ['project-progress-history', 'sk', tenantId] }),
       queryClient.invalidateQueries({ queryKey: ['sk-accomplishments', tenantId] }),
-      queryClient.invalidateQueries({ queryKey: ['sk-project-activity', tenantId] }),
     ])
   }
 
@@ -116,12 +114,11 @@ export function SkProjectsPage() {
     {projects.isPending && enabled && <LoadingNotice />}{projects.error && <ErrorNotice message={projects.error.message} />}
     {projects.data?.totalCount === 0 && <div className="ops-empty"><FolderKanban size={22} /><strong>No SK projects yet</strong><p>Submitted proposals and their review status will appear here.</p></div>}
     <div className="sk-project-list">{projects.data?.rows.map((project) => {
-      const projectUpdates = updates.data?.filter((update) => update.project_id === project.id) ?? []
       return <article className="ops-panel sk-project-card" key={project.id}>
         <div className="sk-project-header"><div><StatusPill status={project.status} /><h2>{project.title}</h2><p>{project.description}</p></div><strong className="sk-project-budget">{currency.format(Number(project.proposed_budget))}<small> proposed</small></strong></div>
         <div className="sk-project-meta"><span>Submitted {formatDateTime(project.created_at)}</span>{project.planned_start && <span>Start {new Date(`${project.planned_start}T00:00:00`).toLocaleDateString()}</span>}{project.planned_end && <span>End {new Date(`${project.planned_end}T00:00:00`).toLocaleDateString()}</span>}</div>
         {project.review_note && <p className="finance-review-note">Review note: {project.review_note}</p>}
-        {(canManage.data || canReview.data) && <details className="sk-event-audit"><summary>Project activity history</summary>{activity.isPending && <p className="field-hint" role="status">Loading activity…</p>}{activity.error && <p className="account-security-error" role="alert">Project activity could not be loaded.</p>}{activity.data && <ol>{activity.data.filter((entry) => entry.project_id === project.id).map((entry) => <li key={`${entry.project_id}-${entry.action}-${entry.created_at}`}><span><strong>{entry.action.replace('project_', '').replaceAll('_', ' ')}</strong><time dateTime={entry.created_at}>{formatDateTime(entry.created_at)}</time></span><small>{entry.actor_name}{entry.details ? ` · ${entry.details}` : ''}</small></li>)}{activity.data.every((entry) => entry.project_id !== project.id) && <li><small>No activity is available in the recent history.</small></li>}</ol>}</details>}
+        {(canManage.data || canReview.data) && <SkProjectActivityHistory tenantId={tenantId} projectId={project.id} />}
         {(() => {
           const summary = accomplishments.data?.find((item) => item.project_id === project.id)
           const canResubmit = summary?.status === 'returned' && summary.created_by === user?.id
@@ -134,7 +131,7 @@ export function SkProjectsPage() {
         {canReview.data && project.status === 'submitted' && project.created_by !== user?.id && <div className="finance-review-actions"><button className="button outline danger-action" disabled={busy} onClick={() => void review(project.id, false)}>Reject with reason</button><button className="button primary" disabled={busy} onClick={() => void review(project.id, true)}>Approve proposal</button></div>}
         {canManage.data && project.status === 'approved' && <button className="button primary" disabled={busy} onClick={() => void advance(project.id, 'active')}>Start project</button>}
         {canManage.data && project.status === 'active' && <button className="button outline" disabled={busy} onClick={() => void advance(project.id, 'completed')}>Mark complete</button>}
-        <section className="sk-project-updates"><h3>Milestones & progress <span>{projectUpdates.length}</span></h3>{projectUpdates.length ? <ul>{projectUpdates.map((update) => <li key={update.id}><span className="status-pill">{update.update_type}</span><div><strong>{update.title}</strong>{update.details && <p>{update.details}</p>}<small>{formatDateTime(update.created_at)}</small></div></li>)}</ul> : <p>No progress updates yet.</p>}
+        <section className="sk-project-updates"><ProjectProgressHistory tenantId={tenantId} projectId={project.id} scope="sk" />
           {canManage.data && ['approved','active'].includes(project.status) && <>{updateProject === project.id ? <form className="sk-update-form" onSubmit={(event) => void addUpdate(project.id, event)}><label>Update type<select name="type"><option value="milestone">Milestone</option><option value="progress">Progress report</option></select></label><label>Title<input name="title" minLength={3} maxLength={180} required /></label><label>Details<textarea name="details" maxLength={3000} /></label><div className="finance-review-actions"><button type="button" className="button outline" onClick={() => setUpdateProject('')}>Cancel</button><button className="button primary" disabled={busy}>Save update</button></div></form> : <button className="button outline" disabled={busy} onClick={() => setUpdateProject(project.id)}>Add milestone or progress update</button>}</>}
         </section>
       </article>

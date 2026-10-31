@@ -3,17 +3,13 @@ import { supabase } from '../../lib/supabase'
 export type BarangayProject = { id: string; title: string; description: string; planned_start: string | null; planned_end: string | null; status: 'planned' | 'active' | 'paused' | 'completed' | 'cancelled'; created_at: string }
 export type BarangayProjectUpdate = { id: string; project_id: string; update_type: 'milestone' | 'progress'; title: string; details: string; created_at: string }
 export type BarangayProjectPage = { rows: BarangayProject[]; totalCount: number }
+export type BarangayProjectUpdatePage = { rows: BarangayProjectUpdate[]; totalCount: number }
 export const BARANGAY_PROJECT_PAGE_SIZE = 20
+export const BARANGAY_PROJECT_UPDATE_PAGE_SIZE = 25
 
 function client() {
   if (!supabase) throw new Error('Supabase is not configured.')
   return supabase
-}
-
-async function read<T>(request: PromiseLike<{ data: unknown; error: { message: string } | null }>) {
-  const { data, error } = await request
-  if (error) throw new Error(error.message)
-  return (data ?? []) as T[]
 }
 
 function rpc<T>(name: string, args: Record<string, unknown>) {
@@ -35,9 +31,13 @@ export async function listBarangayProjects(tenantId: string, page: number): Prom
   return { rows: (data ?? []) as BarangayProject[], totalCount: count ?? 0 }
 }
 
-export function listBarangayProjectUpdates(tenantId: string, projectIds: string[]) {
-  if (projectIds.length === 0) return Promise.resolve([] as BarangayProjectUpdate[])
-  return read<BarangayProjectUpdate>(client().from('barangay_project_updates').select('id,project_id,update_type,title,details,created_at').eq('barangay_id', tenantId).in('project_id', projectIds).order('created_at', { ascending: false }).order('id', { ascending: false }))
+export async function listBarangayProjectUpdates(projectId: string, page: number): Promise<BarangayProjectUpdatePage> {
+  const { data, error } = await client().rpc('list_barangay_project_update_page', {
+    p_project_id: projectId, p_page: page, p_page_size: BARANGAY_PROJECT_UPDATE_PAGE_SIZE,
+  })
+  if (error) throw new Error(error.message)
+  const rows = (data ?? []) as Array<BarangayProjectUpdate & { total_count: number }>
+  return { rows, totalCount: Number(rows[0]?.total_count ?? 0) }
 }
 
 export function createBarangayProject(input: { tenantId: string; title: string; description: string; start: string; end: string }) {

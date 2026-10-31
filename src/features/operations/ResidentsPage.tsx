@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
 import { Check, ChevronLeft, ChevronRight, Download, Home, Search, UserPlus, UserRoundPen } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
-import { cancelResidentProfileChange, getOwnResidentDataExport, hasPermission, listHouseholdsPage, listResidents, listResidentsPage, listResidencyVerifications, listResidentProfileChangeRequests, registerResident, reviewResidentProfileChange, submitResidentProfileChange, verifyResident, HOUSEHOLD_PAGE_SIZE, RESIDENT_CORRECTION_PAGE_SIZE, RESIDENT_PAGE_SIZE, type HouseholdRow } from './data'
+import { cancelResidentProfileChange, findResidentProfileChangePage, getOwnResidentDataExport, hasPermission, listHouseholdsPage, listResidents, listResidentsPage, listResidencyVerifications, listResidentProfileChangeRequests, registerResident, reviewResidentProfileChange, submitResidentProfileChange, verifyResident, HOUSEHOLD_PAGE_SIZE, RESIDENT_CORRECTION_PAGE_SIZE, RESIDENT_PAGE_SIZE, type HouseholdRow } from './data'
 import { ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 
 const residentSchema = z.object({
@@ -16,7 +16,7 @@ const residentSchema = z.object({
   purok: z.string().max(100).optional(),
 }).refine((value) => value.householdId || (value.address?.length ?? 0) >= 3, { message: 'Provide a household address or select an existing household.' })
 
-export function ResidentsPage() {
+export function ResidentsPage({ focusId, onFocusHandled }: { focusId?: string; onFocusHandled?: () => void } = {}) {
   const { membership } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
   const role = membership?.role?.key
@@ -24,8 +24,10 @@ export function ResidentsPage() {
   const [formOpen, setFormOpen] = useState(false)
   const [message, setMessage] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
+  const [focusError, setFocusError] = useState('')
   const [busy, setBusy] = useState(false)
   const [exportBusy, setExportBusy] = useState(false)
+  const [exportProgress, setExportProgress] = useState('')
   const [residentSearch, setResidentSearch] = useState('')
   const [residencyFilter, setResidencyFilter] = useState('all')
   const [page, setPage] = useState(0)
@@ -35,6 +37,17 @@ export function ResidentsPage() {
   const [debouncedHouseholdSearch, setDebouncedHouseholdSearch] = useState('')
   const [selectedHousehold, setSelectedHousehold] = useState<HouseholdRow | null>(null)
   const [debouncedSearch, setDebouncedSearch] = useState('')
+  useEffect(() => {
+    if (!focusId || !tenantId) return
+    let active = true
+    setFocusError('')
+    void findResidentProfileChangePage(tenantId, focusId, role !== 'resident').then((targetPage) => {
+      if (!active) return
+      if (targetPage === null) { setFocusError('This profile correction request is no longer available to your account.'); onFocusHandled?.(); return }
+      setCorrectionPage(targetPage)
+    }).catch(() => { if (active) { setFocusError('The profile correction request could not be opened.'); onFocusHandled?.() } })
+    return () => { active = false }
+  }, [focusId, tenantId, role, onFocusHandled])
   useEffect(() => {
     const timeout = window.setTimeout(() => { setDebouncedSearch(residentSearch); setPage(0) }, 250)
     return () => window.clearTimeout(timeout)
@@ -91,6 +104,11 @@ export function ResidentsPage() {
     if (correctionTotalPages > 0 && correctionPage >= correctionTotalPages) setCorrectionPage(correctionTotalPages - 1)
   }, [correctionPage, correctionTotalPages])
   const correctionRequests = profileChanges.data?.requests ?? []
+  useEffect(() => {
+    if (!focusId || profileChanges.isPending) return
+    const target = document.getElementById(`resident-correction-${focusId}`)
+    if (target) { target.scrollIntoView({ behavior: 'smooth', block: 'center' }); target.focus({ preventScroll: true }); onFocusHandled?.() }
+  }, [focusId, profileChanges.isPending, profileChanges.data, onFocusHandled])
   const canSelfRegister = role === 'resident' && residentRows.length === 0
   const ownResident = role === 'resident' ? residentRows[0] : undefined
   const latestVerificationByResident = new Map<string, string>(Object.entries(residents.data?.verificationStatuses ?? {}))
@@ -187,9 +205,9 @@ export function ResidentsPage() {
   }
 
   async function downloadOwnData() {
-    setErrorMessage(''); setMessage(''); setExportBusy(true)
+    setErrorMessage(''); setMessage(''); setExportBusy(true); setExportProgress('Starting your private data copy…')
     try {
-      const data = await getOwnResidentDataExport(tenantId)
+      const data = await getOwnResidentDataExport(tenantId, setExportProgress)
       const file = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
       const url = URL.createObjectURL(file)
       const link = document.createElement('a')
@@ -199,7 +217,7 @@ export function ResidentsPage() {
       window.setTimeout(() => URL.revokeObjectURL(url), 1000)
       setMessage('Your data copy has been downloaded. Keep the file somewhere private.')
     } catch (error) { setErrorMessage(error instanceof Error ? error.message : 'Unable to download your data.') }
-    finally { setExportBusy(false) }
+    finally { setExportBusy(false); setExportProgress('') }
   }
 
   return <section className="operation-page">
@@ -207,8 +225,10 @@ export function ResidentsPage() {
       {role === 'resident' && ownResident && <button className="button outline" onClick={() => void downloadOwnData()} disabled={exportBusy}><Download size={16} />{exportBusy ? 'Preparing…' : 'Download my data'}</button>}
       {(canCreate.data || canSelfRegister) && <button className="button primary" onClick={() => { setFormOpen((open) => !open); setSelectedHousehold(null); setHouseholdSearch(''); setHouseholdPage(0) }}><UserPlus size={16} />{canSelfRegister ? 'Register my household' : 'Add resident'}</button>}
     </PageHeading>
+    {exportBusy && <p className="field-hint" role="status" aria-live="polite">{exportProgress} The file will download when it is ready.</p>}
     {message && <div className="ops-success"><Check size={16} />{message}</div>}
     {errorMessage && <ErrorNotice message={errorMessage} />}
+    {focusError && <p className="account-security-error" role="status">{focusError}</p>}
     {role === 'resident' && ownResident && <section className="ops-panel resident-correction-panel">
       <div className="ops-panel-heading"><div><h2>Request a profile correction</h2><p>Changes are sent to authorized barangay staff. Your official record changes only after approval.</p></div><UserRoundPen size={19} /></div>
       {ownPendingProfileChanges.isPending ? <LoadingNotice compact /> : ownPendingProfileChanges.error ? <ErrorNotice message="Your pending request status could not be checked. Refresh before submitting another correction." /> : (ownPendingProfileChanges.data?.totalCount ?? 0) > 0 ? <p className="field-hint">You already have a pending request. You can submit another after staff review.</p> : <form className="ops-form" onSubmit={(event) => void submitCorrection(event)}>
@@ -224,7 +244,7 @@ export function ResidentsPage() {
           request.proposed_last_name && `Last name: ${request.proposed_last_name}`,
           request.proposed_phone && `Phone: ${request.proposed_phone}`,
         ].filter(Boolean).join(' · ')
-        return <li key={request.id}><span><strong>{request.status === 'pending' ? 'Awaiting review' : request.status === 'approved' ? 'Approved' : request.status === 'cancelled' ? 'Withdrawn' : 'Declined'}</strong><small>{new Date(request.created_at).toLocaleDateString()}</small><small className="resident-correction-proposal">{proposedChanges}</small>{request.request_note && <small>Note: {request.request_note}</small>}{request.status === 'rejected' && request.review_reason && <small>Review note: {request.review_reason}</small>}</span><div className="row-actions"><StatusPill status={request.status} />{request.status === 'pending' && <button disabled={busy} onClick={() => void cancelCorrection(request.id)}>Withdraw</button>}</div></li>
+        return <li id={`resident-correction-${request.id}`} tabIndex={-1} key={request.id}><span><strong>{request.status === 'pending' ? 'Awaiting review' : request.status === 'approved' ? 'Approved' : request.status === 'cancelled' ? 'Withdrawn' : 'Declined'}</strong><small>{new Date(request.created_at).toLocaleDateString()}</small><small className="resident-correction-proposal">{proposedChanges}</small>{request.request_note && <small>Note: {request.request_note}</small>}{request.status === 'rejected' && request.review_reason && <small>Review note: {request.review_reason}</small>}</span><div className="row-actions"><StatusPill status={request.status} />{request.status === 'pending' && <button disabled={busy} onClick={() => void cancelCorrection(request.id)}>Withdraw</button>}</div></li>
       })}</ul>{correctionTotalPages > 1 && <nav className="ops-form-actions" aria-label="Your correction request pages"><span className="field-hint">Page {correctionPage + 1} of {correctionTotalPages}</span><div className="finance-review-actions"><button className="button outline" disabled={correctionPage === 0 || profileChanges.isFetching} onClick={() => setCorrectionPage((current) => current - 1)}><ChevronLeft size={15} />Previous</button><button className="button outline" disabled={correctionPage + 1 >= correctionTotalPages || profileChanges.isFetching} onClick={() => setCorrectionPage((current) => current + 1)}>Next<ChevronRight size={15} /></button></div></nav>}</div> : null}
     </section>}
     {canReviewChanges.data && correctionRequests.some((request) => request.status === 'pending') && <section className="ops-panel resident-correction-panel">

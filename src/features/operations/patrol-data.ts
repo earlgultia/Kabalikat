@@ -15,8 +15,14 @@ function client() {
   return supabase
 }
 
-export async function listPatrolShifts(tenantId: string, page: number): Promise<PatrolShiftPage> {
-  const { data, error } = await client().rpc('list_patrol_shifts_page', { p_barangay_id: tenantId, p_page: page, p_page_size: PATROL_SHIFT_PAGE_SIZE })
+export async function listPatrolShifts(tenantId: string, page: number, search: string, status: 'all' | 'scheduled' | 'active' | 'completed' | 'cancelled'): Promise<PatrolShiftPage> {
+  const { data, error } = await client().rpc('list_patrol_shifts_filtered_page', {
+    p_barangay_id: tenantId,
+    p_page: page,
+    p_page_size: PATROL_SHIFT_PAGE_SIZE,
+    p_search: search.trim().slice(0, 100) || null,
+    p_status: status,
+  })
   if (error) throw new Error(error.message)
   const rows = (data ?? []) as Array<PatrolShift & { total_count: number }>
   return { rows, totalCount: Number(rows[0]?.total_count ?? 0) }

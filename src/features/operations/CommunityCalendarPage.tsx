@@ -13,6 +13,7 @@ export function CommunityCalendarPage() {
   const [source, setSource] = useState<'all' | CommunityCalendarItem['source']>('all')
   const [page, setPage] = useState(0)
   const [exportBusy, setExportBusy] = useState(false)
+  const [exportProgress, setExportProgress] = useState('')
   const [exportError, setExportError] = useState('')
   const events = useQuery({
     queryKey: ['community-calendar', barangayId, page, search, source],
@@ -27,7 +28,8 @@ export function CommunityCalendarPage() {
     setExportBusy(true)
     setExportError('')
     try {
-    const exportEvents = await listAllCommunityEvents(barangayId, search, source)
+    const exportEvents = await listAllCommunityEvents(barangayId, search, source, setExportProgress)
+    setExportProgress('Preparing calendar download…')
     const encoder = new TextEncoder()
     const escapeText = (value: string) => value.replace(/\\/g, '\\\\').replace(/\r\n|\r|\n/g, '\\n').replace(/,/g, '\\,').replace(/;/g, '\\;')
     const foldLine = (line: string) => {
@@ -78,6 +80,7 @@ export function CommunityCalendarPage() {
       setExportError(error instanceof Error ? error.message : 'Unable to download the community calendar.')
     } finally {
       setExportBusy(false)
+      setExportProgress('')
     }
   }
 
@@ -95,6 +98,7 @@ export function CommunityCalendarPage() {
     {events.isPending && barangayId && <LoadingNotice />}
     {events.error && <ErrorNotice message={events.error.message} onRetry={() => void events.refetch()} retrying={events.isFetching} />}
     {exportError && <ErrorNotice message={exportError} />}
+    {exportProgress && <p className="field-hint" role="status" aria-live="polite">{exportProgress}</p>}
     {!events.isPending && !events.error && events.data?.total === 0 && <div className="ops-empty"><CalendarDays size={22} /><strong>{search || source !== 'all' ? 'No matching events' : 'No upcoming community events'}</strong><p>{search || source !== 'all' ? 'Try another event name, location, or event type.' : 'Published SK programs and health outreach schedules will appear here.'}</p></div>}
     <div className="community-calendar-list">{visibleEvents.map((event) => <article className="ops-panel community-calendar-card" key={`${event.source}-${event.id}`}>
       <header><span className={`community-calendar-type ${event.source}`}>{event.source === 'sk' ? <CalendarDays size={15} /> : <CalendarHeart size={15} />}{event.source === 'sk' ? 'SK program' : 'Health outreach'}</span><time dateTime={event.starts_at}>{formatDateTime(event.starts_at)}</time></header>

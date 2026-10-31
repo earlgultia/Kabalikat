@@ -1,10 +1,10 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
-import { Check, MessageSquare, Send, ShieldAlert } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, MessageSquare, Send, ShieldAlert } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import { hasPermission } from './data'
-import { listCommunityFeedback, listCommunityFeedbackEvents, submitCommunityFeedback, updateCommunityFeedback, type CommunityFeedbackStatus } from './feedback-data'
+import { COMMUNITY_FEEDBACK_HISTORY_PAGE_SIZE, findCommunityFeedbackPage, listCommunityFeedback, listCommunityFeedbackEventPage, submitCommunityFeedback, updateCommunityFeedback, type CommunityFeedbackStatus } from './feedback-data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 
 const feedbackSchema = z.object({
@@ -13,7 +13,7 @@ const feedbackSchema = z.object({
   message: z.string().trim().min(10).max(3000),
 })
 
-export function CommunityFeedbackPage() {
+export function CommunityFeedbackPage({ focusId, onFocusHandled }: { focusId?: string; onFocusHandled?: () => void } = {}) {
   const { membership } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
   const isResident = membership?.role?.key === 'resident'
@@ -30,28 +30,42 @@ export function CommunityFeedbackPage() {
     enabled: Boolean(tenantId),
   })
   const feedbackItems = feedback.data?.pages.flat() ?? []
-  const feedbackIds = feedbackItems.map((item) => item.id)
-  const activity = useQuery({
-    queryKey: ['community-feedback-events',tenantId,feedbackIds],
-    queryFn: () => listCommunityFeedbackEvents(tenantId,feedbackIds),
-    enabled: Boolean(tenantId && feedbackIds.length),
-  })
+  const feedbackPageCount = feedback.data?.pages.length ?? 0
+  const fetchNextFeedbackPage = feedback.fetchNextPage
+  const isFetchingFeedbackPage = feedback.isFetchingNextPage
   const [formOpen,setFormOpen] = useState(false)
   const [busy,setBusy] = useState(false)
   const [error,setError] = useState('')
   const [message,setMessage] = useState('')
+  const [focusPage,setFocusPage] = useState<number | null>(null)
+  const [focusError,setFocusError] = useState('')
+  useEffect(() => {
+    setFocusPage(null)
+    if (!focusId || !tenantId) return
+    let active = true
+    setStatusFilter('all'); setSearch(''); setSearchInput(''); setFocusError('')
+    void findCommunityFeedbackPage(tenantId, focusId).then((page) => {
+      if (!active) return
+      if (page === null) { setFocusError('This feedback item is no longer available to your account.'); onFocusHandled?.(); return }
+      setFocusPage(page)
+    }).catch(() => { if (active) { setFocusError('The feedback item could not be opened.'); onFocusHandled?.() } })
+    return () => { active = false }
+  }, [focusId, tenantId, onFocusHandled])
+  useEffect(() => {
+    if (focusPage === null || isFetchingFeedbackPage || feedbackPageCount > focusPage) return
+    void fetchNextFeedbackPage()
+  }, [focusPage, feedbackPageCount, isFetchingFeedbackPage, fetchNextFeedbackPage])
+  useEffect(() => {
+    if (!focusId || focusPage === null || (feedback.data?.pages.length ?? 0) <= focusPage) return
+    const target = document.getElementById(`community-feedback-${focusId}`)
+    if (target) { target.scrollIntoView({ behavior: 'smooth', block: 'center' }); target.focus({ preventScroll: true }); onFocusHandled?.() }
+  }, [focusId, focusPage, feedback.data, onFocusHandled])
 
   async function refresh() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['community-feedback',tenantId] }),
-      queryClient.invalidateQueries({ queryKey: ['community-feedback-events',tenantId] }),
+      queryClient.invalidateQueries({ queryKey: ['community-feedback-history',tenantId] }),
     ])
-  }
-  const activityByFeedback = new Map<string, NonNullable<typeof activity.data>>()
-  for (const event of activity.data ?? []) {
-    const events = activityByFeedback.get(event.feedback_id) ?? []
-    events.push(event)
-    activityByFeedback.set(event.feedback_id, events)
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -99,6 +113,7 @@ export function CommunityFeedbackPage() {
     {Boolean(tenantId) && canManage.isPending && <LoadingNotice compact />}
     {canManage.error && <ErrorNotice message="Feedback review access could not be checked. Residents can still view and submit their own feedback; staff review controls are hidden until access can be verified." />}
     {message && <div className="ops-success"><Check size={16} />{message}</div>}{error && <ErrorNotice message={error} />}
+    {focusError && <p className="account-security-error" role="status">{focusError}</p>}
     {formOpen && isResident && <form className="ops-panel ops-form" onSubmit={(event) => void submit(event)}><div className="ops-panel-heading"><div><h2>Send feedback</h2><p>Your account stays private to the designated barangay reviewers.</p></div><MessageSquare size={19} /></div>
       <div className="ops-form-grid"><label>Topic<select name="category"><option value="service">Barangay service</option><option value="suggestion">Suggestion</option><option value="accessibility">Accessibility</option><option value="other">Other</option></select></label>
         <label className="span-two">Subject<input name="subject" required minLength={3} maxLength={160} /></label>
@@ -110,10 +125,10 @@ export function CommunityFeedbackPage() {
       <button className="button outline" type="submit">Search</button>{search && <button className="text-action" type="button" onClick={() => { setSearch(''); setSearchInput('') }}>Clear search</button>}
     </form>
     <div className="community-feedback-filter"><label htmlFor="feedback-status-filter">Show feedback</label><select id="feedback-status-filter" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as CommunityFeedbackStatus | 'all')}><option value="all">All statuses</option><option value="submitted">Submitted</option><option value="in_review">In review</option><option value="responded">Responded</option><option value="closed">Closed</option></select></div>
-    {!tenantId ? null : feedback.isPending ? <LoadingNotice /> : feedback.error ? <ErrorNotice message={feedback.error.message} /> : feedbackItems.length ? <><div className="community-feedback-list">{feedbackItems.map((item) => <article className="ops-panel community-feedback-card" key={item.id}>
+    {!tenantId ? null : feedback.isPending ? <LoadingNotice /> : feedback.error ? <ErrorNotice message={feedback.error.message} /> : feedbackItems.length ? <><div className="community-feedback-list">{feedbackItems.map((item) => <article className="ops-panel community-feedback-card" id={`community-feedback-${item.id}`} tabIndex={-1} key={item.id}>
       <header><div><StatusPill status={item.status} /><span>{item.category.replaceAll('_',' ')}</span></div><time dateTime={item.created_at}>{new Date(item.created_at).toLocaleString()}</time></header>
       <small className="community-feedback-reference">Feedback ref {item.id.toUpperCase()}</small><h2>{item.subject}</h2><p className="community-feedback-message">{item.message}</p>
-      {(activityByFeedback.get(item.id)?.length ?? 0) > 0 && <details className="community-feedback-history"><summary>Activity history ({activityByFeedback.get(item.id)?.length})</summary><ol>{activityByFeedback.get(item.id)?.map((event) => <li key={event.id}><span>{event.action === 'review_started' ? 'Review started' : event.action === 'responded' ? 'Response sent' : event.action === 'closed' ? 'Feedback closed' : 'Feedback submitted'}</span><time dateTime={event.created_at}>{new Date(event.created_at).toLocaleString()}</time></li>)}</ol></details>}
+      <FeedbackHistory tenantId={tenantId} feedbackId={item.id} />
       {item.staff_response && <div className="community-feedback-response"><strong>Barangay office response</strong><p>{item.staff_response}</p>{item.responded_at && <time dateTime={item.responded_at}>{new Date(item.responded_at).toLocaleString()}</time>}</div>}
       {canManage.data && <div className="community-feedback-actions">
         {item.status === 'submitted' && <button className="button outline" disabled={busy} onClick={() => void changeStatus(item.id,'in_review')}>Start review</button>}
@@ -122,4 +137,21 @@ export function CommunityFeedbackPage() {
       </div>}
     </article>)}</div>{feedback.hasNextPage && <button className="button outline feedback-load-more" disabled={feedback.isFetchingNextPage} onClick={() => void feedback.fetchNextPage()}>{feedback.isFetchingNextPage ? 'Loading…' : 'Load older feedback'}</button>}</> : <EmptyNotice title={emptyTitle} detail={emptyDetail} />}
   </section>
+}
+
+function FeedbackHistory({ tenantId, feedbackId }: { tenantId: string; feedbackId: string }) {
+  const [open, setOpen] = useState(false)
+  const [page, setPage] = useState(0)
+  const history = useQuery({
+    queryKey: ['community-feedback-history', tenantId, feedbackId, page],
+    queryFn: () => listCommunityFeedbackEventPage(tenantId, feedbackId, page),
+    enabled: Boolean(open && tenantId && feedbackId),
+  })
+  return <details className="community-feedback-history" onToggle={(event) => setOpen(event.currentTarget.open)}>
+    <summary>Activity history{history.data ? ` (${history.data.total})` : ''}</summary>
+    {open && <>
+      {history.isPending ? <LoadingNotice compact /> : history.error ? <ErrorNotice message="Feedback activity could not be loaded." onRetry={() => void history.refetch()} retrying={history.isFetching} /> : history.data?.events.length ? <ol>{history.data.events.map((event) => <li key={event.id}><span>{event.action === 'review_started' ? 'Review started' : event.action === 'responded' ? 'Response sent' : event.action === 'closed' ? 'Feedback closed' : 'Feedback submitted'}</span><time dateTime={event.created_at}>{new Date(event.created_at).toLocaleString()}</time></li>)}</ol> : <p className="field-hint">No activity has been recorded.</p>}
+      {history.data && history.data.total > COMMUNITY_FEEDBACK_HISTORY_PAGE_SIZE && <nav className="ops-form-actions" aria-label="Feedback history pages"><button type="button" className="button outline" disabled={page === 0 || history.isFetching} onClick={() => setPage((current) => Math.max(0, current - 1))}><ChevronLeft size={15} />Previous</button><span className="field-hint">Page {page + 1} of {Math.ceil(history.data.total / COMMUNITY_FEEDBACK_HISTORY_PAGE_SIZE)}</span><button type="button" className="button outline" disabled={(page + 1) * COMMUNITY_FEEDBACK_HISTORY_PAGE_SIZE >= history.data.total || history.isFetching} onClick={() => setPage((current) => current + 1)}>Next<ChevronRight size={15} /></button></nav>}
+    </>}
+  </details>
 }

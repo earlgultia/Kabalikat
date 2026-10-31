@@ -1,12 +1,12 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent, type SyntheticEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
 import { Check, ChevronLeft, ChevronRight, FileText, History, ListChecks, Search, Send, Settings2 } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import {
-  createDocumentRequest, createDocumentType, hasPermission, listDocumentRequestActivity, listDocumentRequestsPage, listDocumentTypeActivity, listDocumentTypes, revokeIssuedDocument,
+  createDocumentRequest, createDocumentType, findDocumentRequestPage, hasPermission, listDocumentRequestActivity, listDocumentRequestsPage, listDocumentTypeActivity, listDocumentTypes, revokeIssuedDocument,
   listResidents, listResidentsPage, resubmitDocumentRequest, transitionDocumentRequest, updateDocumentType,
-  type DocumentRequestRow, type DocumentTypeRow, type ResidentRow, DOCUMENT_REQUEST_PAGE_SIZE, RESIDENT_PAGE_SIZE,
+  type DocumentRequestRow, type DocumentTypeRow, type ResidentRow, DOCUMENT_REQUEST_PAGE_SIZE, DOCUMENT_TYPE_ACTIVITY_PAGE_SIZE, RESIDENT_PAGE_SIZE,
 } from './data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 
@@ -59,7 +59,7 @@ function DocumentTypeEditor({ item, busy, onSave, onCancel }: {
   </form>
 }
 
-export function DocumentsPage() {
+export function DocumentsPage({ focusId, onFocusHandled }: { focusId?: string; onFocusHandled?: () => void } = {}) {
   const { membership, user } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
   const isResident = membership?.role?.key === 'resident'
@@ -68,6 +68,8 @@ export function DocumentsPage() {
   const [manageTypesOpen, setManageTypesOpen] = useState(false)
   const [createTypeOpen, setCreateTypeOpen] = useState(false)
   const [editTypeId, setEditTypeId] = useState<string | null>(null)
+  const [typeActivityOpen, setTypeActivityOpen] = useState(false)
+  const [typeActivityPage, setTypeActivityPage] = useState(0)
   const [selectedTypeId, setSelectedTypeId] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [requestSearch, setRequestSearch] = useState('')
@@ -80,6 +82,18 @@ export function DocumentsPage() {
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [focusError, setFocusError] = useState('')
+  useEffect(() => {
+    if (!focusId || !tenantId) return
+    let active = true
+    setRequestSearch(''); setDebouncedRequestSearch(''); setStatusFilter('all'); setFocusError('')
+    void findDocumentRequestPage(tenantId, focusId).then((targetPage) => {
+      if (!active) return
+      if (targetPage === null) { setFocusError('This document request is no longer available to your account.'); onFocusHandled?.(); return }
+      setRequestPage(targetPage)
+    }).catch(() => { if (active) { setFocusError('The document request could not be opened.'); onFocusHandled?.() } })
+    return () => { active = false }
+  }, [focusId, tenantId, onFocusHandled])
   useEffect(() => {
     const timeout = window.setTimeout(() => { setDebouncedRequestSearch(requestSearch); setRequestPage(0) }, 250)
     return () => window.clearTimeout(timeout)
@@ -89,6 +103,11 @@ export function DocumentsPage() {
     queryFn: () => listDocumentRequestsPage(tenantId, requestPage, debouncedRequestSearch, statusFilter),
     enabled: Boolean(tenantId),
   })
+  useEffect(() => {
+    if (!focusId || requests.isPending) return
+    const target = document.getElementById(`document-request-${focusId}`)
+    if (target) { target.scrollIntoView({ behavior: 'smooth', block: 'center' }); target.focus({ preventScroll: true }); onFocusHandled?.() }
+  }, [focusId, requests.isPending, requests.data, onFocusHandled])
   const canReadRequests = useQuery({ queryKey: ['permission', tenantId, 'document.request.read'], queryFn: () => hasPermission(tenantId, 'document.request.read'), enabled: Boolean(tenantId) })
   const visibleRequestIds = requests.data?.requests.map((request) => request.id) ?? []
   const activity = useQuery({
@@ -111,7 +130,8 @@ export function DocumentsPage() {
   const canReview = useQuery({ queryKey: ['permission', tenantId, 'document.request.review'], queryFn: () => hasPermission(tenantId, 'document.request.review'), enabled: Boolean(tenantId) })
   const canIssue = useQuery({ queryKey: ['permission', tenantId, 'document.issue'], queryFn: () => hasPermission(tenantId, 'document.issue'), enabled: Boolean(tenantId) })
   const canManageTypes = useQuery({ queryKey: ['permission', tenantId, 'document.type.manage'], queryFn: () => hasPermission(tenantId, 'document.type.manage'), enabled: Boolean(tenantId) })
-  const typeActivity = useQuery({ queryKey: ['document-type-activity', tenantId], queryFn: () => listDocumentTypeActivity(tenantId), enabled: Boolean(tenantId && canManageTypes.data === true) })
+  const typeActivity = useQuery({ queryKey: ['document-type-activity', tenantId, typeActivityPage], queryFn: () => listDocumentTypeActivity(tenantId, typeActivityPage), enabled: Boolean(tenantId && canManageTypes.data === true && typeActivityOpen) })
+  const typeActivityTotalPages = Math.ceil((typeActivity.data?.totalCount ?? 0) / DOCUMENT_TYPE_ACTIVITY_PAGE_SIZE)
   const enabledTypes = types.data?.filter((type) => type.public_request_enabled) ?? []
   const selectedType = enabledTypes.find((type) => type.id === selectedTypeId)
 
@@ -183,6 +203,8 @@ export function DocumentsPage() {
         setMessage('Document type added.')
       }
       await queryClient.invalidateQueries({ queryKey: ['document-types', tenantId] })
+      await queryClient.invalidateQueries({ queryKey: ['document-type-activity', tenantId] })
+      setTypeActivityPage(0)
       setCreateTypeOpen(false); setEditTypeId(null)
     } finally { setBusy(false) }
   }
@@ -240,11 +262,12 @@ export function DocumentsPage() {
       <div className="ops-panel-heading"><div><h2>Document types and requirements</h2><p>Manage the list residents can request and the instructions they see before applying.</p></div><ListChecks size={19} /></div>
       {!createTypeOpen && !editTypeId && <button className="button outline" onClick={() => setCreateTypeOpen(true)}>Add document type</button>}
       {createTypeOpen && <DocumentTypeEditor key="new-document-type" busy={busy} onSave={saveDocumentType} onCancel={() => setCreateTypeOpen(false)} />}
-      <details className="document-type-audit"><summary>Configuration change history</summary>
-        {typeActivity.isPending ? <LoadingNotice compact /> : typeActivity.error ? <ErrorNotice message={typeActivity.error.message} /> : typeActivity.data?.length ? <ol>{typeActivity.data.map((entry) => <li key={entry.activity_id}>
+      <details className="document-type-audit" onToggle={(event: SyntheticEvent<HTMLDetailsElement>) => setTypeActivityOpen(event.currentTarget.open)}><summary>Configuration change history{typeActivity.data ? ` (${typeActivity.data.totalCount})` : ''}</summary>
+        {typeActivity.isPending ? <LoadingNotice compact /> : typeActivity.error ? <ErrorNotice message={typeActivity.error.message} /> : typeActivity.data?.rows.length ? <ol>{typeActivity.data.rows.map((entry) => <li key={entry.activity_id}>
           <div><strong>{entry.document_type_name} · {entry.action}</strong><small>{entry.actor_name} · {new Date(entry.created_at).toLocaleString()}</small></div>
           <details><summary>View recorded values</summary><div className="document-type-audit-values">{entry.previous_values && <div><strong>Before</strong><pre>{JSON.stringify(entry.previous_values, null, 2)}</pre></div>}<div><strong>After</strong><pre>{JSON.stringify(entry.new_values, null, 2)}</pre></div></div></details>
         </li>)}</ol> : <p className="field-hint">No document type changes have been recorded yet.</p>}
+        {typeActivityTotalPages > 1 && <nav className="ops-form-actions" aria-label="Document type history pages"><span className="field-hint">Page {typeActivityPage + 1} of {typeActivityTotalPages} · {typeActivity.data?.totalCount.toLocaleString()} changes</span><div className="finance-review-actions"><button type="button" className="button outline" disabled={typeActivityPage === 0 || typeActivity.isFetching} onClick={() => setTypeActivityPage((current) => current - 1)}><ChevronLeft size={15} />Previous</button><button type="button" className="button outline" disabled={typeActivityPage + 1 >= typeActivityTotalPages || typeActivity.isFetching} onClick={() => setTypeActivityPage((current) => current + 1)}>Next<ChevronRight size={15} /></button></div></nav>}
       </details>
       {types.error && <ErrorNotice message={types.error.message} />}
       {types.isPending ? <LoadingNotice compact /> : <div className="document-type-list">{(types.data ?? []).map((type) => <article key={type.id}>
@@ -256,6 +279,7 @@ export function DocumentsPage() {
     </section>}
     {types.error && <ErrorNotice message={types.error.message} />}
     <div className="ops-section-title"><h2>Requests</h2><p>Residents see only their own private requests; authorized staff see their tenant queue.</p></div>
+    {focusError && <p className="account-security-error" role="status">{focusError}</p>}
     {tenantId && <div className="incident-filters"><label>Search requests<input type="search" value={requestSearch} onChange={(event) => setRequestSearch(event.target.value)} placeholder="Reference, resident, purpose, or document" /></label><label>Filter requests by status<select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setRequestPage(0) }}><option value="all">All requests</option>{['pending', 'under_review', 'awaiting_approval', 'approved', 'rejected', 'issued', 'released', 'cancelled'].map((status) => <option value={status} key={status}>{status.replaceAll('_', ' ')}</option>)}</select></label></div>}
     {!tenantId ? <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to view document services and requests." /> : requests.isPending ? <LoadingNotice /> : requests.error ? <ErrorNotice message={requests.error.message} /> : requests.data?.total ? visibleRequests.length ?
       <div className="ops-request-list">{visibleRequests.map((request) => {
@@ -273,7 +297,7 @@ export function DocumentsPage() {
         }
         const actions = (isStaff ? transitionActions[request.status] ?? [] : [])
           .filter((action) => action.next === 'issued' || action.next === 'released' ? canIssue.data : canReview.data)
-        return <article className="ops-request-card" key={request.id}>
+        return <article className="ops-request-card" id={`document-request-${request.id}`} tabIndex={-1} key={request.id}>
           <div className="request-main"><div className="request-icon"><FileText size={19} /></div><div><strong>{request.document_type?.name ?? 'Barangay document'}</strong><p>{request.resident ? request.resident.first_name + ' ' + request.resident.last_name + ' · ' : ''}{request.purpose}</p><small>Ref {request.reference_number} · {new Date(request.submitted_at).toLocaleDateString()}</small>{request.status === 'rejected' && request.rejection_reason && <small className="rejection-detail">Reason: {request.rejection_reason}</small>}{request.issued && <div className="issued-document-meta"><strong>Issuance {request.issued.issuance_number}</strong><span>Recorded {new Date(request.issued.issued_at).toLocaleString()}</span>{request.issued.expires_at && <span>Expires {new Date(request.issued.expires_at).toLocaleDateString()}</span>}<span>Verification status: {request.issued.verification_status}</span>{request.issued.events?.map((event) => <span className="rejection-detail" key={event.id}>Revoked {new Date(event.created_at).toLocaleString()}: {event.reason}</span>)}</div>}</div></div>
           {request.resident?.user_id === user?.id && residentGuidance[request.status] && <p className="resident-request-guidance">{residentGuidance[request.status]}</p>}
           <div className="request-status"><StatusPill status={request.status} />{request.resident?.user_id === user?.id && <button className="text-action" onClick={() => downloadRequestReceipt(request)}>Download receipt</button>}{actions.map((action) => <button className="text-action" key={action.next} disabled={busy} onClick={() => void transition(request.id, action.next)}>{action.label}</button>)}{canIssue.data && request.issued?.verification_status === 'valid' && <button className="text-action danger-action" disabled={busy} onClick={() => void revoke(request.id)}>Revoke issuance</button>}{request.status === 'pending' && request.resident?.user_id === user?.id && <button className="text-action" disabled={busy} onClick={() => void transition(request.id, 'cancelled')}>Withdraw request</button>}{request.status === 'rejected' && request.resident?.user_id === user?.id && <button className="text-action" disabled={busy} onClick={() => void resubmit(request.id, request.purpose)}>Resubmit</button>}</div>
