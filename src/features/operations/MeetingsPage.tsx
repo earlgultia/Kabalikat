@@ -1,7 +1,7 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
-import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Download, Pencil, Search, X } from 'lucide-react'
+import { CalendarDays, CalendarPlus, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Download, Pencil, Search, X } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import {
   createMeeting, hasPermission, listAttendance, listMeetingAttendeeMembers, listMeetingAttendees, listMeetingMemberPage, listMeetingPage, updateMeetingDetails,
@@ -26,7 +26,7 @@ const meetingSchema = z.object({
   agenda: z.string().max(5000).optional(),
 })
 
-export function MeetingsPage() {
+export function MeetingsPage({ focusId, focusPage, onFocusHandled }: { focusId?: string; focusPage?: number; onFocusHandled?: () => void }) {
   const { membership, user } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
   const queryClient = useQueryClient()
@@ -37,6 +37,7 @@ export function MeetingsPage() {
   const [selectedAttendees, setSelectedAttendees] = useState<string[]>([])
   const [memberPage, setMemberPage] = useState(0)
   const [memberSearch, setMemberSearch] = useState('')
+  const skipNextMeetingSearchReset = useRef(false)
   const [open, setOpen] = useState(false)
   const [selectedMeeting, setSelectedMeeting] = useState('')
   const [attendanceSearch, setAttendanceSearch] = useState('')
@@ -56,10 +57,27 @@ export function MeetingsPage() {
     setMemberSearch('')
   }, [tenantId])
   useEffect(() => {
-    const timeout = window.setTimeout(() => { setMeetingSearch(meetingSearchInput.trim()); setPage(0) }, 250)
+    const timeout = window.setTimeout(() => {
+      setMeetingSearch(meetingSearchInput.trim())
+      if (skipNextMeetingSearchReset.current) skipNextMeetingSearchReset.current = false
+      else setPage(0)
+    }, 250)
     return () => window.clearTimeout(timeout)
   }, [meetingSearchInput])
   const meetings = useQuery({ queryKey: ['meetings', tenantId, page, meetingSearch, meetingStatus], queryFn: () => listMeetingPage(tenantId, page, meetingSearch, meetingStatus), enabled: Boolean(tenantId) })
+  useEffect(() => {
+    if (!focusId) return
+    if (meetingSearchInput) skipNextMeetingSearchReset.current = true
+    setMeetingSearchInput(''); setMeetingSearch(''); setMeetingStatus('all')
+    setPage(Math.max(0, focusPage ?? 0)); setSelectedMeeting(focusId); setAttendanceSearch('')
+  }, [focusId, focusPage, meetingSearchInput])
+  useEffect(() => {
+    if (!focusId || !meetings.data?.meetings.some((meeting) => meeting.id === focusId)) return
+    const target = document.getElementById(`meeting-card-${focusId}`)
+    if (!target) return
+    target.focus({ preventScroll: true }); target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    onFocusHandled?.()
+  }, [focusId, meetings.data, onFocusHandled])
   useEffect(() => {
     if (!meetings.isPending && !meetings.isError && page > 0 && meetings.data?.meetings.length === 0) setPage((current) => Math.max(0, current - 1))
   }, [meetings.data?.meetings.length, meetings.isError, meetings.isPending, page])
@@ -219,6 +237,39 @@ export function MeetingsPage() {
     return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16)
   }
 
+  function exportMeetingCalendarFile(meeting: { id: string; title: string; location: string; starts_at: string; ends_at: string | null; agenda: string }) {
+    const escapeIcsText = (value: string) => value.replaceAll('\\', '\\\\').replace(/\r?\n/g, '\\n').replaceAll(',', '\\,').replaceAll(';', '\\;')
+    const formatUtc = (value: Date) => value.toISOString().replaceAll('-', '').replaceAll(':', '').replace(/\.\d{3}Z$/, 'Z')
+    const encoder = new TextEncoder()
+    const foldLine = (line: string) => {
+      const output: string[] = []
+      let current = ''
+      let byteLength = 0
+      for (const character of line) {
+        const size = encoder.encode(character).length
+        if (byteLength + size > 75) { output.push(current); current = ' '; byteLength = 1 }
+        current += character; byteLength += size
+      }
+      output.push(current)
+      return output.join('\r\n')
+    }
+    const startsAt = new Date(meeting.starts_at)
+    const endsAt = meeting.ends_at ? new Date(meeting.ends_at) : new Date(startsAt.getTime() + 60 * 60 * 1000)
+    const description = meeting.agenda ? `DESCRIPTION:${escapeIcsText(meeting.agenda)}` : ''
+    const lines = [
+      'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//KABALIKAT//Community Meeting//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
+      'BEGIN:VEVENT', `UID:${meeting.id}@kabalikat`, `DTSTAMP:${formatUtc(new Date())}`,
+      `DTSTART:${formatUtc(startsAt)}`, `DTEND:${formatUtc(endsAt)}`, `SUMMARY:${escapeIcsText(meeting.title)}`,
+      `LOCATION:${escapeIcsText(meeting.location)}`, ...(description ? [description] : []), 'END:VEVENT', 'END:VCALENDAR', '',
+    ]
+    const blobUrl = URL.createObjectURL(new Blob([lines.map(foldLine).join('\r\n')], { type: 'text/calendar;charset=utf-8' }))
+    const link = document.createElement('a')
+    link.href = blobUrl
+    link.download = `${meeting.title.trim().replace(/[^\p{L}\p{N}-]+/gu, '-').replace(/^-|-$/g, '').slice(0, 60) || 'meeting'}.ics`
+    link.click()
+    window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1_000)
+  }
+
   function exportAttendanceCSV(meetingTitle: string) {
     const recordsByUser = new Map((attendance.data ?? []).map((entry) => [entry.user_id, entry]))
     const memberByUser = new Map((members.data ?? []).map((entry) => [entry.user_id, entry]))
@@ -268,11 +319,12 @@ export function MeetingsPage() {
     <div className="ops-section-title"><h2>Scheduled meetings</h2><p>Meeting lists and attendance are tenant- and role-scoped.</p></div>
     {tenantId && <div className="incident-filters"><label className="archive-search"><Search size={16} /><input type="search" aria-label="Search meetings" maxLength={100} placeholder="Search title, location, or agenda" value={meetingSearchInput} onChange={(event) => setMeetingSearchInput(event.target.value)} /></label><label>Meeting status<select value={meetingStatus} onChange={(event) => { setMeetingStatus(event.target.value as typeof meetingStatus); setPage(0) }}><option value="all">All statuses</option><option value="draft">Draft</option><option value="scheduled">Scheduled</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></label></div>}
     {!tenantId ? null : meetings.isPending ? <LoadingNotice /> : meetings.error ? <ErrorNotice message={meetings.error.message} onRetry={() => void meetings.refetch()} retrying={meetings.isFetching} /> : meetings.data?.total ? meetings.data.meetings.length ?
-      <div className="ops-meeting-list">{meetings.data.meetings.map((meeting) => <article className="ops-panel meeting-card" key={meeting.id}>
+      <div className="ops-meeting-list">{meetings.data.meetings.map((meeting) => <article id={`meeting-card-${meeting.id}`} tabIndex={-1} className="ops-panel meeting-card" key={meeting.id}>
         <div className="meeting-card-top"><div className="request-icon"><CalendarDays size={18} /></div><div className="meeting-title"><h2>{meeting.title}</h2><p>{meeting.location} · {formatDateTime(meeting.starts_at)}</p></div><StatusPill status={meeting.status} /></div>
         {meeting.agenda && <div className="meeting-agenda"><strong><ClipboardList size={14} />Agenda</strong><p>{meeting.agenda}</p></div>}
         <div className="meeting-actions"><button className="button outline" onClick={() => { setAttendanceSearch(''); setSelectedMeeting((current) => current === meeting.id ? '' : meeting.id) }}>{selectedMeeting === meeting.id ? 'Hide meeting details' : 'View attendance & records'}</button>
           {meeting.status === 'scheduled' && <button className="button primary" onClick={() => void checkIn(meeting.id)}>I’m attending</button>}
+          {meeting.status === 'scheduled' && <button className="button outline" onClick={() => exportMeetingCalendarFile(meeting)}><CalendarPlus size={15} />Add to calendar</button>}
           {canManage.data && (meeting.status === 'scheduled' || meeting.status === 'draft') && <button className="button outline" onClick={() => setEditingMeeting((current) => current === meeting.id ? '' : meeting.id)}>{editingMeeting === meeting.id ? <><X size={15} />Close editor</> : <><Pencil size={15} />Edit meeting</>}</button>}
           {canManage.data && meeting.status === 'scheduled' && <><button className="text-action" onClick={() => void setStatus(meeting.id, 'completed')}>Complete</button><button className="text-action danger-action" onClick={() => void setStatus(meeting.id, 'cancelled')}>Cancel</button></>}
         </div>

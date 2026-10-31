@@ -27,7 +27,7 @@ export function AccountSecurityDialog({ email, userId, tenantId, onClose }: { em
     enabled: Boolean(tenantId),
   })
 
-  async function setNotificationPreference(resourceType: 'announcement' | 'disaster_advisory', enabled: boolean) {
+  async function setNotificationPreference(resourceType: 'announcement' | 'disaster_advisory' | 'meeting_update' | 'health_outreach_update' | 'sk_event_update', enabled: boolean) {
     if (!tenantId) return
     setPreferenceBusy(true); setPreferenceError('')
     try {
@@ -65,13 +65,16 @@ export function AccountSecurityDialog({ email, userId, tenantId, onClose }: { em
           {([
             ['announcement', 'Community announcements', 'New announcements visible to your role.'],
             ['disaster_advisory', 'Disaster advisories', 'New published advisories visible to your role.'],
+            ['meeting_update', 'Meeting updates', 'Schedule changes, completions, and cancellations for meetings you are invited to.'],
+            ['health_outreach_update', 'Health outreach schedule updates', 'Publication, completion, and cancellation alerts for outreach events, including aggregate attendance when completed.'],
+            ['sk_event_update', 'SK event schedule updates', 'Publication, rescheduling, and cancellation notices for community events.'],
           ] as const).map(([resourceType,label,detail]) => {
             const enabled = preferences.data?.find((item) => item.resource_type === resourceType)?.enabled ?? true
             return <label className="notification-preference" key={resourceType}><span><strong>{label}</strong><small>{detail}</small></span><input type="checkbox" checked={enabled} disabled={preferenceBusy || preferences.isFetching} onChange={(event) => void setNotificationPreference(resourceType,event.target.checked)} /></label>
           })}
         </div>}
         {preferenceError && <p className="account-security-error" role="alert">{preferenceError}</p>}
-        <p className="field-hint">These settings apply only to announcements and disaster advisories. Profile correction, document status, and feedback response alerts stay enabled so you can track your requests. No email or SMS is sent.</p>
+        <p className="field-hint">These settings apply to announcements, advisories, meeting changes, health outreach, and SK event publication or schedule changes. Profile correction, document status, and private review feedback alerts stay enabled so you can track requests. No email or SMS is sent.</p>
       </section>
       <form className="account-security-form" onSubmit={(event) => void changePassword(event)}>
         <label>New password<input name="password" type="password" autoComplete="new-password" minLength={12} maxLength={128} required /><span className="field-hint">At least 12 characters, with uppercase, lowercase, and a number.</span></label>

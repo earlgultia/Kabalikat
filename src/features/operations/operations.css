@@ -74,6 +74,7 @@
 .status-pill { display: inline-flex; align-items: center; border-radius: 999px; padding: 5px 8px; background: #eef2ef; color: #67786d; font-size: 8px; line-height: 1; text-transform: capitalize; white-space: nowrap; }
 .status-published, .status-approved, .status-released, .status-verified, .status-active, .status-present { color: #477653; background: #eaf4e7; }
 .status-pending, .status-under_review, .status-awaiting_approval, .status-scheduled { color: #8b6b34; background: #f8f1df; }
+.status-changes_requested { color: #8b6b34; background: #f8f1df; }
 .status-rejected, .status-cancelled, .status-inactive, .status-archived, .status-absent { color: #9a5c4b; background: #f8ece8; }
 .row-actions { display: flex; gap: 8px; margin-top: 7px; }
 .row-actions button, .text-action { border: 0; background: none; color: #4f7c5a; font-size: 9px; padding: 2px 0; font-weight: 700; }
@@ -752,9 +753,41 @@
 .community-calendar-filters > label { color: #354f4c; display: grid; flex: 1 1 220px; font-size: 11px; font-weight: 700; gap: 5px; }
 .community-calendar-filters input, .community-calendar-filters select { background: #fffefa; border: 1px solid #bfcec8; border-radius: 8px; color: #24353b; font: inherit; min-height: 40px; padding: 8px 10px; width: 100%; }
 .health-outreach-filters { align-items: end; display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0; }
+.health-campaign-editor > label { color: #354f4c; display: grid; font-size: 13px; font-weight: 650; gap: 7px; }
+.health-campaign-editor > label textarea { background: #fffefa; border: 1px solid #bfcec8; border-radius: 8px; color: #24353b; font: inherit; min-height: 104px; padding: 10px 12px; resize: vertical; width: 100%; }
+.health-campaign-editor > label textarea:focus { outline: 2px solid #a7c69b; outline-offset: 1px; }
+.health-campaign-history { display: grid; gap: 10px; margin-top: 14px; }
+.health-campaign-history > .button { justify-self: start; }
+.health-campaign-history-panel { background: #f8faf8; border: 1px solid #e0e9e2; border-radius: 10px; display: grid; gap: 10px; padding: 14px; }
+.health-campaign-history-event { border-bottom: 1px solid #e3ebe5; display: grid; gap: 6px; padding: 4px 0 10px; }
+.health-campaign-history-event:last-of-type { border-bottom: 0; }
+.health-campaign-history-event > div { align-items: baseline; display: flex; flex-wrap: wrap; gap: 4px 10px; justify-content: space-between; }
+.health-campaign-history-event strong { color: #2f5145; font-size: 13px; text-transform: capitalize; }
+.health-campaign-history-event span, .health-campaign-history-event time { color: #64776d; font-size: 12px; }
+.health-campaign-history-event p { color: #40564d; font-size: 13px; line-height: 1.55; margin: 0; white-space: pre-wrap; }
+.health-campaign-focused { border-color: #6c9b78; box-shadow: 0 0 0 3px rgb(108 155 120 / 18%); }
 .health-outreach-filters > label:not(.archive-search) { color: #354f4c; display: grid; flex: 0 1 220px; font-size: 11px; font-weight: 700; gap: 5px; }
 .health-outreach-filters select { background: #fffefa; border: 1px solid #bfcec8; border-radius: 8px; color: #24353b; font: inherit; min-height: 40px; padding: 8px 10px; width: 100%; }
-@media (max-width: 600px) { .health-outreach-filters, .health-outreach-filters > label:not(.archive-search), .health-outreach-filters > .archive-search { width: 100%; min-width: 0; } }
+.health-outreach-summary { display: grid; gap: 12px; grid-template-columns: repeat(5, minmax(0, 1fr)); margin: 14px 0; }
+.sk-event-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.sk-event-reach-grid { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 10px; }
+.sk-event-reach-item { background: #f8faf8; border: 1px solid #e0e9e2; border-radius: 9px; display: grid; gap: 5px; min-width: 0; padding: 11px 12px; }
+.sk-event-reach-item strong { color: #2f5145; font-size: 12px; }
+.sk-event-reach-item span { color: #53696a; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.health-outreach-summary article { display: grid; gap: 8px; min-width: 0; padding: 16px; }
+.health-outreach-summary-action { appearance: none; color: inherit; cursor: pointer; font: inherit; text-align: left; transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease; width: 100%; }
+.health-outreach-summary-action:hover { border-color: #7ca58a; box-shadow: 0 5px 16px rgb(37 79 59 / 10%); transform: translateY(-1px); }
+.health-outreach-summary-action:focus-visible { outline: 3px solid #5e9872; outline-offset: 2px; }
+.health-outreach-summary-action small { color: #51745f; font-size: 11px; font-weight: 650; }
+.health-outreach-summary span { color: #5b7066; font-size: 12px; font-weight: 650; }
+.health-outreach-summary strong { color: #244b3d; font-size: clamp(20px, 3vw, 28px); font-variant-numeric: tabular-nums; }
+.health-attendance-form { align-items: end; flex-wrap: wrap; }
+.health-attendance-form label { color: #354f4c; display: grid; flex: 1 1 220px; font-size: 12px; font-weight: 700; gap: 6px; }
+.health-attendance-form input { background: #fffefa; border: 1px solid #bfcec8; border-radius: 8px; color: #24353b; font: inherit; min-height: 42px; padding: 9px 10px; width: 100%; }
+.health-attendance-form .field-hint { font-weight: 400; }
+@media (max-width: 960px) { .health-outreach-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 600px) { .health-outreach-filters, .health-outreach-filters > label:not(.archive-search), .health-outreach-filters > .archive-search { width: 100%; min-width: 0; } .health-outreach-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .health-outreach-summary article:last-child { grid-column: 1 / -1; } }
+@media (max-width: 520px) { .sk-event-reach-grid { grid-template-columns: 1fr; } }
 .community-calendar-download { min-height: 40px; white-space: nowrap; }
 .community-calendar-search { align-items: center; display: flex !important; gap: 8px !important; }
 .community-calendar-search svg { color: #697a72; flex: none; }

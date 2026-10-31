@@ -29,13 +29,13 @@ function page<Props extends object>(component: ComponentType<Props>, props?: Pro
 
 export type OperationSection = 'residents' | 'invitations' | 'documents' | 'announcements' | 'meetings' | 'archive' | 'finance' | 'committees' | 'projects' | 'referrals' | 'health-outreach' | 'sk-events' | 'sk-projects' | 'sk-accomplishments' | 'incidents' | 'patrols' | 'advisories' | 'community-calendar' | 'feedback' | 'support'
 
-export function OperationsSection({ section, focusId, onFocusHandled }: { section: OperationSection; focusId?: string; onFocusHandled?: () => void }) {
+export function OperationsSection({ section, focusId, focusPage, focusStatus, onFocusHandled }: { section: OperationSection; focusId?: string; focusPage?: number; focusStatus?: 'draft' | 'changes_requested' | 'published' | 'cancelled' | 'completed'; onFocusHandled?: () => void }) {
   switch (section) {
     case 'residents': return page(ResidentsPage, { focusId, onFocusHandled })
     case 'invitations': return page(InvitationsPage)
     case 'documents': return page(DocumentsPage, { focusId, onFocusHandled })
     case 'announcements': return page(AnnouncementsPage, { focusId, onFocusHandled })
-    case 'meetings': return page(MeetingsPage)
+    case 'meetings': return page(MeetingsPage, { focusId, focusPage, onFocusHandled })
     case 'archive': return page(ArchivePage)
     case 'finance': return page(FinancePage)
     case 'committees': return page(CommitteesPage)
@@ -43,8 +43,8 @@ export function OperationsSection({ section, focusId, onFocusHandled }: { sectio
     case 'sk-accomplishments': return page(SkTransparencyPage)
     case 'projects': return page(ProjectsPage)
     case 'referrals': return page(ReferralsPage)
-    case 'health-outreach': return page(HealthOutreachPage)
-    case 'sk-events': return page(SkEventsPage)
+    case 'health-outreach': return page(HealthOutreachPage, { focusId, focusPage, focusStatus, onFocusHandled })
+    case 'sk-events': return page(SkEventsPage, { focusId, focusPage, focusStatus: focusStatus as 'draft' | 'changes_requested' | 'published' | 'completed' | 'cancelled' | undefined, onFocusHandled })
     case 'incidents': return page(IncidentsPage)
     case 'patrols': return page(PatrolPage)
     case 'advisories': return page(DisasterAdvisoriesPage, { focusId, onFocusHandled })
