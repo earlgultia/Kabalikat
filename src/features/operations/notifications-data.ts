@@ -2,7 +2,7 @@ import { supabase } from '../../lib/supabase'
 
 export type CommunityNotification = {
   id: string
-  resource_type: 'announcement' | 'disaster_advisory' | 'resident_profile_change' | 'document_request' | 'community_feedback' | 'meeting_update' | 'health_outreach_cancellation' | 'health_outreach_completion' | 'health_outreach_review' | 'health_outreach_published' | 'health_outreach_review_submission' | 'sk_event_review_submission' | 'sk_event_published' | 'sk_event_review_feedback' | 'sk_event_cancelled' | 'sk_event_rescheduled'
+  resource_type: 'announcement' | 'disaster_advisory' | 'resident_profile_change' | 'document_request' | 'community_feedback' | 'meeting_update' | 'health_outreach_cancellation' | 'health_outreach_completion' | 'health_outreach_review' | 'health_outreach_published' | 'health_outreach_review_submission' | 'health_outreach_rescheduled' | 'sk_event_review_submission' | 'sk_event_published' | 'sk_event_review_feedback' | 'sk_event_cancelled' | 'sk_event_rescheduled' | 'sk_event_completed' | 'incident_assignment' | 'incident_status_change' | 'patrol_shift_assignment' | 'patrol_shift_cancelled' | 'patrol_shift_rescheduled' | 'patrol_shift_started' | 'patrol_shift_completed'
   resource_id: string
   created_at: string
   read_at: string | null
@@ -41,6 +41,13 @@ export type HealthOutreachNotificationDetail = {
   page_number: number
 }
 
+export type HealthOutreachRescheduleDetail = {
+  campaign_id: string; title: string; status: 'published' | 'completed' | 'cancelled'
+  new_location: string; new_starts_at: string; new_ends_at: string
+  previous_location: string; previous_starts_at: string; previous_ends_at: string
+  reason: string; page_number: number
+}
+
 export type HealthOutreachReviewNotificationDetail = {
   event_id: string
   campaign_id: string
@@ -66,6 +73,12 @@ export type SkEventPublicationDetail = {
   event_id: string
   title: string
   status: 'published' | 'completed'
+  page_number: number
+}
+
+export type SkEventCompletionDetail = {
+  event_id: string
+  title: string
   page_number: number
 }
 
@@ -139,6 +152,19 @@ export async function listHealthOutreachUpdateDetails(tenantId: string, campaign
   return details
 }
 
+export async function listHealthOutreachRescheduleDetails(tenantId: string, campaignIds: string[]): Promise<HealthOutreachRescheduleDetail[]> {
+  if (!campaignIds.length) return []
+  const details: HealthOutreachRescheduleDetail[] = []
+  for (let offset = 0; offset < campaignIds.length; offset += 250) {
+    const { data, error } = await client().rpc('list_my_rescheduled_health_outreach_notification_details', {
+      p_barangay_id: tenantId, p_campaign_ids: campaignIds.slice(offset, offset + 250),
+    })
+    if (error) throw new Error(error.message)
+    details.push(...((data ?? []) as HealthOutreachRescheduleDetail[]))
+  }
+  return details
+}
+
 export async function listHealthOutreachReviewDetails(tenantId: string, eventIds: string[]): Promise<HealthOutreachReviewNotificationDetail[]> {
   if (!eventIds.length) return []
   const details: HealthOutreachReviewNotificationDetail[] = []
@@ -191,6 +217,20 @@ export async function listSkEventPublicationDetails(tenantId: string, eventIds: 
     })
     if (error) throw new Error(error.message)
     details.push(...((data ?? []) as SkEventPublicationDetail[]))
+  }
+  return details
+}
+
+export async function listSkEventCompletionDetails(tenantId: string, eventIds: string[]): Promise<SkEventCompletionDetail[]> {
+  if (!eventIds.length) return []
+  const details: SkEventCompletionDetail[] = []
+  for (let offset = 0; offset < eventIds.length; offset += 250) {
+    const { data, error } = await client().rpc('list_my_completed_sk_event_notification_details', {
+      p_barangay_id: tenantId,
+      p_event_ids: eventIds.slice(offset, offset + 250),
+    })
+    if (error) throw new Error(error.message)
+    details.push(...((data ?? []) as SkEventCompletionDetail[]))
   }
   return details
 }

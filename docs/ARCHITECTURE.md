@@ -26,6 +26,8 @@ Inter-barangay referrals use permission-checked RPCs, disclose only the referral
 
 Incident evidence files use short-lived upload intents and a private Storage bucket. RLS limits attachment metadata and downloads to the incident Captain or currently assigned Tanod, and successful uploads appear in incident history.
 
+Patrol assignments create generic in-app notifications for the currently assigned Tanod. The update opens the patrol workspace and reveals no patrol log content in the notification itself.
+
 Captains can add a verified external handoff event to an active incident. The RPC requires a recipient, handoff details, and explicit confirmation, then appends to the incident history. It does not make calls or contact external responders.
 
 Health outreach is an event-scheduling workflow: BHWs submit schedules, Captains independently review them, and published events are visible to active barangay members. It does not keep patient or participant records and is not a clinical system. SK event scheduling follows the same public schedule boundary: SK Chairpersons submit events for Captain review; the feature does not register youth, track attendance, or keep participant records. OCR providers, billing, email/SMS delivery, clinical health workflows and youth registries remain unimplemented.

@@ -1,11 +1,12 @@
 import { useEffect, useState, type FormEvent, type SyntheticEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
-import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Download, Paperclip, Siren, Upload } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Download, FileDown, Paperclip, Siren, Upload } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import { hasPermission } from './data'
-import { addIncidentUpdate, assignIncident, createIncidentEvidenceDownloadUrl, escalateIncident, INCIDENT_HISTORY_PAGE_SIZE, INCIDENT_PAGE_SIZE, listIncidentEvents, listIncidentEvidence, listIncidents, listIncidentSummary, submitIncident, transitionIncident, uploadIncidentEvidence } from './incident-data'
+import { addIncidentUpdate, assignIncident, createIncidentEvidenceDownloadUrl, escalateIncident, findVisibleIncidentPage, INCIDENT_HISTORY_PAGE_SIZE, INCIDENT_PAGE_SIZE, listIncidentBreakdown, listIncidentEvents, listIncidentEvidence, listIncidents, listIncidentSummary, submitIncident, transitionIncident, uploadIncidentEvidence } from './incident-data'
 import { TanodPicker } from './TanodPicker'
+import { IncidentResolutionDialog } from './IncidentResolutionDialog'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 import { formatDateTime } from './format'
 
@@ -31,7 +32,7 @@ function IncidentHistory({ tenantId, incidentId, ownStatusOnly }: { tenantId: st
   </details>
 }
 
-export function IncidentsPage() {
+export function IncidentsPage({ focusId, onFocusHandled }: { focusId?: string; onFocusHandled?: () => void }) {
   const { membership, user } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
   const queryClient = useQueryClient()
@@ -43,31 +44,68 @@ export function IncidentsPage() {
   const [page, setPage] = useState(0)
   const [showForm, setShowForm] = useState(false)
   const [escalationId, setEscalationId] = useState('')
+  const [resolutionRequest, setResolutionRequest] = useState<{ incidentId: string; status: 'resolved' | 'closed' } | null>(null)
+  const [focusReadyId, setFocusReadyId] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [categoryFilter, setCategoryFilter] = useState('all')
+  const [severityFilter, setSeverityFilter] = useState('all')
+  const [assignmentFilter, setAssignmentFilter] = useState<'all' | 'mine' | 'unassigned'>('all')
+  const [activeOnly, setActiveOnly] = useState(false)
+  const [createdAfter, setCreatedAfter] = useState('')
+  const [createdBefore, setCreatedBefore] = useState('')
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [busy, setBusy] = useState(false)
+  const [exportBusy, setExportBusy] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
-  useEffect(() => setPage(0), [tenantId])
+  useEffect(() => { setPage(0); setStatusFilter('all'); setCategoryFilter('all'); setSeverityFilter('all'); setAssignmentFilter('all'); setActiveOnly(false); setSearch(''); setDebouncedSearch(''); setCreatedAfter(''); setCreatedBefore('') }, [tenantId])
   useEffect(() => {
     const timeout = window.setTimeout(() => { setDebouncedSearch(search.trim().slice(0, 100)); setPage(0) }, 250)
     return () => window.clearTimeout(timeout)
-  }, [search, statusFilter, categoryFilter])
+  }, [search, statusFilter, categoryFilter, severityFilter, assignmentFilter, activeOnly, createdAfter, createdBefore])
+  const validDateRange = !createdAfter || !createdBefore || createdAfter <= createdBefore
+  function localDateBound(value: string, nextDay = false) {
+    if (!value) return null
+    const [year, month, day] = value.split('-').map(Number)
+    return new Date(year, month - 1, day + (nextDay ? 1 : 0)).toISOString()
+  }
   const incidents = useQuery({
-    queryKey: ['incidents', tenantId, page, debouncedSearch, statusFilter, categoryFilter],
-    queryFn: () => listIncidents({ tenantId, page, search: debouncedSearch, status: statusFilter, category: categoryFilter }),
-    enabled,
+    queryKey: ['incidents', tenantId, page, debouncedSearch, statusFilter, categoryFilter, severityFilter, assignmentFilter, activeOnly, createdAfter, createdBefore],
+    queryFn: () => listIncidents({ tenantId, page, search: debouncedSearch, status: statusFilter, category: categoryFilter, severity: severityFilter, assignmentFilter, activeOnly, createdAfter: localDateBound(createdAfter), createdBefore: localDateBound(createdBefore, true) }),
+    enabled: enabled && validDateRange,
   })
-  const summary = useQuery({ queryKey: ['incident-summary', tenantId, user?.id], queryFn: () => listIncidentSummary(tenantId, user?.id ?? ''), enabled: Boolean(enabled && user?.id) })
+  const summary = useQuery({ queryKey: ['incident-summary', tenantId, user?.id, createdAfter, createdBefore], queryFn: () => listIncidentSummary(tenantId, user?.id ?? '', localDateBound(createdAfter), localDateBound(createdBefore, true)), enabled: Boolean(enabled && user?.id && validDateRange) })
+  const breakdown = useQuery({ queryKey: ['incident-breakdown', tenantId, createdAfter, createdBefore], queryFn: () => listIncidentBreakdown(tenantId, localDateBound(createdAfter), localDateBound(createdBefore, true)), enabled: Boolean(canManage.data && validDateRange) })
   const ownStatusOnly = Boolean(canReport.data && !canCreate.data && !canManage.data)
   const incidentIds = incidents.data?.rows.map((incident) => incident.id) ?? []
   const evidence = useQuery({ queryKey: ['incident-evidence', tenantId, incidentIds], queryFn: () => listIncidentEvidence(tenantId, incidentIds), enabled: Boolean(tenantId && incidents.data && (canCreate.data || canManage.data)) })
   const totalPages = Math.ceil((incidents.data?.totalCount ?? 0) / INCIDENT_PAGE_SIZE)
 
+  useEffect(() => {
+    if (!focusId || !tenantId || !enabled) return
+    let cancelled = false
+    setSearch(''); setDebouncedSearch(''); setStatusFilter('all'); setCategoryFilter('all'); setSeverityFilter('all'); setAssignmentFilter('all'); setActiveOnly(false)
+    setCreatedAfter(''); setCreatedBefore(''); setPage(0); setFocusReadyId('')
+    void findVisibleIncidentPage(tenantId, focusId).then((targetPage) => {
+      if (cancelled) return
+      if (targetPage === null) { onFocusHandled?.(); return }
+      setPage(targetPage)
+      setFocusReadyId(focusId)
+    }).catch(() => { if (!cancelled) onFocusHandled?.() })
+    return () => { cancelled = true }
+  }, [enabled, focusId, onFocusHandled, tenantId])
+
+  useEffect(() => {
+    if (!focusId || focusReadyId !== focusId || !incidents.data?.rows.some((incident) => incident.id === focusId)) return
+    const target = document.getElementById(`incident-card-${focusId}`)
+    if (!target) return
+    target.focus({ preventScroll: true }); target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    onFocusHandled?.()
+  }, [focusId, focusReadyId, incidents.data, onFocusHandled])
+
   async function refresh() {
-    await Promise.all([queryClient.invalidateQueries({ queryKey: ['incidents', tenantId] }), queryClient.invalidateQueries({ queryKey: ['incident-summary', tenantId] }), queryClient.invalidateQueries({ queryKey: ['incident-events', tenantId] }), queryClient.invalidateQueries({ queryKey: ['incident-evidence', tenantId] })])
+    await Promise.all([queryClient.invalidateQueries({ queryKey: ['incidents', tenantId] }), queryClient.invalidateQueries({ queryKey: ['incident-summary', tenantId] }), queryClient.invalidateQueries({ queryKey: ['incident-breakdown', tenantId] }), queryClient.invalidateQueries({ queryKey: ['incident-events', tenantId] }), queryClient.invalidateQueries({ queryKey: ['incident-evidence', tenantId] })])
   }
 
   async function create(event: FormEvent<HTMLFormElement>) {
@@ -78,7 +116,7 @@ export function IncidentsPage() {
     setBusy(true); setError(''); setMessage('')
     try {
       await submitIncident({ tenantId, ...parsed.data })
-      setPage(0); setSearch(''); setStatusFilter('all'); setCategoryFilter('all')
+      setPage(0); setSearch(''); setStatusFilter('all'); setCategoryFilter('all'); setSeverityFilter('all'); setAssignmentFilter('all'); setActiveOnly(false); setCreatedAfter(''); setCreatedBefore('')
       await refresh(); form.reset(); setShowForm(false); setMessage('Incident report submitted.')
     } catch (err) { setError(err instanceof Error ? err.message : 'Unable to submit the report.') }
     finally { setBusy(false) }
@@ -86,12 +124,24 @@ export function IncidentsPage() {
 
   async function advance(id: string, status: string) {
     const needsNote = status === 'resolved' || status === 'closed'
-    const note = needsNote ? window.prompt('Add a short resolution note:') ?? '' : ''
-    if (needsNote && note.trim().length < 3) return
+    if (needsNote) { setResolutionRequest({ incidentId: id, status }); return }
     setBusy(true); setError(''); setMessage('')
-    try { await transitionIncident(id, status, note); await refresh(); setMessage(`Incident marked ${statusLabels[status].toLowerCase()}.`) }
+    try { await transitionIncident(id, status); await refresh(); setMessage(`Incident marked ${statusLabels[status].toLowerCase()}.`) }
     catch (err) { setError(err instanceof Error ? err.message : 'Unable to update this incident.') }
     finally { setBusy(false) }
+  }
+
+  async function resolveWithNote(note: string) {
+    if (!resolutionRequest) return
+    setBusy(true); setError(''); setMessage('')
+    try {
+      await transitionIncident(resolutionRequest.incidentId, resolutionRequest.status, note)
+      await refresh()
+      setResolutionRequest(null)
+      setMessage(`Incident marked ${statusLabels[resolutionRequest.status].toLowerCase()}.`)
+    } catch (err) {
+      throw new Error(err instanceof Error ? err.message : 'Unable to update this incident.')
+    } finally { setBusy(false) }
   }
 
   async function assign(id: string, tanodId: string) {
@@ -143,8 +193,39 @@ export function IncidentsPage() {
     } catch { setError('Unable to open this evidence file. Your access may have changed.') }
   }
 
+  async function exportIncidents() {
+    setExportBusy(true); setError(''); setMessage('')
+    try {
+      const rows = [] as Awaited<ReturnType<typeof listIncidents>>['rows']
+      let totalCount = 0
+      const exportPageSize = 100
+      for (let exportPage = 0; exportPage === 0 || rows.length < totalCount; exportPage += 1) {
+        const result = await listIncidents({ tenantId, page: exportPage, pageSize: exportPageSize, search: debouncedSearch, status: statusFilter, category: categoryFilter, severity: severityFilter, assignmentFilter, activeOnly, createdAfter: localDateBound(createdAfter), createdBefore: localDateBound(createdBefore, true) })
+        rows.push(...result.rows)
+        totalCount = result.totalCount
+        if (result.rows.length === 0) break
+      }
+      const columns = ['Reported at', 'Category', 'Severity', 'Location', 'Summary', 'Status', 'Assignment']
+      const csvCell = (value: string) => {
+        const safeValue = /^[\s]*[=+@-]/.test(value) ? `'${value}` : value
+        return `"${safeValue.replaceAll('"', '""')}"`
+      }
+      const lines = [columns, ...rows.map((row) => [row.created_at, row.category, row.severity, row.location, row.summary, row.status, row.assigned_to ? 'Assigned' : 'Unassigned'])]
+      const blob = new Blob(['\uFEFF', lines.map((line) => line.map((value) => csvCell(value)).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = `kabalikat-incident-queue-${new Date().toISOString().slice(0, 10)}.csv`
+      anchor.click()
+      URL.revokeObjectURL(url)
+      setMessage(`Downloaded ${rows.length} incident ${rows.length === 1 ? 'report' : 'reports'}.`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to export the incident queue.')
+    } finally { setExportBusy(false) }
+  }
+
   const visibleIncidents = incidents.data?.rows ?? []
-  const hasFilters = Boolean(debouncedSearch || statusFilter !== 'all' || categoryFilter !== 'all')
+  const hasFilters = Boolean(debouncedSearch || statusFilter !== 'all' || categoryFilter !== 'all' || severityFilter !== 'all' || assignmentFilter !== 'all' || activeOnly || createdAfter || createdBefore)
 
   return <section className="operation-page">
     <PageHeading title="Incident reports" description={canReport.data && !canCreate.data ? 'Submit a local safety report and track its status.' : 'Record local safety and hazard reports and track official follow-up.'}>
@@ -158,6 +239,7 @@ export function IncidentsPage() {
     {message && <div className="ops-success"><CheckCircle2 size={16} />{message}</div>}{error && <ErrorNotice message={error} />}
     {summary.error && <ErrorNotice message="Incident reports are available, but the workload summary could not be loaded." />}
     {summary.data && <div className="incident-summary" aria-label="Incident workload summary"><div><strong>{summary.data.openCount}</strong><span>Open reports</span></div><div><strong>{summary.data.urgentOpenCount}</strong><span>High or urgent</span></div><div><strong>{canReport.data && !canCreate.data ? summary.data.myOpenCount : summary.data.assignedToMeCount}</strong><span>{canReport.data && !canCreate.data ? 'Your open reports' : 'Assigned to you'}</span></div></div>}
+    {canManage.data && breakdown.data && <section className="ops-panel incident-breakdown" aria-label="Incident queue overview"><div><h2>Queue overview</h2><p>Counts follow the selected report date range. Select a status or category to filter the queue.</p></div><button type="button" className="incident-unassigned-summary" aria-label="Show active reports without an assignee" aria-pressed={assignmentFilter === 'unassigned' && activeOnly} onClick={() => { const selected = assignmentFilter === 'unassigned' && activeOnly; setAssignmentFilter(selected ? 'all' : 'unassigned'); setActiveOnly(!selected); setStatusFilter('all'); setPage(0) }}><span>Active reports without an assignee</span><strong>{breakdown.data.find((item) => item.metric_type === 'assignment' && item.metric_value === 'unassigned_active')?.report_count ?? 0}</strong><small>Submitted, acknowledged, or in progress · Select to review</small></button><div className="incident-breakdown-groups"><div><h3>By status</h3><ul>{breakdown.data.filter((item) => item.metric_type === 'status').map((item) => <li key={item.metric_value}><button type="button" className="incident-status-shortcut" aria-pressed={statusFilter === item.metric_value && !activeOnly} onClick={() => { setStatusFilter((current) => current === item.metric_value && !activeOnly ? 'all' : item.metric_value); setActiveOnly(false); setPage(0) }}><span>{statusLabels[item.metric_value] ?? item.metric_value}</span><strong>{item.report_count}</strong></button></li>)}</ul></div><div><h3>By category</h3><ul>{breakdown.data.filter((item) => item.metric_type === 'category').map((item) => <li key={item.metric_value}><button type="button" className="incident-status-shortcut" aria-pressed={categoryFilter === item.metric_value} onClick={() => { setCategoryFilter((current) => current === item.metric_value ? 'all' : item.metric_value); setPage(0) }}><span>{item.metric_value}</span><strong>{item.report_count}</strong></button></li>)}</ul></div></div></section>}
     {showForm && canSubmit && <form className="ops-panel ops-form" onSubmit={(event) => void create(event)}><div className="ops-panel-heading"><div><h2>New incident report</h2><p>Share only the minimum details needed to respond. Do not include names or medical information.</p></div><Siren size={19} /></div><div className="ops-form-grid">
       <label>Category<select name="category"><option value="safety">Safety concern</option><option value="hazard">Hazard</option><option value="disturbance">Disturbance</option><option value="property">Property issue</option><option value="disaster">Disaster</option><option value="other">Other</option></select></label>
       <label>Severity<select name="severity"><option value="low">Low</option><option value="moderate">Moderate</option><option value="high">High</option><option value="urgent">Urgent</option></select></label>
@@ -165,13 +247,20 @@ export function IncidentsPage() {
       <label className="span-two">Short summary<input name="summary" minLength={3} maxLength={180} required /></label>
       <label className="span-two">Details<textarea name="details" maxLength={3000} rows={4} /></label>
     </div><div className="ops-form-actions"><button className="button primary" disabled={busy}>Submit report</button></div></form>}
-    {incidents.isPending && enabled && <LoadingNotice />}{incidents.error && <ErrorNotice message={incidents.error.message} />}
-    {Boolean(incidents.data && (incidents.data.totalCount > 0 || hasFilters)) && <div className="incident-filters"><label>Search<input aria-label="Search incident reports" placeholder="Summary, location, or details" value={search} onChange={(event) => setSearch(event.target.value)} /></label><label>Status<select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setPage(0) }}><option value="all">All statuses</option>{Object.entries(statusLabels).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Category<select value={categoryFilter} onChange={(event) => { setCategoryFilter(event.target.value); setPage(0) }}><option value="all">All categories</option>{['safety','hazard','disturbance','property','disaster','other'].map((category) => <option key={category} value={category}>{category}</option>)}</select></label></div>}
+    {incidents.isPending && enabled && validDateRange && <LoadingNotice />}{incidents.error && <ErrorNotice message={incidents.error.message} />}
+    {enabled && <div className="incident-filters"><label>Search<input aria-label="Search incident reports" placeholder="Summary, location, or details" value={search} onChange={(event) => setSearch(event.target.value)} /></label><label>Status<select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setActiveOnly(false); setPage(0) }}><option value="all">All statuses</option>{Object.entries(statusLabels).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Category<select value={categoryFilter} onChange={(event) => { setCategoryFilter(event.target.value); setPage(0) }}><option value="all">All categories</option>{['safety','hazard','disturbance','property','disaster','other'].map((category) => <option key={category} value={category}>{category}</option>)}</select></label><label>Severity<select value={severityFilter} onChange={(event) => { setSeverityFilter(event.target.value); setPage(0) }}><option value="all">All severities</option>{['urgent','high','moderate','low'].map((severity) => <option key={severity} value={severity}>{severity[0].toUpperCase() + severity.slice(1)}</option>)}</select></label><label>Reported on or after<input type="date" value={createdAfter} max={createdBefore || undefined} onChange={(event) => { setCreatedAfter(event.target.value); setPage(0) }} /></label><label>Reported on or before<input type="date" value={createdBefore} min={createdAfter || undefined} onChange={(event) => { setCreatedBefore(event.target.value); setPage(0) }} /></label>{(createdAfter || createdBefore) && <button type="button" className="button outline" onClick={() => { setCreatedAfter(''); setCreatedBefore(''); setPage(0) }}>Clear dates</button>}{canManage.data && <button type="button" className="button outline incident-export-button" disabled={exportBusy || !validDateRange} onClick={() => void exportIncidents()}><FileDown size={16} />{exportBusy ? 'Preparing export…' : 'Export filtered queue'}</button>}</div>}
+    {enabled && (canCreate.data || canManage.data) && <div className="incident-assignment-filters" role="group" aria-label="Filter incident assignment">
+      <button type="button" className={`button ${assignmentFilter === 'all' ? 'primary' : 'outline'}`} aria-pressed={assignmentFilter === 'all'} onClick={() => { setAssignmentFilter('all'); setPage(0) }}>All reports</button>
+      <button type="button" className={`button ${assignmentFilter === 'mine' ? 'primary' : 'outline'}`} aria-pressed={assignmentFilter === 'mine'} onClick={() => { setAssignmentFilter((value) => value === 'mine' ? 'all' : 'mine'); setPage(0) }}>Assigned to me</button>
+      {canManage.data && <button type="button" className={`button ${assignmentFilter === 'unassigned' ? 'primary' : 'outline'}`} aria-pressed={assignmentFilter === 'unassigned'} onClick={() => { setAssignmentFilter((value) => value === 'unassigned' ? 'all' : 'unassigned'); setPage(0) }}>Unassigned reports</button>}
+      {canManage.data && <button type="button" className={`button ${activeOnly ? 'primary' : 'outline'}`} aria-pressed={activeOnly} onClick={() => { const nextActiveOnly = !activeOnly; setActiveOnly(nextActiveOnly); if (nextActiveOnly) setStatusFilter('all'); setPage(0) }}>Needs attention</button>}
+    </div>}
+    {!validDateRange && <p className="muted" role="alert">The start date must be on or before the end date.</p>}
     {incidents.data?.totalCount === 0 && <div className="ops-empty"><Siren size={22} /><strong>{hasFilters ? 'No matching reports' : 'No incident reports'}</strong><p>{hasFilters ? 'Adjust the search or filters to see other reports.' : 'Reports you submit or are authorized to manage appear here.'}</p></div>}
-    <div className="incident-list">{visibleIncidents.map((incident) => <article className="ops-panel incident-card" key={incident.id}>
+    <div className="incident-list">{visibleIncidents.map((incident) => <article id={`incident-card-${incident.id}`} tabIndex={-1} className="ops-panel incident-card" key={incident.id}>
       <header><div><StatusPill status={incident.status} /><h2>{incident.summary}</h2></div><span className={`incident-severity severity-${incident.severity}`}>{incident.severity}</span></header>
       <div className="incident-meta"><span>{incident.category}</span><span>{incident.location}</span><span>{formatDateTime(incident.created_at)}</span></div>
-      {incident.details && <p className="incident-details">{incident.details}</p>}
+      {incident.details && <details className="incident-report-details"><summary>View report details</summary><p className="incident-details">{incident.details}</p></details>}
       {(canManage.data || incident.assigned_to === user?.id) && <section className="incident-evidence"><h3><Paperclip size={15} /> Private evidence <span>{evidence.data?.filter((item) => item.incident_id === incident.id).length ?? 0}</span></h3><p>Visible only to the barangay Captain and Tanod assigned to this report. PDF, JPEG, or PNG up to 10 MB.</p>{evidence.data?.filter((item) => item.incident_id === incident.id).map((item) => <button className="incident-evidence-file" key={item.id} onClick={() => void openEvidence(item.storage_path)}><Download size={14} /><span>{item.file_name}<small>{(Number(item.file_size) / 1024).toFixed(0)} KB · {formatDateTime(item.created_at)}</small></span></button>)}{incident.status !== 'closed' && <form className="incident-evidence-upload" onSubmit={(event) => void attachEvidence(incident.id, event)}><label>Attach evidence<input name="evidence" type="file" accept="application/pdf,image/jpeg,image/png" required /></label><button className="button outline" disabled={busy}>Upload file</button></form>}</section>}
       {incident.resolution_note && <p className="finance-review-note">Resolution: {incident.resolution_note}</p>}
       {incident.assigned_to && <p className="incident-assigned">Assigned to {incident.assigned_to === user?.id ? 'you' : 'a Tanod'}</p>}
@@ -188,5 +277,6 @@ export function IncidentsPage() {
         <button className="button outline" disabled={page + 1 >= totalPages || incidents.isFetching} onClick={() => setPage((current) => current + 1)}>Next<ChevronRight size={16} /></button>
       </div>
     </nav>}
+    {resolutionRequest && <IncidentResolutionDialog status={resolutionRequest.status} busy={busy} onCancel={() => { if (!busy) setResolutionRequest(null) }} onConfirm={resolveWithNote} />}
   </section>
 }

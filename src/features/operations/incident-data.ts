@@ -9,6 +9,7 @@ export type IncidentEventPage = { rows: IncidentEventRow[]; totalCount: number }
 export type IncidentEvidenceRow = { id: string; incident_id: string; file_name: string; mime_type: string; file_size: number; storage_path: string; created_at: string }
 export type IncidentPage = { rows: IncidentRow[]; totalCount: number }
 export type IncidentSummary = { openCount: number; urgentOpenCount: number; myOpenCount: number; assignedToMeCount: number }
+export type IncidentBreakdownRow = { metric_type: 'status' | 'category' | 'assignment'; metric_value: string; report_count: number }
 export const INCIDENT_PAGE_SIZE = 20
 export const INCIDENT_HISTORY_PAGE_SIZE = 50
 const activeIncidentStatuses = ['submitted', 'acknowledged', 'in_progress']
@@ -21,22 +22,49 @@ function client() {
   return supabase
 }
 
-export async function listIncidents(input: { tenantId: string; page: number; search: string; status: string; category: string }): Promise<IncidentPage> {
-  const { data, error } = await client().rpc('list_incident_reports_page', {
+export async function listIncidents(input: { tenantId: string; page: number; pageSize?: number; search: string; status: string; category: string; severity: string; assignmentFilter?: 'all' | 'mine' | 'unassigned'; activeOnly?: boolean; createdAfter?: string | null; createdBefore?: string | null }): Promise<IncidentPage> {
+  const { data, error } = await client().rpc('list_incident_reports_page_active_assignment_filter', {
     p_barangay_id: input.tenantId,
     p_page: input.page,
-    p_page_size: INCIDENT_PAGE_SIZE,
+    p_page_size: input.pageSize ?? INCIDENT_PAGE_SIZE,
     p_search: input.search,
     p_status: input.status,
     p_category: input.category,
+    p_severity: input.severity,
+    p_assignment_filter: input.assignmentFilter ?? 'all',
+    p_active_only: input.activeOnly ?? false,
+    p_created_after: input.createdAfter ?? null,
+    p_created_before: input.createdBefore ?? null,
   })
   if (error) throw new Error(error.message)
   const rows = (data ?? []) as Array<IncidentRow & { total_count: number }>
   return { rows, totalCount: Number(rows[0]?.total_count ?? 0) }
 }
 
-export async function listIncidentSummary(tenantId: string, userId: string): Promise<IncidentSummary> {
-  const countQuery = () => client().from('incidents').select('id', { count: 'exact', head: true }).eq('barangay_id', tenantId).in('status', activeIncidentStatuses)
+export async function findVisibleIncidentPage(tenantId: string, incidentId: string): Promise<number | null> {
+  const { data: incident, error } = await client().from('incidents')
+    .select('id,created_at').eq('barangay_id', tenantId).eq('id', incidentId).maybeSingle()
+  if (error) throw new Error(error.message)
+  if (!incident) return null
+
+  const [newer, tied] = await Promise.all([
+    client().from('incidents').select('id', { count: 'exact', head: true })
+      .eq('barangay_id', tenantId).gt('created_at', incident.created_at),
+    client().from('incidents').select('id', { count: 'exact', head: true })
+      .eq('barangay_id', tenantId).eq('created_at', incident.created_at).gt('id', incident.id),
+  ])
+  if (newer.error) throw new Error(newer.error.message)
+  if (tied.error) throw new Error(tied.error.message)
+  return Math.floor(((newer.count ?? 0) + (tied.count ?? 0)) / INCIDENT_PAGE_SIZE)
+}
+
+export async function listIncidentSummary(tenantId: string, userId: string, createdAfter?: string | null, createdBefore?: string | null): Promise<IncidentSummary> {
+  const countQuery = () => {
+    let query = client().from('incidents').select('id', { count: 'exact', head: true }).eq('barangay_id', tenantId).in('status', activeIncidentStatuses)
+    if (createdAfter) query = query.gte('created_at', createdAfter)
+    if (createdBefore) query = query.lt('created_at', createdBefore)
+    return query
+  }
   const results = await Promise.all([
     countQuery(),
     countQuery().in('severity', ['high', 'urgent']),
@@ -46,6 +74,16 @@ export async function listIncidentSummary(tenantId: string, userId: string): Pro
   const failed = results.find((result) => result.error)
   if (failed?.error) throw new Error(failed.error.message)
   return { openCount: results[0].count ?? 0, urgentOpenCount: results[1].count ?? 0, myOpenCount: results[2].count ?? 0, assignedToMeCount: results[3].count ?? 0 }
+}
+
+export async function listIncidentBreakdown(tenantId: string, createdAfter?: string | null, createdBefore?: string | null): Promise<IncidentBreakdownRow[]> {
+  const { data, error } = await client().rpc('get_incident_queue_breakdown', {
+    p_barangay_id: tenantId,
+    p_created_after: createdAfter ?? null,
+    p_created_before: createdBefore ?? null,
+  })
+  if (error) throw new Error(error.message)
+  return ((data ?? []) as IncidentBreakdownRow[]).map((row) => ({ ...row, report_count: Number(row.report_count) }))
 }
 
 export async function listIncidentEvents(tenantId: string, incidentId: string, page: number, ownStatusOnly = false): Promise<IncidentEventPage> {

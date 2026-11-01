@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { CalendarDays, CalendarPlus, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Download, Pencil, Search, X } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import {
-  createMeeting, hasPermission, listAttendance, listMeetingAttendeeMembers, listMeetingAttendees, listMeetingMemberPage, listMeetingPage, updateMeetingDetails,
+  createMeeting, hasPermission, listAllMeetingSchedule, listAttendance, listMeetingAttendeeMembers, listMeetingAttendees, listMeetingMemberPage, listMeetingPage, updateMeetingDetails,
   markAttendance, recordAttendance, updateMeetingStatus, MEETING_MEMBER_PAGE_SIZE, MEETING_PAGE_SIZE,
 } from './data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
@@ -34,6 +34,8 @@ export function MeetingsPage({ focusId, focusPage, onFocusHandled }: { focusId?:
   const [meetingSearchInput, setMeetingSearchInput] = useState('')
   const [meetingSearch, setMeetingSearch] = useState('')
   const [meetingStatus, setMeetingStatus] = useState<'all' | 'draft' | 'scheduled' | 'completed' | 'cancelled'>('all')
+  const [startsOnOrAfter, setStartsOnOrAfter] = useState('')
+  const [startsOnOrBefore, setStartsOnOrBefore] = useState('')
   const [selectedAttendees, setSelectedAttendees] = useState<string[]>([])
   const [memberPage, setMemberPage] = useState(0)
   const [memberSearch, setMemberSearch] = useState('')
@@ -44,11 +46,15 @@ export function MeetingsPage({ focusId, focusPage, onFocusHandled }: { focusId?:
   const [editingMeeting, setEditingMeeting] = useState('')
   const [reasonRequest, setReasonRequest] = useState<MeetingReasonRequest | null>(null)
   const [reasonBusy, setReasonBusy] = useState(false)
+  const [scheduleExportBusy, setScheduleExportBusy] = useState(false)
+  const [scheduleExportError, setScheduleExportError] = useState('')
   useEffect(() => {
     setPage(0)
     setMeetingSearchInput('')
     setMeetingSearch('')
     setMeetingStatus('all')
+    setStartsOnOrAfter('')
+    setStartsOnOrBefore('')
     setSelectedMeeting('')
     setEditingMeeting('')
     setSelectedAttendees([])
@@ -64,11 +70,20 @@ export function MeetingsPage({ focusId, focusPage, onFocusHandled }: { focusId?:
     }, 250)
     return () => window.clearTimeout(timeout)
   }, [meetingSearchInput])
-  const meetings = useQuery({ queryKey: ['meetings', tenantId, page, meetingSearch, meetingStatus], queryFn: () => listMeetingPage(tenantId, page, meetingSearch, meetingStatus), enabled: Boolean(tenantId) })
+  const dateRangeInvalid = Boolean(startsOnOrAfter && startsOnOrBefore && startsOnOrBefore < startsOnOrAfter)
+  const localDateBoundary = (value: string, dayOffset = 0) => {
+    if (!value) return null
+    const [year, month, day] = value.split('-').map(Number)
+    const date = new Date(year, month - 1, day + dayOffset)
+    return Number.isNaN(date.getTime()) ? null : date.toISOString()
+  }
+  const startsAfter = localDateBoundary(startsOnOrAfter)
+  const startsBefore = localDateBoundary(startsOnOrBefore, 1)
+  const meetings = useQuery({ queryKey: ['meetings', tenantId, page, meetingSearch, meetingStatus, startsOnOrAfter, startsOnOrBefore], queryFn: () => listMeetingPage(tenantId, page, meetingSearch, meetingStatus, startsAfter, startsBefore), enabled: Boolean(tenantId && !dateRangeInvalid) })
   useEffect(() => {
     if (!focusId) return
     if (meetingSearchInput) skipNextMeetingSearchReset.current = true
-    setMeetingSearchInput(''); setMeetingSearch(''); setMeetingStatus('all')
+    setMeetingSearchInput(''); setMeetingSearch(''); setMeetingStatus('all'); setStartsOnOrAfter(''); setStartsOnOrBefore('')
     setPage(Math.max(0, focusPage ?? 0)); setSelectedMeeting(focusId); setAttendanceSearch('')
   }, [focusId, focusPage, meetingSearchInput])
   useEffect(() => {
@@ -237,6 +252,23 @@ export function MeetingsPage({ focusId, focusPage, onFocusHandled }: { focusId?:
     return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16)
   }
 
+  async function exportMeetingSchedule() {
+    setScheduleExportBusy(true); setScheduleExportError('')
+    try {
+      const rows = await listAllMeetingSchedule(tenantId, meetingSearch, meetingStatus, startsAfter, startsBefore)
+      if (!rows.length) { setScheduleExportError('There are no matching meetings to export.'); return }
+      const cell = (value: string) => {
+        const safe = /^[\s]*[=+\-@]/.test(value) ? `'${value}` : value
+        return `"${safe.replaceAll('"', '""')}"`
+      }
+      const csv = `\uFEFF${[['Meeting', 'Location', 'Starts (UTC)', 'Ends (UTC)', 'Status'], ...rows.map((meeting) => [meeting.title, meeting.location, meeting.starts_at, meeting.ends_at ?? '', meeting.status])].map((row) => row.map(cell).join(',')).join('\r\n')}`
+      const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+      const link = document.createElement('a'); link.href = url; link.download = `kabalikat-meetings-${new Date().toISOString().slice(0, 10)}.csv`; link.click()
+      window.setTimeout(() => URL.revokeObjectURL(url), 1_000)
+    } catch { setScheduleExportError('The meeting schedule export could not be prepared. Refresh the list and try again.') }
+    finally { setScheduleExportBusy(false) }
+  }
+
   function exportMeetingCalendarFile(meeting: { id: string; title: string; location: string; starts_at: string; ends_at: string | null; agenda: string }) {
     const escapeIcsText = (value: string) => value.replaceAll('\\', '\\\\').replace(/\r?\n/g, '\\n').replaceAll(',', '\\,').replaceAll(';', '\\;')
     const formatUtc = (value: Date) => value.toISOString().replaceAll('-', '').replaceAll(':', '').replace(/\.\d{3}Z$/, 'Z')
@@ -296,7 +328,7 @@ export function MeetingsPage({ focusId, focusPage, onFocusHandled }: { focusId?:
 
   return <section className="operation-page">
     <PageHeading title="Meetings & attendance" description="Schedule meetings, share agendas with eligible members, and record attendance.">
-      {canManage.data && <button className="button primary" onClick={toggleMeetingForm}><CalendarDays size={16} />Schedule meeting</button>}
+      {canManage.data && <div className="ops-form-actions"><button type="button" className="button outline" disabled={scheduleExportBusy || dateRangeInvalid || !meetings.data?.total} onClick={() => void exportMeetingSchedule()}><Download size={16} />{scheduleExportBusy ? 'Preparing export…' : 'Export schedule'}</button><button className="button primary" onClick={toggleMeetingForm}><CalendarDays size={16} />Schedule meeting</button></div>}
     </PageHeading>
     {!tenantId && <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to view meetings and attendance." />}
     {Boolean(tenantId) && (canManage.isPending || canManageAttendance.isPending || canSelectAttendees.isPending) && <LoadingNotice compact />}
@@ -317,8 +349,11 @@ export function MeetingsPage({ focusId, focusPage, onFocusHandled }: { focusId?:
       <div className="ops-form-actions"><span className="field-hint">Attendance self-check-in opens 30 minutes before start and closes 30 minutes after end.</span><button className="button primary" disabled={busy}>{busy ? 'Saving…' : 'Create meeting'}</button></div>
     </form>}
     <div className="ops-section-title"><h2>Scheduled meetings</h2><p>Meeting lists and attendance are tenant- and role-scoped.</p></div>
-    {tenantId && <div className="incident-filters"><label className="archive-search"><Search size={16} /><input type="search" aria-label="Search meetings" maxLength={100} placeholder="Search title, location, or agenda" value={meetingSearchInput} onChange={(event) => setMeetingSearchInput(event.target.value)} /></label><label>Meeting status<select value={meetingStatus} onChange={(event) => { setMeetingStatus(event.target.value as typeof meetingStatus); setPage(0) }}><option value="all">All statuses</option><option value="draft">Draft</option><option value="scheduled">Scheduled</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></label></div>}
-    {!tenantId ? null : meetings.isPending ? <LoadingNotice /> : meetings.error ? <ErrorNotice message={meetings.error.message} onRetry={() => void meetings.refetch()} retrying={meetings.isFetching} /> : meetings.data?.total ? meetings.data.meetings.length ?
+    {tenantId && <div className="incident-filters"><label className="archive-search"><Search size={16} /><input type="search" aria-label="Search meetings" maxLength={100} placeholder="Search title, location, or agenda" value={meetingSearchInput} onChange={(event) => setMeetingSearchInput(event.target.value)} /></label><label>Meeting status<select value={meetingStatus} onChange={(event) => { setMeetingStatus(event.target.value as typeof meetingStatus); setPage(0) }}><option value="all">All statuses</option><option value="draft">Draft</option><option value="scheduled">Scheduled</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></label><label>Starts on or after<input type="date" value={startsOnOrAfter} max={startsOnOrBefore || undefined} onChange={(event) => { setStartsOnOrAfter(event.target.value); setPage(0) }} /></label><label>Starts on or before<input type="date" value={startsOnOrBefore} min={startsOnOrAfter || undefined} onChange={(event) => { setStartsOnOrBefore(event.target.value); setPage(0) }} /></label>{(startsOnOrAfter || startsOnOrBefore) && <button type="button" className="button outline" onClick={() => { setStartsOnOrAfter(''); setStartsOnOrBefore(''); setPage(0) }}>Clear dates</button>}</div>}
+    {dateRangeInvalid && <p className="account-security-error" role="alert">The end date must be the same day or later than the start date.</p>}
+    {scheduleExportError && <p className="account-security-error" role="alert">{scheduleExportError}</p>}
+    {(startsOnOrAfter || startsOnOrBefore) && !dateRangeInvalid && <p className="field-hint">Dates use your local timezone. The queue and schedule CSV use this same start-date window.</p>}
+    {!tenantId ? null : dateRangeInvalid ? null : meetings.isPending ? <LoadingNotice /> : meetings.error ? <ErrorNotice message={meetings.error.message} onRetry={() => void meetings.refetch()} retrying={meetings.isFetching} /> : meetings.data?.total ? meetings.data.meetings.length ?
       <div className="ops-meeting-list">{meetings.data.meetings.map((meeting) => <article id={`meeting-card-${meeting.id}`} tabIndex={-1} className="ops-panel meeting-card" key={meeting.id}>
         <div className="meeting-card-top"><div className="request-icon"><CalendarDays size={18} /></div><div className="meeting-title"><h2>{meeting.title}</h2><p>{meeting.location} · {formatDateTime(meeting.starts_at)}</p></div><StatusPill status={meeting.status} /></div>
         {meeting.agenda && <div className="meeting-agenda"><strong><ClipboardList size={14} />Agenda</strong><p>{meeting.agenda}</p></div>}
@@ -360,7 +395,7 @@ export function MeetingsPage({ focusId, focusPage, onFocusHandled }: { focusId?:
             attendanceLoading={attendance.isPending || Boolean(attendance.error)} currentUserId={user?.id}
             canManage={Boolean(canManage.data)} />
         </div>}
-      </article>)}</div> : <EmptyNotice title="No meetings on this page" detail="Move to another page to see more meetings." /> : <EmptyNotice title={meetingSearch || meetingStatus !== 'all' ? 'No matching meetings' : 'No meetings scheduled'} detail={meetingSearch || meetingStatus !== 'all' ? 'Try another search or choose a different status.' : 'Meetings created for this barangay will appear here.'} />}
+      </article>)}</div> : <EmptyNotice title="No meetings on this page" detail="Move to another page to see more meetings." /> : <EmptyNotice title={meetingSearch || meetingStatus !== 'all' || startsOnOrAfter || startsOnOrBefore ? 'No matching meetings' : 'No meetings scheduled'} detail={meetingSearch || meetingStatus !== 'all' || startsOnOrAfter || startsOnOrBefore ? 'Try another search, status, or date range.' : 'Meetings created for this barangay will appear here.'} />}
     {meetings.data && meetings.data.total > MEETING_PAGE_SIZE && <nav className="ops-form-actions" aria-label="Meeting pages">
       <button className="button outline" disabled={page === 0 || meetings.isFetching} onClick={() => setPage((current) => Math.max(0, current - 1))}>Previous</button>
       <span className="field-hint">Page {page + 1} of {Math.ceil(meetings.data.total / MEETING_PAGE_SIZE)}</span>

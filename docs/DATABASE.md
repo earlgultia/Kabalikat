@@ -235,3 +235,65 @@ Migration `0128_paginated_sk_event_schedule_history.sql` adds a bounded, tenant-
 
 
 Migration `0129_sk_event_notification_summary.sql` adds a tenant-scoped, manager-only aggregate RPC for SK publication, schedule update, and cancellation notification counts and read counts. The responsive event card fetches it on demand and reveals no member identities. Notification delivery and read status do not indicate RSVP or attendance. Apply after `0128_paginated_sk_event_schedule_history.sql`.
+
+
+Migration `0130_sk_event_future_schedule_guard.sql` adds a database trigger to require a future start for new or returned SK proposals and to prevent publishing an event that has already started. The create/edit UI validates the same rule before submission. Apply after `0129_sk_event_notification_summary.sql`.
+
+
+Migration `0131_health_outreach_future_schedule_guard.sql` adds a trigger requiring future start times for new or returned health outreach schedules and blocks publication after a proposal's start time. The proposal form, edit form, and reviewer controls validate the same rule. It changes schedule logistics only and adds no patient or participant data. Apply after `0130_sk_event_future_schedule_guard.sql`.
+
+Migration `0132_health_outreach_rescheduling.sql` lets authorized outreach managers and reviewers reschedule a published upcoming or in-progress outreach. It snapshots the old and new location/time with a public reason, adds the change to staff activity history, shows the public change history to active members, and sends preference-aware community notifications. The workflow stores only schedule logistics and does not add participant or patient records. Apply after `0131_health_outreach_future_schedule_guard.sql`.
+
+Migration `0133_health_outreach_notification_summary.sql` adds a permission-checked aggregate of outreach publication, schedule update, cancellation, and completion notifications sent and marked read. Managers can open the counts from an outreach card; individual recipients are never shown. The counts describe in-app notices only, not attendance. Apply after `0132_health_outreach_rescheduling.sql`.
+
+Migration `0134_health_outreach_early_completion.sql` lets managers complete an outreach after it has started but before its scheduled end, with a required reason and aggregate attendance count. It records an explicit early-completion activity entry and sends the existing preference-aware completion notice. An event cannot be completed early before its start time. Apply after `0133_health_outreach_notification_summary.sql`.
+
+Migration `0135_health_outreach_attendance_correction.sql` adds a manager-only correction RPC for completed outreach totals. Every correction requires a reason and creates a staff activity entry with the old and new aggregate values; it never creates participant records. Apply after `0134_health_outreach_early_completion.sql`.
+
+Migration `0136_health_outreach_start_date_filters.sql` adds server-side date-window filtering for the BHW outreach queue, summary cards, and complete CSV export, using the existing tenant/start schedule index. Start and end dates are interpreted in the user's local timezone; the end date is inclusive. Existing row-level security remains in force. Apply after `0135_health_outreach_attendance_correction.sql`.
+
+Migration 0137_sk_event_early_completion.sql allows managers to complete a started SK event before its scheduled end with a required 3-to-1000 character reason. The staff activity log records early completion, opted-in active members receive an in-app notice, and the update panel links to the event. The manager-only notification reach summary includes completion notice sent/read totals. Completion before the event starts is rejected. Apply after 0136_health_outreach_start_date_filters.sql; hosted database behavior has not been verified.
+
+Migration `0138_sk_event_start_date_filters.sql` adds local-date start-window filters to the paginated SK event queue and its status summary. The responsive UI applies the same range to CSV exports. The new SECURITY INVOKER functions preserve caller RLS; an end date is implemented as the exclusive start of the following local day. Apply after `0137_sk_event_early_completion.sql`; hosted database behavior has not been verified.
+
+Migration `0139_meeting_schedule_start_date_filters.sql` adds an RLS-preserving paginated meeting schedule function with local-date start-window filtering. The meeting page uses the same range for the list and manager-only schedule CSV export, with only title, location, dates and status included. Apply after `0138_sk_event_start_date_filters.sql`; hosted database behavior has not been verified.
+
+Migration `0140_community_calendar_start_date_filters.sql` adds local-date start-window filtering to the combined published SK and health outreach calendar. The page and full ICS download share the same filter, with existing tenant RLS and published/upcoming visibility preserved. Apply after `0139_meeting_schedule_start_date_filters.sql`; hosted database behavior has not been verified.
+
+Migration `0141_announcement_search_and_date_filters.sql` adds an RLS-preserving server-side announcement page with title/body search, status selection, and a local-date creation window. Existing announcement and role-target visibility policies still control which rows are returned. Apply after `0140_community_calendar_start_date_filters.sql`; hosted database behavior has not been verified.
+
+Migration `0142_incident_report_date_filters.sql` adds local creation-date bounds to the paginated incident report queue while retaining SECURITY INVOKER, tenant scoping, existing RLS, search, status, and category filters. The incident page converts local inclusive dates to an inclusive start and exclusive next-day end. Incident evidence remains outside the filter/export surface and behind its existing access controls. Apply after `0141_announcement_search_and_date_filters.sql`; hosted database behavior has not been verified.
+
+Migration `0143_incident_manager_queue_breakdown.sql` adds a SECURITY INVOKER aggregate-only incident queue summary for users with `incident.manage`. It reports status and category totals within the selected report-date range, includes zero-count categories/statuses, and returns no incident details. Apply after `0142_incident_report_date_filters.sql`; hosted database behavior has not been verified.
+
+Migration `0144_incident_assignment_notifications.sql` sends an in-app alert when an incident is assigned or reassigned to a Tanod. The alert contains no report details and is readable/markable only by the currently assigned active member with incident reporting permission; reassignment hides it from the previous assignee and reopens it for a returning assignee. Apply after `0143_incident_manager_queue_breakdown.sql`; hosted database behavior has not been verified.
+
+Migration `0145_incident_status_notifications.sql` sends a generic in-app status update to the incident report creator when another user changes its status. The notification includes no report details and can be read or marked read only by that report's creator while they retain active membership and incident reporting permission. Apply after `0144_incident_assignment_notifications.sql`; hosted database behavior has not been verified.
+
+Migration `0146_incident_severity_filter.sql` adds a validated server-side severity filter to the incident report queue, alongside existing tenant RLS, search, status, category and local creation-date filters. Apply after `0145_incident_status_notifications.sql`; hosted database behavior has not been verified.
+
+Migration `0147_incident_assigned_to_me_filter.sql` adds an assignee-only view to the paginated incident queue. The RPC matches `assigned_to` to the authenticated user and preserves SECURITY INVOKER and existing RLS visibility. Apply after `0146_incident_severity_filter.sql`; hosted database behavior has not been verified.
+
+Migration `0148_incident_assignment_queue_filter.sql` adds manager triage for unassigned incidents and unifies the assignment selector into all, assigned to me, and unassigned modes. The paginated SECURITY INVOKER query preserves tenant scoping, existing RLS, and all incident search/date/status/category/severity filters. Apply after `0147_incident_assigned_to_me_filter.sql`; hosted database behavior has not been verified.
+
+Migration `0149_incident_unassigned_queue_summary.sql` extends the permission-checked incident aggregate with a date-aware count of active reports without an assignee. The manager queue overview displays only this count and status/category aggregates, with no report details. Apply after `0148_incident_assignment_queue_filter.sql`; hosted database behavior has not been verified.
+
+Incident queue CSV export reuses the permission-checked paginated queue RPC and applies the current search, status, category, severity, assignment and date filters across all pages. It exports a small operational field set; details and evidence are not included. No database migration is required.
+
+Migration `0150_incident_needs_attention_filter.sql` adds an active-status switch to the manager incident queue query. It composes with status, assignment, search, category, severity and date filters and preserves tenant RLS and pagination. Apply after `0149_incident_unassigned_queue_summary.sql`; hosted database behavior has not been verified.
+
+Migration `0151_patrol_shift_assignment_notifications.sql` sends an in-app notification when a patrol shift is assigned or reassigned. Notification access follows the current assigned Tanod, active membership and patrol permission; prior assignees lose access after reassignment. The notice contains no shift notes. Apply after `0150_incident_needs_attention_filter.sql`; hosted database behavior has not been verified.
+
+Migration `0152_patrol_cancellation_notifications.sql` notifies the current assigned Tanod when a Captain cancels a scheduled shift. The notice is a resource pointer only, visible only to the active assignee with `patrol.access`, and deep-links to the shift. Apply after `0151_patrol_shift_assignment_notifications.sql`; hosted database behavior has not been verified.
+
+Migration `0153_patrol_shift_rescheduling.sql` adds a Captain-only RPC to reschedule future scheduled patrols, records previous and new schedule details plus the reason in the restricted append-only shift log, and notifies the current assignee. The responsive patrol workspace exposes the edit form on scheduled shifts; the notification contains only the shift pointer. Apply after `0152_patrol_cancellation_notifications.sql`; hosted database behavior has not been verified.
+
+Migration `0154_patrol_lifecycle_notifications.sql` notifies active users with `patrol.manage` when an assigned Tanod starts or completes a shift. Alerts contain a shift pointer, remain readable only while the recipient has an active membership and patrol management permission, and open the paginated patrol queue at that shift. Apply after `0153_patrol_shift_rescheduling.sql`; hosted database behavior has not been verified.
+
+Migration `0155_patrol_completion_handover.sql` replaces the no-summary completion RPC with an assigned-Tanod-only operation that requires a 10-1,500 character handover. Completion and its summary are committed together to the restricted shift log, and the responsive active-shift UI collects the report before closing the patrol. Apply after `0154_patrol_lifecycle_notifications.sql`; hosted database behavior has not been verified.
+
+Migration `0156_filtered_patrol_shift_history.sql` adds a security-invoker, bounded page function for filtering one patrol shift's history by log type and date range. Existing shift-log RLS remains in force; the desktop and mobile history controls page and filter on the server. Apply after `0155_patrol_completion_handover.sql`; hosted database behavior has not been verified.
+
+Migration `0157_patrol_coverage_summary.sql` adds a Captain-permission-checked aggregate for patrol shift status and field log totals over a date range. It returns counts only, and the patrol dashboard provides a responsive date range selector and summary cards. Apply after `0156_filtered_patrol_shift_history.sql`; hosted database behavior has not been verified.
+
+Migration `0158_platform_activity_log.sql` records barangay onboarding and subscription create/update events using fixed, non-sensitive summaries. A platform-admin-only, searchable paginated RPC backs the new Super Admin activity page; private tenant records are not copied into the log. Apply after `0157_patrol_coverage_summary.sql`; hosted database behavior has not been verified.

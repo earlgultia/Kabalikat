@@ -1,16 +1,22 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
-import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Download, MapPin, Search, ShieldAlert } from 'lucide-react'
+import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Download, MapPin, Search, Share2, ShieldAlert } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import { hasPermission } from './data'
-import { cancelSkEvent, completeSkEvent, createSkEvent, getSkEventNotificationSummary, getSkEventQueueSummary, listSkEventAudit, listSkEventScheduleChanges, listSkEvents, rescheduleSkEvent, reviewSkEvent, updateSkEvent, SK_EVENT_HISTORY_PAGE_SIZE, SK_EVENT_PAGE_SIZE, SK_EVENT_SCHEDULE_HISTORY_PAGE_SIZE, type SkEvent } from './sk-events-data'
+import { cancelSkEvent, completeSkEvent, createSkEvent, getSkEventNotificationSummary, getSkEventQueueSummary, listAllSkEvents, listSkEventAudit, listSkEventScheduleChanges, listSkEvents, rescheduleSkEvent, reviewSkEvent, updateSkEvent, SK_EVENT_HISTORY_PAGE_SIZE, SK_EVENT_PAGE_SIZE, SK_EVENT_SCHEDULE_HISTORY_PAGE_SIZE, type SkEvent } from './sk-events-data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 import { formatDateTime } from './format'
 
 const eventSchema = z.object({ title: z.string().trim().min(3).max(180), description: z.string().trim().max(2000), location: z.string().trim().min(2).max(240), starts: z.string().min(1), ends: z.string().min(1) })
 const rescheduleSchema = z.object({ location: z.string().trim().min(2).max(240), starts: z.string().min(1), ends: z.string().min(1), reason: z.string().trim().min(3).max(1000) })
 const toDateTimeInput = (value: string) => { const date = new Date(value); return Number.isNaN(date.getTime()) ? '' : new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16) }
+const localDateBoundary = (value: string, dayOffset = 0) => {
+  if (!value) return null
+  const [year, month, day] = value.split('-').map(Number)
+  const date = new Date(year, month - 1, day + dayOffset)
+  return Number.isNaN(date.getTime()) ? null : date.toISOString()
+}
 
 function downloadSkEventCalendarFile(event: SkEvent) {
   const encoder = new TextEncoder()
@@ -39,6 +45,26 @@ function downloadSkEventCalendarFile(event: SkEvent) {
   const link = document.createElement('a')
   link.href = url
   link.download = `${event.title.trim().replace(/[^\p{L}\p{N}-]+/gu, '-').replace(/^-|-$/g, '').slice(0, 60) || 'sk-event'}.ics`
+  document.body.append(link)
+  link.click()
+  link.remove()
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+function downloadSkEventCsv(events: SkEvent[]) {
+  const cell = (value: string) => {
+    let firstVisibleCharacter = 0
+    while (firstVisibleCharacter < value.length && value.charCodeAt(firstVisibleCharacter) <= 32) firstVisibleCharacter += 1
+    const safe = /^[=+\-@]/.test(value.slice(firstVisibleCharacter)) ? `'${value}` : value
+    return `"${safe.replace(/"/g, '""')}"`
+  }
+  const columns = ['Title', 'Public details', 'Location', 'Starts (UTC)', 'Ends (UTC)', 'Status']
+  const rows = events.map((event) => [event.title, event.description, event.location, event.starts_at, event.ends_at, event.status])
+  const csv = [columns, ...rows].map((row) => row.map(cell).join(',')).join('\r\n')
+  const url = URL.createObjectURL(new Blob([`\uFEFF${csv}\r\n`], { type: 'text/csv;charset=utf-8' }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `kabalikat-sk-events-${new Date().toISOString().slice(0, 10)}.csv`
   document.body.append(link)
   link.click()
   link.remove()
@@ -87,6 +113,7 @@ function SkEventNotificationReach({ tenantId, eventId }: { tenantId: string; eve
     { label: 'Publication', sent: summary.data?.publication_sent, read: summary.data?.publication_read },
     { label: 'Schedule update', sent: summary.data?.schedule_update_sent, read: summary.data?.schedule_update_read },
     { label: 'Cancellation', sent: summary.data?.cancellation_sent, read: summary.data?.cancellation_read },
+    { label: 'Completion', sent: summary.data?.completion_sent, read: summary.data?.completion_read },
   ]
   return <details className="sk-event-audit sk-event-reach" onToggle={(toggle) => setOpen(toggle.currentTarget.open)}>
     <summary>Notification reach</summary>
@@ -107,12 +134,14 @@ export function SkEventsPage({ focusId, focusPage, focusStatus, onFocusHandled }
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | SkEvent['status']>('all')
+  const [startsOnOrAfter, setStartsOnOrAfter] = useState('')
+  const [startsOnOrBefore, setStartsOnOrBefore] = useState('')
   const [editingEventId, setEditingEventId] = useState<string | null>(null)
   const [reschedulingEventId, setReschedulingEventId] = useState<string | null>(null)
-  useEffect(() => { setPage(0); setSearchInput(''); setSearch(''); setStatusFilter('all') }, [tenantId])
+  useEffect(() => { setPage(0); setSearchInput(''); setSearch(''); setStatusFilter('all'); setStartsOnOrAfter(''); setStartsOnOrBefore('') }, [tenantId])
   useEffect(() => {
     if (!focusId) return
-    setPage(focusPage ?? 0); setSearchInput(''); setSearch(''); setStatusFilter(focusStatus ?? 'draft')
+    setPage(focusPage ?? 0); setSearchInput(''); setSearch(''); setStatusFilter(focusStatus ?? 'draft'); setStartsOnOrAfter(''); setStartsOnOrBefore('')
   }, [focusId, focusPage, focusStatus])
   useEffect(() => {
     const timeout = window.setTimeout(() => { setSearch(searchInput.trim()); setPage(0) }, 250)
@@ -120,8 +149,11 @@ export function SkEventsPage({ focusId, focusPage, focusStatus, onFocusHandled }
   }, [searchInput])
   const canManage = useQuery({ queryKey: ['permission', tenantId, 'sk.event.manage'], queryFn: () => hasPermission(tenantId, 'sk.event.manage'), enabled: Boolean(tenantId) })
   const canReview = useQuery({ queryKey: ['permission', tenantId, 'sk.event.review'], queryFn: () => hasPermission(tenantId, 'sk.event.review'), enabled: Boolean(tenantId) })
-  const events = useQuery({ queryKey: ['sk-events', tenantId, page, search, statusFilter], queryFn: () => listSkEvents(tenantId, page, search, statusFilter), enabled: Boolean(tenantId) })
-  const summary = useQuery({ queryKey: ['sk-event-summary', tenantId, search, statusFilter], queryFn: () => getSkEventQueueSummary(tenantId, search, statusFilter), enabled: Boolean(tenantId), staleTime: 30_000 })
+  const dateRangeInvalid = Boolean(startsOnOrAfter && startsOnOrBefore && startsOnOrBefore < startsOnOrAfter)
+  const startsAfter = localDateBoundary(startsOnOrAfter)
+  const startsBefore = localDateBoundary(startsOnOrBefore, 1)
+  const events = useQuery({ queryKey: ['sk-events', tenantId, page, search, statusFilter, startsOnOrAfter, startsOnOrBefore], queryFn: () => listSkEvents(tenantId, page, search, statusFilter, startsAfter, startsBefore), enabled: Boolean(tenantId && !dateRangeInvalid) })
+  const summary = useQuery({ queryKey: ['sk-event-summary', tenantId, search, statusFilter, startsOnOrAfter, startsOnOrBefore], queryFn: () => getSkEventQueueSummary(tenantId, search, statusFilter, startsAfter, startsBefore), enabled: Boolean(tenantId && !dateRangeInvalid), staleTime: 30_000 })
   useEffect(() => {
     if (!events.isPending && !events.isError && page > 0 && events.data?.rows.length === 0) setPage((current) => Math.max(0, current - 1))
   }, [events.data?.rows.length, events.isError, events.isPending, page])
@@ -131,18 +163,48 @@ export function SkEventsPage({ focusId, focusPage, focusStatus, onFocusHandled }
     onFocusHandled?.()
   }, [events.data?.rows, focusId, onFocusHandled])
   const totalPages = Math.ceil((events.data?.totalCount ?? 0) / SK_EVENT_PAGE_SIZE)
+  const minimumEventStart = toDateTimeInput(new Date(Date.now() + 60_000).toISOString())
   const [showForm, setShowForm] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [exportBusy, setExportBusy] = useState(false)
+  const [exportProgress, setExportProgress] = useState('')
+  const [exportError, setExportError] = useState('')
+  const [shareFeedback, setShareFeedback] = useState<{ eventId: string; message: string } | null>(null)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const [earlyCompletionEventId, setEarlyCompletionEventId] = useState<string | null>(null)
+  const [earlyCompletionReason, setEarlyCompletionReason] = useState('')
 
   async function refresh() { await Promise.all([queryClient.invalidateQueries({ queryKey: ['sk-events', tenantId] }), queryClient.invalidateQueries({ queryKey: ['sk-event-summary', tenantId] }), queryClient.invalidateQueries({ queryKey: ['sk-event-audit', tenantId] }), queryClient.invalidateQueries({ queryKey: ['community-calendar', tenantId] }), queryClient.invalidateQueries({ queryKey: ['community-calendar-preview', tenantId] }), queryClient.invalidateQueries({ queryKey: ['community-notifications', tenantId] }), queryClient.invalidateQueries({ queryKey: ['community-notification-unread-count', tenantId] })]) }
+  async function exportSchedules() {
+    setExportBusy(true); setExportError(''); setExportProgress('Preparing export…')
+    try {
+      const rows = await listAllSkEvents(tenantId, search, statusFilter, startsAfter, startsBefore, (loaded, total) => setExportProgress(`Preparing ${loaded.toLocaleString()} of ${total.toLocaleString()} schedules…`))
+      if (!rows.length) { setExportError('There are no matching schedules to export.'); return }
+      downloadSkEventCsv(rows)
+      setExportProgress(`Downloaded ${rows.length.toLocaleString()} schedules.`)
+    } catch { setExportError('Unable to export SK event schedules. Refresh the queue and try again.') }
+    finally { setExportBusy(false) }
+  }
+  async function shareEventDetails(item: SkEvent) {
+    const text = [`${item.title}`, `When: ${formatDateTime(item.starts_at)} to ${formatDateTime(item.ends_at)}`, `Where: ${item.location}`, ...(item.description ? [`Details: ${item.description}`] : [])].join('\n')
+    const nativeShare = (navigator as unknown as { share?: (data: ShareData) => Promise<void> }).share
+    setShareFeedback(null)
+    try {
+      if (nativeShare) await nativeShare.call(navigator, { title: item.title, text })
+      else await navigator.clipboard.writeText(text)
+      setShareFeedback({ eventId: item.id, message: nativeShare ? 'Event details are ready to share.' : 'Event details copied. Paste them into your message.' })
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return
+      setShareFeedback({ eventId: item.id, message: 'Sharing is unavailable in this browser. Use Add to calendar to save the schedule.' })
+    }
+  }
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); const form = event.currentTarget
     const parsed = eventSchema.safeParse(Object.fromEntries(new FormData(form).entries()))
     if (!parsed.success) { setError(parsed.error.issues[0]?.message ?? 'Review the event details.'); return }
     const startsAt = new Date(parsed.data.starts), endsAt = new Date(parsed.data.ends)
-    if (!Number.isFinite(startsAt.getTime()) || !Number.isFinite(endsAt.getTime()) || endsAt <= startsAt) { setError('The event end time must be after its start time.'); return }
+    if (!Number.isFinite(startsAt.getTime()) || startsAt <= new Date() || !Number.isFinite(endsAt.getTime()) || endsAt <= startsAt) { setError('Choose a future start time and an end time after the start.'); return }
     setBusy(true); setError(''); setMessage('')
     try {
       await createSkEvent({ barangayId: tenantId, title: parsed.data.title, description: parsed.data.description, location: parsed.data.location, startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString() })
@@ -155,7 +217,7 @@ export function SkEventsPage({ focusId, focusPage, focusStatus, onFocusHandled }
     const parsed = eventSchema.safeParse(Object.fromEntries(new FormData(form).entries()))
     if (!parsed.success) { setError(parsed.error.issues[0]?.message ?? 'Review the event details.'); return }
     const startsAt = new Date(parsed.data.starts), endsAt = new Date(parsed.data.ends)
-    if (!Number.isFinite(startsAt.getTime()) || !Number.isFinite(endsAt.getTime()) || endsAt <= startsAt) { setError('The event end time must be after its start time.'); return }
+    if (!Number.isFinite(startsAt.getTime()) || startsAt <= new Date() || !Number.isFinite(endsAt.getTime()) || endsAt <= startsAt) { setError('Choose a future start time and an end time after the start.'); return }
     setBusy(true); setError(''); setMessage('')
     try {
       await updateSkEvent({ id: item.id, title: parsed.data.title, description: parsed.data.description, location: parsed.data.location, startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString() })
@@ -176,8 +238,22 @@ export function SkEventsPage({ focusId, focusPage, focusStatus, onFocusHandled }
     } catch { setError('Unable to reschedule this event. Check the details and try again.') }
     finally { setBusy(false) }
   }
+  async function completeEarly(item: SkEvent, event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const reason = earlyCompletionReason.trim()
+    if (reason.length < 3 || reason.length > 1000) { setError('Enter an early completion reason between 3 and 1,000 characters.'); return }
+    if (new Date(item.starts_at).getTime() > Date.now()) { setError('An event cannot be completed before it starts.'); return }
+    setBusy(true); setError(''); setMessage('')
+    try {
+      await completeSkEvent(item.id, reason)
+      setEarlyCompletionEventId(null); setEarlyCompletionReason(''); await refresh()
+      setMessage('Event completed early. Opted-in community members have been notified.')
+    } catch { setError('Unable to complete this event early. Refresh and try again.') }
+    finally { setBusy(false) }
+  }
   async function act(item: SkEvent, action: 'approve' | 'reject' | 'complete' | 'cancel') {
     let note: string | null = null
+    if (action === 'approve' && new Date(item.starts_at) <= new Date()) { setError('This schedule has already started. Return it to the creator so they can choose a future date before publishing.'); return }
     if (action === 'reject') { note = window.prompt('Reason for returning this schedule (3–1000 characters):')?.trim() ?? ''; if (note.length < 3 || note.length > 1000) return }
     else if (action === 'cancel') { note = window.prompt('Reason for cancelling this event (3–1000 characters):')?.trim() ?? ''; if (note.length < 3 || note.length > 1000) return }
     else if (action === 'complete' && !window.confirm('Mark this SK event schedule as complete?')) return
@@ -193,21 +269,28 @@ export function SkEventsPage({ focusId, focusPage, focusStatus, onFocusHandled }
 
   return <section className="operation-page">
     <PageHeading title="SK events & programs" description="Schedule youth programs and community events, with Captain review before publication.">
-      {canManage.data && <button className="button primary" onClick={() => setShowForm((visible) => !visible)}><CalendarDays size={16} />Plan an event</button>}
+      {canManage.data && <div className="ops-form-actions"><button className="button outline" type="button" disabled={exportBusy || dateRangeInvalid || !events.data?.totalCount} onClick={() => void exportSchedules()}><Download size={16} />{exportBusy ? 'Preparing export…' : 'Export schedules'}</button><button className="button primary" onClick={() => setShowForm((visible) => !visible)}><CalendarDays size={16} />Plan an event</button></div>}
     </PageHeading>
+    {canManage.data && exportProgress && <p className="field-hint" role="status">{exportProgress}</p>}
+    {canManage.data && exportError && <p className="account-security-error" role="alert">{exportError}</p>}
     <div className="ops-panel referral-privacy-notice"><ShieldAlert size={18} /><p><strong>Event schedules only.</strong> This page does not register youth or participants, collect attendance, or store information about minors. Keep private details out of event descriptions.</p></div>
     {!tenantId && <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to view published SK events." />}
     {Boolean(tenantId) && (canManage.isPending || canReview.isPending) && <LoadingNotice compact />}
     {(canManage.error || canReview.error) && <ErrorNotice message="SK event management or review access could not be checked. Published events remain available; staff controls are hidden until access can be verified." />}
     {message && <div className="ops-success" role="status"><CheckCircle2 size={16} />{message}</div>}{error && <ErrorNotice message={error} />}
     {showForm && canManage.data && <form className="ops-panel ops-form" onSubmit={(event) => void create(event)}><div className="ops-panel-heading"><div><h2>Plan an SK program or event</h2><p>Schedules remain private until a Captain publishes them.</p></div><CalendarDays size={19} /></div>
-      <div className="ops-form-grid"><label>Event title<input name="title" minLength={3} maxLength={180} required placeholder="Youth community clean-up" /></label><label>Location<input name="location" minLength={2} maxLength={240} required placeholder="Venue or meeting point" /></label><label>Starts<input name="starts" type="datetime-local" required /></label><label>Ends<input name="ends" type="datetime-local" required /></label><label className="span-two">Public event details<textarea name="description" maxLength={2000} placeholder="General schedule and logistics only. Do not include names or personal details." /></label></div>
+      <div className="ops-form-grid"><label>Event title<input name="title" minLength={3} maxLength={180} required placeholder="Youth community clean-up" /></label><label>Location<input name="location" minLength={2} maxLength={240} required placeholder="Venue or meeting point" /></label><label>Starts<input name="starts" type="datetime-local" min={minimumEventStart} required /></label><label>Ends<input name="ends" type="datetime-local" required /></label><label className="span-two">Public event details<textarea name="description" maxLength={2000} placeholder="General schedule and logistics only. Do not include names or personal details." /></label></div>
       <div className="ops-form-actions"><button className="button primary" disabled={busy}>Submit for review</button></div>
     </form>}
     {Boolean(tenantId) && <div className="health-outreach-filters">
       <label className="archive-search"><Search size={16} /><input type="search" aria-label="Search SK events" maxLength={100} placeholder="Search event, location, or details" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} /></label>
       <label>Status<select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value as typeof statusFilter); setPage(0) }}><option value="all">All statuses</option><option value="draft">Awaiting review</option><option value="changes_requested">Changes requested</option><option value="published">Published</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></label>
+      <label>Starts on or after<input type="date" value={startsOnOrAfter} max={startsOnOrBefore || undefined} onChange={(event) => { setStartsOnOrAfter(event.target.value); setPage(0) }} /></label>
+      <label>Starts on or before<input type="date" value={startsOnOrBefore} min={startsOnOrAfter || undefined} onChange={(event) => { setStartsOnOrBefore(event.target.value); setPage(0) }} /></label>
+      {(startsOnOrAfter || startsOnOrBefore) && <button type="button" className="button outline" onClick={() => { setStartsOnOrAfter(''); setStartsOnOrBefore(''); setPage(0) }}>Clear dates</button>}
     </div>}
+    {dateRangeInvalid && <p className="account-security-error" role="alert">The end date must be the same day or later than the start date.</p>}
+    {(startsOnOrAfter || startsOnOrBefore) && !dateRangeInvalid && <p className="field-hint">Dates use your local timezone. Search results, overview counts, and CSV exports use this same start-date window.</p>}
     {summary.error && <ErrorNotice message="Unable to load the SK event overview." onRetry={() => void summary.refetch()} retrying={summary.isFetching} />}
     {summary.data && <section className="health-outreach-summary sk-event-summary" aria-label="SK event schedule overview">
       <article className="ops-panel"><span>Matching events</span><strong>{summary.data.totalCount.toLocaleString()}</strong></article>
@@ -218,23 +301,26 @@ export function SkEventsPage({ focusId, focusPage, focusStatus, onFocusHandled }
       <button type="button" className="ops-panel health-outreach-summary-action" aria-label={`Show ${summary.data.cancelledCount} cancelled SK events`} onClick={() => { setPage(0); setStatusFilter('cancelled') }}><span>Cancelled</span><strong>{summary.data.cancelledCount.toLocaleString()}</strong><small>View cancelled events</small></button>
     </section>}
     {events.isPending && tenantId && <LoadingNotice />}{events.error && <ErrorNotice message="Unable to load SK event schedules." onRetry={() => void events.refetch()} retrying={events.isFetching} />}
-    {events.data?.totalCount === 0 && <div className="ops-empty"><CalendarDays size={22} /><strong>{search || statusFilter !== 'all' ? 'No matching SK events' : 'No SK events scheduled'}</strong><p>{search || statusFilter !== 'all' ? 'Try another search or status.' : 'Published youth programs and events will appear here.'}</p></div>}
+    {events.data?.totalCount === 0 && <div className="ops-empty"><CalendarDays size={22} /><strong>{search || statusFilter !== 'all' || startsOnOrAfter || startsOnOrBefore ? 'No matching SK events' : 'No SK events scheduled'}</strong><p>{search || statusFilter !== 'all' || startsOnOrAfter || startsOnOrBefore ? 'Try another search, status, or date range.' : 'Published youth programs and events will appear here.'}</p></div>}
     <div className="referral-list">{events.data?.rows.map((item) => <article id={`sk-event-${item.id}`} className={`ops-panel referral-card ${item.id === focusId ? 'health-campaign-focused' : ''}`} key={item.id}>
       <div className="referral-card-head"><div><h2>{item.title}</h2><p><MapPin size={14} />{item.location}</p></div><StatusPill status={item.status} /></div>
       {item.description && <p className="referral-summary">{item.description}</p>}
       <div className="referral-meta"><span><strong>Starts</strong>{formatDateTime(item.starts_at)}</span><span><strong>Ends</strong>{formatDateTime(item.ends_at)}</span></div>
-      {item.status === 'published' && <div className="ops-form-actions"><button type="button" className="button outline" onClick={() => downloadSkEventCalendarFile(item)}><Download size={15} />Add to calendar</button></div>}
+      {item.status === 'published' && <div className="ops-form-actions"><button type="button" className="button outline" onClick={() => void shareEventDetails(item)}><Share2 size={15} />Share details</button><button type="button" className="button outline" onClick={() => downloadSkEventCalendarFile(item)}><Download size={15} />Add to calendar</button></div>}
+      {item.status === 'published' && shareFeedback?.eventId === item.id && <p className="field-hint" role="status">{shareFeedback.message}</p>}
       {item.review_note && <p className="field-hint">{item.status === 'changes_requested' ? 'Captain feedback: ' : item.status === 'cancelled' ? 'Cancellation reason: ' : 'Review note: '}{item.review_note}</p>}
       {canManage.data && item.created_by === user?.id && ['draft', 'changes_requested'].includes(item.status) && <div className="ops-form-actions"><button type="button" className="button outline" disabled={busy} onClick={() => setEditingEventId((current) => current === item.id ? null : item.id)}>{editingEventId === item.id ? 'Close editor' : item.status === 'changes_requested' ? 'Edit and resubmit' : 'Edit draft'}</button></div>}
-      {editingEventId === item.id && <form className="ops-panel ops-form health-campaign-editor" onSubmit={(event) => void edit(item, event)}><div className="ops-form-grid"><label>Event title<input name="title" minLength={3} maxLength={180} defaultValue={item.title} required /></label><label>Location<input name="location" minLength={2} maxLength={240} defaultValue={item.location} required /></label><label>Starts<input name="starts" type="datetime-local" defaultValue={toDateTimeInput(item.starts_at)} required /></label><label>Ends<input name="ends" type="datetime-local" defaultValue={toDateTimeInput(item.ends_at)} required /></label><label className="span-two">Public event details<textarea name="description" maxLength={2000} defaultValue={item.description} placeholder="General schedule and logistics only. Do not include names or personal details." /></label></div><div className="ops-form-actions"><button className="button primary" disabled={busy}>{item.status === 'changes_requested' ? 'Resubmit for review' : 'Save draft'}</button><button type="button" className="button outline" disabled={busy} onClick={() => setEditingEventId(null)}>Cancel</button></div></form>}
+      {editingEventId === item.id && <form className="ops-panel ops-form health-campaign-editor" onSubmit={(event) => void edit(item, event)}><div className="ops-form-grid"><label>Event title<input name="title" minLength={3} maxLength={180} defaultValue={item.title} required /></label><label>Location<input name="location" minLength={2} maxLength={240} defaultValue={item.location} required /></label><label>Starts<input name="starts" type="datetime-local" min={minimumEventStart} defaultValue={toDateTimeInput(item.starts_at)} required /></label><label>Ends<input name="ends" type="datetime-local" defaultValue={toDateTimeInput(item.ends_at)} required /></label><label className="span-two">Public event details<textarea name="description" maxLength={2000} defaultValue={item.description} placeholder="General schedule and logistics only. Do not include names or personal details." /></label></div><div className="ops-form-actions"><button className="button primary" disabled={busy}>{item.status === 'changes_requested' ? 'Resubmit for review' : 'Save draft'}</button><button type="button" className="button outline" disabled={busy} onClick={() => setEditingEventId(null)}>Cancel</button></div></form>}
       {(canManage.data || canReview.data) && <SkEventActivityDetails tenantId={tenantId} eventId={item.id} />}
       {['published', 'completed', 'cancelled'].includes(item.status) && <SkEventScheduleHistory key={item.id} tenantId={tenantId} eventId={item.id} />}
       {canManage.data && ['published', 'completed', 'cancelled'].includes(item.status) && <SkEventNotificationReach key={item.id} tenantId={tenantId} eventId={item.id} />}
       {canReview.data && ['draft', 'changes_requested'].includes(item.status) && <div className="ops-form-actions"><button className="button primary" disabled={busy || item.created_by === user?.id} title={item.created_by === user?.id ? 'The creator cannot approve their own schedule.' : undefined} onClick={() => void act(item, 'approve')}>Publish</button><button className="button outline" disabled={busy} onClick={() => void act(item, 'reject')}>Return with reason</button></div>}
       {canManage.data && item.status === 'published' && new Date(item.ends_at).getTime() <= Date.now() && <div className="ops-form-actions"><button className="button outline" disabled={busy} onClick={() => void act(item, 'complete')}>Mark complete</button></div>}
+      {canManage.data && item.status === 'published' && new Date(item.starts_at).getTime() <= Date.now() && new Date(item.ends_at).getTime() > Date.now() && <div className="ops-form-actions"><button type="button" className="button outline" disabled={busy} onClick={() => { setEarlyCompletionEventId((current) => current === item.id ? null : item.id); setEarlyCompletionReason('') }}>{earlyCompletionEventId === item.id ? 'Close early completion' : 'Complete event early'}</button></div>}
+      {earlyCompletionEventId === item.id && <form className="ops-panel ops-form health-campaign-editor" onSubmit={(event) => void completeEarly(item, event)}><label>Reason for completing before the scheduled end<textarea value={earlyCompletionReason} minLength={3} maxLength={1000} onChange={(event) => setEarlyCompletionReason(event.target.value)} required placeholder="Explain why the event is ending early. Do not include participant or personal details." /></label><p className="field-hint">The reason is recorded in staff activity history. Opted-in members receive a completion notice.</p><div className="ops-form-actions"><button className="button primary" disabled={busy}>Confirm early completion</button><button type="button" className="button outline" disabled={busy} onClick={() => { setEarlyCompletionEventId(null); setEarlyCompletionReason('') }}>Cancel</button></div></form>}
       {canManage.data && item.status === 'published' && new Date(item.ends_at).getTime() > Date.now() && <div className="ops-form-actions"><button className="button outline" disabled={busy} onClick={() => void act(item, 'cancel')}>Cancel event</button></div>}
       {canManage.data && item.status === 'published' && new Date(item.ends_at).getTime() > Date.now() && <div className="ops-form-actions"><button type="button" className="button outline" disabled={busy} onClick={() => setReschedulingEventId((current) => current === item.id ? null : item.id)}>{reschedulingEventId === item.id ? 'Close rescheduler' : 'Reschedule event'}</button></div>}
-      {reschedulingEventId === item.id && <form className="ops-panel ops-form health-campaign-editor" onSubmit={(event) => void reschedule(item, event)}><div className="ops-panel-heading"><div><h3>Update published schedule</h3><p>Members who allow SK updates will be notified of the revised time or location.</p></div><CalendarDays size={18} /></div><div className="ops-form-grid"><label>New location<input name="location" minLength={2} maxLength={240} defaultValue={item.location} required /></label><label>New start<input name="starts" type="datetime-local" defaultValue={toDateTimeInput(item.starts_at)} required /></label><label>New end<input name="ends" type="datetime-local" defaultValue={toDateTimeInput(item.ends_at)} required /></label><label className="span-two">Public reason for change<textarea name="reason" minLength={3} maxLength={1000} required placeholder="Explain the schedule change without names or private details." /></label></div><div className="ops-form-actions"><button className="button primary" disabled={busy}>Save and notify</button><button type="button" className="button outline" disabled={busy} onClick={() => setReschedulingEventId(null)}>Cancel</button></div></form>}
+      {reschedulingEventId === item.id && <form className="ops-panel ops-form health-campaign-editor" onSubmit={(event) => void reschedule(item, event)}><div className="ops-panel-heading"><div><h3>Update published schedule</h3><p>Members who allow SK updates will be notified of the revised time or location.</p></div><CalendarDays size={18} /></div><div className="ops-form-grid"><label>New location<input name="location" minLength={2} maxLength={240} defaultValue={item.location} required /></label><label>New start<input name="starts" type="datetime-local" min={minimumEventStart} defaultValue={toDateTimeInput(item.starts_at)} required /></label><label>New end<input name="ends" type="datetime-local" defaultValue={toDateTimeInput(item.ends_at)} required /></label><label className="span-two">Public reason for change<textarea name="reason" minLength={3} maxLength={1000} required placeholder="Explain the schedule change without names or private details." /></label></div><div className="ops-form-actions"><button className="button primary" disabled={busy}>Save and notify</button><button type="button" className="button outline" disabled={busy} onClick={() => setReschedulingEventId(null)}>Cancel</button></div></form>}
     </article>)}</div>
     {totalPages > 1 && <nav className="ops-panel ops-form-actions" aria-label="SK event pages">
       <span className="muted">Page {page + 1} of {totalPages} · {events.data?.totalCount ?? 0} events</span>

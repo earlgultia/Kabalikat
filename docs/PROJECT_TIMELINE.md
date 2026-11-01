@@ -14,7 +14,7 @@ The 74% figure is a rough estimate of the seven roadmap phases in the project sp
 | 2. Core barangay operations | Onboarding, residents, announcements, documents, meetings and attendance | 92% | Announcement audience targeting, notification preferences, resident feedback and staff follow-up, request withdrawal/history, and staff-reviewed resident profile correction requests are implemented; live database and policy checks are pending. |
 | 3. Archives and productivity | Archive, meeting records, QR attendance, reports and OCR | 85% | Archive and productivity tools implemented; no OCR provider is configured. |
 | 4. Finance and projects | Budgets, approvals, receipts, committees and project tracking | 90% | Finance and project workflows implemented; database verification is pending. |
-| 5. Specialized workspaces | SK, health, safety, incident workflows and referrals | 83% | SK proposals, independently reviewed events, creator revision/resubmission, reasoned cancellation and rescheduling with public change history, and public accomplishment summaries with activity history; a unified calendar with downloadable upcoming published SK and health outreach schedules; searchable status-filtered BHW and SK event queues; searchable Tanod patrol shifts; incidents with verified handoff logging; advisories; published emergency contacts and evacuation centers with audit history; controlled referrals; and restricted incident evidence implemented. Clinical workflows and restricted youth registry/programs remain. |
+| 5. Specialized workspaces | SK, health, safety, incident workflows and referrals | 83% | SK proposals, independently reviewed events, creator revision/resubmission, reasoned cancellation, early completion and rescheduling with public change history, date-filtered queues and exports, and public accomplishment summaries with activity history; BHW proposals and review, schedule cancellation and rescheduling with public change history; a unified calendar with downloadable upcoming published SK and health outreach schedules; searchable status-filtered BHW and SK event queues; searchable Tanod patrol shifts; incidents with verified handoff logging; advisories; published emergency contacts and evacuation centers with audit history; controlled referrals; and restricted incident evidence implemented. Clinical workflows and restricted youth registry/programs remain. |
 | 6. Subscriptions and integrations | Plans, billing, notifications, OCR/AI providers and support | 55% | Support portal now has searchable, status-filtered, paginated triage with conversations loaded on demand; subscription metadata includes review indicators and filtered CSV export. Payments, enforced entitlements, email/SMS, and provider integrations remain. |
 | 7. Hardening and pilot | Security verification, accessibility, performance, backups, pilot and training | 30% | SPA deployment routing and browser security headers are configured; GitHub Actions is configured for lint, TypeScript checks, Vitest, production builds, isolated migration application, and pgTAP checks. Keyboard skip links, reduced-motion preferences, keyboard-accessible mobile navigation, and consistent dialog focus handling are supported. Full accessibility and cross-tenant review, successful CI database verification, recovery, pilot and operational reviews remain. |
 
@@ -37,20 +37,31 @@ This is a dependency-based timeline rather than a calendar schedule. No delivery
 - Invitation-based sign-in and multi-barangay role/permission foundation.
 - Resident and household records, resident correction requests and owner-only personal-data export, private feedback with staff replies, announcements, document services, meetings, attendance and private archive.
 - Finance approvals, receipts, committee tasks, SK project proposals with activity history and independently reviewed public accomplishment summaries, general barangay project tracking, incidents, patrol shifts, disaster advisories, and audited emergency contact/evacuation center listings.
-- Platform support portal with searchable paginated triage and on-demand conversation/history loading, admin-managed plan/subscription records with review indicators and CSV exports, controlled audited inter-barangay referrals, BHW outreach scheduling, and SK event scheduling with Captain review, revisions, cancellation, rescheduling, and public change history; plus a read-only calendar for upcoming published community events.
+- Platform support portal with searchable paginated triage and on-demand conversation/history loading, admin-managed plan/subscription records with review indicators and CSV exports, controlled audited inter-barangay referrals, BHW outreach scheduling with Captain review, reasoned cancellation and rescheduling history, and SK event scheduling with Captain review, revisions, cancellation, rescheduling, and public change history; plus a read-only calendar for upcoming published community events.
 - Vercel SPA deep-link rewrite and browser security headers.
 - Installable PWA app shell with a clear offline notice, reconnect prompt, and user-controlled updates; secure records and mutations still require a live connection and are not queued for later sync.
 - Community update notifications link to the matching paginated announcement, advisory, document request, feedback item, or profile correction request when the signed-in role can access it.
 - GitHub Actions CI for locked dependency installation, lint, TypeScript checks, Vitest, and production builds on pushes and pull requests.
 - An isolated Supabase CI job that applies all migrations and runs the existing pgTAP suites without hosted-project credentials; its first GitHub run is still pending.
+- The platform activity page records high-level barangay onboarding and subscription changes without copying tenant records.
 
 ## Main remaining work
 
-1. **Verify the database:** The isolated CI workflow applies migrations 0001-0129 and runs pgTAP suites, including role-targeted announcement, resident profile correction, private feedback, public document verification, platform subscription controls, and owner-scoped personal export coverage. Add resident directory, document queue, finance paging, archive search and folder paging, meeting resolution/member search, community calendar, platform directory/subscription paging, support queue/thread, committee member-picker, referral paging, Tanod picker, meeting attendee-directory, document type history, SK accomplishment paging, project-history, finance budget paging, feedback activity paging, complete personal export, health outreach search, attendance aggregate and summary, revision, cancellation, audit history, outreach completion/cancellation/private review/publication notification, review queue summary, health review submission, SK event search, review submission and publication notification, and SK event queue summary coverage, patrol shift search, searchable meeting schedule, meeting status history, and meeting schedule/status notification coverage to pgTAP and review the first GitHub run. Its status has not been verified in GitHub yet.
+1. **Verify the database:** The isolated CI workflow applies migrations 0001-0158 and runs pgTAP suites, including role-targeted announcement, resident profile correction, private feedback, public document verification, platform subscription controls, and owner-scoped personal export coverage. Add resident directory, document queue, finance paging, archive search and folder paging, meeting resolution/member search, community calendar paging/date filters, announcement search/date filters, incident report date/severity/assignment filters and manager queue breakdown, incident assignment and status notifications, patrol assignment, cancellation, rescheduling, start, and completion notifications, completion handover, filtered patrol shift history, patrol coverage summary, platform directory/subscription paging, platform onboarding and subscription activity history, support queue/thread, committee member-picker, referral paging, Tanod picker, meeting attendee-directory, document type history, SK accomplishment paging, project-history, finance budget paging, feedback activity paging, complete personal export, health outreach search/date filters, attendance aggregate and summary, revision, cancellation, audit history, outreach completion/early completion/attendance correction/cancellation/private review/publication notification, SK event reasoned early completion and notification coverage, review queue summary, health review submission, health outreach rescheduling/history/notification summary, SK event search/date filters, review submission and publication notification, SK event queue summary coverage, patrol shift search, searchable meeting schedule/date filters, meeting status history, and meeting schedule/status notification coverage to pgTAP and review the first GitHub run. Its status has not been verified in GitHub yet.
 2. **Complete agreed specialist modules:** Clinical BHW workflows and restricted youth registry/program workflows require explicit data minimization and access rules. Current BHW and SK event features only schedule public community events.
 3. **Decide integration behavior:** Billing, plan enforcement, email/SMS, OCR and AI require product decisions, real providers, server-side secrets, and user-facing failure handling.
 4. **Complete hardening:** Cross-tenant/RLS review, accessibility and performance checks, backup restore, operational monitoring, and incident response procedures.
 5. **Prepare and run a pilot:** Confirm privacy/legal notices and retention policy, deployment and support ownership, user training, and pilot acceptance criteria. Rehearse and record backup restoration using the [recovery runbook](BACKUP_RECOVERY.md).
+
+Health outreach rescheduling: Migration `0132_health_outreach_rescheduling.sql` adds permission-checked schedule updates for published outreach, snapshots public old/new logistics and the reason, delivers preference-aware notices, and exposes a paginated change history in the outreach page. Apply after `0131_health_outreach_future_schedule_guard.sql`; hosted database behavior has not been verified.
+
+Health outreach notice reach: Migration `0133_health_outreach_notification_summary.sql` adds authorized aggregate counts for publication, schedule change, cancellation, and completion notices. Managers can expand the notification reach panel on an outreach card to see sent and read totals. Apply after `0132_health_outreach_rescheduling.sql`; counts do not identify recipients or represent attendance.
+
+Early outreach completion: Migration `0134_health_outreach_early_completion.sql` and the outreach card form let a manager close a started event before its planned end, record an aggregate attendance count and required reason, and notify opted-in members. The staff activity log distinguishes early completion from completion after the scheduled end.
+
+Attendance correction: Migration `0135_health_outreach_attendance_correction.sql` adds a reasoned manager correction action for completed events. The form records only a corrected aggregate total; the prior and new totals and reason appear in the staff activity log.
+
+Health outreach date filters: Migration `0136_health_outreach_start_date_filters.sql` adds local-date start-window filtering before database pagination. Queue pages, summary cards, and full matching CSV exports use the same window.
 
 Recent frontend verification: typecheck, lint, and production build passed after the notification deep-link and PWA connection-status updates. These checks verify the client build only. They do not apply migrations, prove hosted RLS behavior, or replace pilot and privacy review.
 
@@ -154,4 +165,64 @@ SK event schedule history: Migration `0128_paginated_sk_event_schedule_history.s
 
 SK event notification reach: Migration `0129_sk_event_notification_summary.sql` adds an on-demand summary for authorized SK managers: notification counts and read counts for publication, schedule updates, and cancellation. The UI shows aggregates only; these counts do not represent RSVP or attendance. Apply after `0128_paginated_sk_event_schedule_history.sql`.
 
-SK calendar convenience: Public SK event cards now offer an “Add to calendar” download for the currently published schedule. The `.ics` file uses the latest approved time and location and can be imported into common calendar apps; no extra participant data is collected.
+SK calendar convenience: Public SK event cards now offer an Add to calendar download for the currently published schedule. The `.ics` file uses the latest approved time and location and can be imported into common calendar apps; no extra participant data is collected.
+
+SK schedule reporting: Authorized event managers can export all schedules matching the current status and search filters as a CSV, fetched in bounded pages. The export excludes staff and member identifiers and protects spreadsheet cells against formula execution.
+
+SK event sharing: Published event cards can share the public title, schedule, location, and description through the device share sheet or copy the details to the clipboard. Sharing uses only the public schedule fields.
+
+SK schedule validation: Migration `0130_sk_event_future_schedule_guard.sql` rejects new or returned draft schedules with a start time in the past and blocks approval of an already-started proposal. Creation, editing, rescheduling, and review forms give matching validation. Apply after `0129_sk_event_notification_summary.sql`.
+
+BHW schedule validation: Migration `0131_health_outreach_future_schedule_guard.sql` requires future start times for new and returned outreach schedules and prevents publishing proposals that have already started. BHW forms and Captain review controls provide matching validation. Apply after `0130_sk_event_future_schedule_guard.sql`.
+
+SK event early completion: Migration 0137_sk_event_early_completion.sql allows managers to close a started event early with a required reason, records the action in staff history, notifies opted-in active members, and adds sent/read totals to the manager-only notification reach panel. Apply after 0136_health_outreach_start_date_filters.sql. Hosted database behavior is not yet verified.
+
+SK event date filters: Migration `0138_sk_event_start_date_filters.sql` applies local start-date windows consistently to paginated queue results, overview status counts, and full matching CSV exports. Clear the filter to restore the unbounded schedule view. This database change has not been applied to or verified against a hosted project.
+
+Meeting date filters: Migration `0139_meeting_schedule_start_date_filters.sql` applies a local start-date range to the paginated meeting schedule and the manager-only CSV export. The export contains schedule fields only and leaves attendee records in their separately permission-checked workflow. Hosted database behavior has not been verified.
+
+Community calendar date filters: Migration `0140_community_calendar_start_date_filters.sql` applies the local start-date range to both SK and health outreach calendar results and the full ICS download. The page continues to show only published schedules that are still upcoming or in progress.
+
+Announcement queue filters: Migration `0141_announcement_search_and_date_filters.sql` adds server-side title/message search, status filters, and creation date filters to the paginated announcement feed. The UI clears filters when following a notification link, so deep links still locate the correct announcement page.
+
+Incident report date filters: Migration `0142_incident_report_date_filters.sql` adds local report-date bounds to the incident list while preserving the existing role-visible rows and status/category/search filters. The responsive filter bar includes date controls and a clear-dates action. Private evidence remains access-controlled and is not exported.
+
+Incident manager queue overview: Migration `0143_incident_manager_queue_breakdown.sql` adds date-aware status/category counts to the incident dashboard for users with incident management permission. The compact responsive panel returns aggregates only and includes zero-count values.
+
+Incident assignment alerts: Migration `0144_incident_assignment_notifications.sql` sends a private in-app notice to the currently assigned Tanod. The alert routes to the incident workspace without embedding report text and is hidden from the former assignee after reassignment.
+
+Incident status alerts: Migration `0145_incident_status_notifications.sql` sends the report creator a generic in-app alert after a status transition. The notice links to the incident workspace and exposes no report information in the notification itself.
+
+Incident severity filter: Migration `0146_incident_severity_filter.sql` adds a server-side severity selector to the responsive incident queue, preserving the existing RLS-scoped paging and other filters.
+
+Incident assignment queue: Migration `0148_incident_assignment_queue_filter.sql` adds responsive all, assigned-to-me, and manager-only unassigned views to the incident queue. Assignment filtering stays server-side, paginated, tenant-scoped, and under existing RLS. Migration `0147_incident_assigned_to_me_filter.sql` remains part of the required ordered history; hosted database behavior has not been verified.
+
+Incident manager CSV export: The incident queue can export every page matching its current search, status, category, severity, assignment and date filters. The export uses the existing permission-checked, RLS-scoped paginated RPC and includes only report date, category, severity, location, summary, status and assignment state. Private evidence and details are excluded; CSV formula-leading characters are escaped.
+
+Incident report card details: Detailed narratives are collapsed by default behind a keyboard-accessible disclosure, keeping the initial queue easier to scan on desktop and mobile.
+
+Incident needs-attention filter: Migration `0150_incident_needs_attention_filter.sql` enables a manager-only quick view for submitted, acknowledged, or in-progress incidents. It combines with assignment, date and other filters and applies equally to the queue CSV export.
+
+Patrol assignment alerts: Migration `0151_patrol_shift_assignment_notifications.sql` notifies the currently assigned Tanod when a patrol shift is assigned or reassigned. The generic notice opens and focuses the assigned shift in the paginated patrol queue and is hidden from former assignees; hosted database behavior has not been verified.
+
+Patrol cancellation alerts: Migration `0152_patrol_cancellation_notifications.sql` notifies the assigned Tanod when a scheduled shift is cancelled and routes them to the cancelled shift. The notice is private and excludes the cancellation note; hosted database behavior has not been verified.
+
+Patrol rescheduling: Migration `0153_patrol_shift_rescheduling.sql` adds a responsive Captain schedule editor for future patrol shifts, validates the revised schedule in a permission-checked RPC, records the reason and before/after times in the restricted shift log, and notifies the current assignee with a private pointer alert. Hosted database behavior has not been verified.
+
+Patrol lifecycle alerts: Migration `0154_patrol_lifecycle_notifications.sql` notifies users with patrol management permission when an assigned Tanod starts or completes a shift. Alerts focus the shift in the patrol queue and contain no log details. Hosted database behavior has not been verified.
+
+Patrol completion handover: Migration `0155_patrol_completion_handover.sql` requires the assigned Tanod to submit a concise shift summary before completion. The summary is saved atomically with the completion event in the restricted shift log and appears in the responsive patrol history.
+
+Filtered patrol history: Migration `0156_filtered_patrol_shift_history.sql` adds server-side date and entry-type filters to the paginated shift log. Existing role- and assignee-scoped access remains unchanged, with compact stacked controls on mobile.
+
+Patrol coverage overview: Migration `0157_patrol_coverage_summary.sql` adds date-scoped shift and activity totals for authorized Captains. The summary avoids personal data and is displayed in responsive cards with a date range selector.
+
+Patrol schedule export: Captains can download every shift matching the current queue search and status filters as a spreadsheet-safe CSV. The export includes shift title, patrol area, schedule, and status, and excludes user identifiers and log contents.
+
+Platform activity history: Migration `0158_platform_activity_log.sql` records high-level tenant onboarding and subscription changes. The Super Admin dashboard provides a searchable, paginated activity page on desktop and mobile; only platform administrators can read these summaries.
+
+Incident queue overview shortcuts: Managers can select a status or category count to filter the paginated list and select it again to clear that filter. Shortcuts use the existing server-side queue query and work on mobile and desktop.
+
+Incident unassigned-work shortcut: The manager's active unassigned count now opens the combined unassigned plus needs-attention queue view. Selecting the count again returns to all assignments.
+
+Incident unassigned-work summary: Migration `0149_incident_unassigned_queue_summary.sql` adds a manager-only count of active reports without an assignee to the date-aware queue overview. It is aggregate-only and responsive on desktop and mobile; hosted database behavior has not been verified.

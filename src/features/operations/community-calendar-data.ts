@@ -12,13 +12,15 @@ export type CommunityCalendarItem = {
 
 export const COMMUNITY_CALENDAR_PAGE_SIZE = 20
 
-export async function listCommunityEventPage(barangayId: string, page: number, search: string, source: 'all' | CommunityCalendarItem['source']) {
-  const { data, error } = await client().rpc('list_community_calendar_page', {
+export async function listCommunityEventPage(barangayId: string, page: number, search: string, source: 'all' | CommunityCalendarItem['source'], startsAfter: string | null = null, startsBefore: string | null = null) {
+  const { data, error } = await client().rpc('list_community_calendar_page_in_window', {
     p_barangay_id: barangayId,
     p_page: page,
     p_page_size: COMMUNITY_CALENDAR_PAGE_SIZE,
     p_search: search.trim().slice(0, 100) || null,
     p_source: source,
+    p_starts_after: startsAfter,
+    p_starts_before: startsBefore,
   })
   if (error) throw new Error(error.message)
   const rows = (data ?? []) as (CommunityCalendarItem & { total_count: number })[]
@@ -29,10 +31,10 @@ export async function listCommunityEventPage(barangayId: string, page: number, s
   }
 }
 
-export async function listAllCommunityEvents(barangayId: string, search: string, source: 'all' | CommunityCalendarItem['source'], onProgress?: (message: string) => void) {
+export async function listAllCommunityEvents(barangayId: string, search: string, source: 'all' | CommunityCalendarItem['source'], startsAfter: string | null = null, startsBefore: string | null = null, onProgress?: (message: string) => void) {
   const result: CommunityCalendarItem[] = []
   for (let page = 0; ; page += 1) {
-    const batch = await listCommunityEventPage(barangayId, page, search, source)
+    const batch = await listCommunityEventPage(barangayId, page, search, source, startsAfter, startsBefore)
     result.push(...batch.events)
     onProgress?.(`Gathering calendar events: ${result.length.toLocaleString()} of ${batch.total.toLocaleString()}`)
     if (result.length >= batch.total || batch.events.length === 0) return result

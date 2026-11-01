@@ -6,34 +6,51 @@ export type SkEvent = {
   created_by: string; created_at: string; reviewed_by: string | null; reviewed_at: string | null
   review_note: string | null; completed_at: string | null
 }
-export type SkEventAuditEntry = { id: string; event_id: string; action: 'event_created' | 'event_published' | 'event_rejected' | 'event_completed' | 'event_changes_requested' | 'event_updated' | 'event_resubmitted' | 'event_cancelled' | 'event_rescheduled'; note: string; created_at: string }
+export type SkEventAuditEntry = { id: string; event_id: string; action: 'event_created' | 'event_published' | 'event_rejected' | 'event_completed' | 'event_completed_early' | 'event_changes_requested' | 'event_updated' | 'event_resubmitted' | 'event_cancelled' | 'event_rescheduled'; note: string; created_at: string }
 export type SkEventQueueSummary = { totalCount: number; awaitingReviewCount: number; changesRequestedCount: number; publishedCount: number; completedCount: number; cancelledCount: number }
 export type SkEventScheduleChange = { id: string; reason: string; previous_location: string; previous_starts_at: string; previous_ends_at: string; new_location: string; new_starts_at: string; new_ends_at: string; created_at: string; total_count: number }
-export type SkEventNotificationSummary = { publication_sent: number; publication_read: number; schedule_update_sent: number; schedule_update_read: number; cancellation_sent: number; cancellation_read: number }
+export type SkEventNotificationSummary = { publication_sent: number; publication_read: number; schedule_update_sent: number; schedule_update_read: number; cancellation_sent: number; cancellation_read: number; completion_sent: number; completion_read: number }
 export const SK_EVENT_PAGE_SIZE = 20
 export const SK_EVENT_HISTORY_PAGE_SIZE = 25
 export const SK_EVENT_SCHEDULE_HISTORY_PAGE_SIZE = 10
 
 function client() { if (!supabase) throw new Error('Supabase is not configured.'); return supabase }
 
-export async function listSkEvents(barangayId: string, page: number, search: string, status: 'all' | SkEvent['status']) {
-  const { data, error } = await client().rpc('list_sk_event_page', {
+export async function listSkEvents(barangayId: string, page: number, search: string, status: 'all' | SkEvent['status'], startsAfter: string | null = null, startsBefore: string | null = null) {
+  const { data, error } = await client().rpc('list_sk_event_page_in_window', {
     p_barangay_id: barangayId,
     p_page: page,
     p_page_size: SK_EVENT_PAGE_SIZE,
     p_search: search.trim().slice(0, 100) || null,
     p_status: status,
+    p_starts_after: startsAfter,
+    p_starts_before: startsBefore,
   })
   if (error) throw new Error(error.message)
   const rows = (data ?? []) as (SkEvent & { total_count: number })[]
   return { rows, totalCount: Number(rows[0]?.total_count ?? 0) }
 }
 
-export async function getSkEventQueueSummary(barangayId: string, search: string, status: 'all' | SkEvent['status']): Promise<SkEventQueueSummary> {
-  const { data, error } = await client().rpc('get_sk_event_queue_summary', {
+export async function listAllSkEvents(barangayId: string, search: string, status: 'all' | SkEvent['status'], startsAfter: string | null = null, startsBefore: string | null = null, onProgress?: (loaded: number, total: number) => void) {
+  const first = await listSkEvents(barangayId, 0, search, status, startsAfter, startsBefore)
+  const rows = [...first.rows]
+  onProgress?.(rows.length, first.totalCount)
+  const pageCount = Math.ceil(first.totalCount / SK_EVENT_PAGE_SIZE)
+  for (let page = 1; page < pageCount; page += 1) {
+    const result = await listSkEvents(barangayId, page, search, status, startsAfter, startsBefore)
+    rows.push(...result.rows)
+    onProgress?.(rows.length, first.totalCount)
+  }
+  return rows
+}
+
+export async function getSkEventQueueSummary(barangayId: string, search: string, status: 'all' | SkEvent['status'], startsAfter: string | null = null, startsBefore: string | null = null): Promise<SkEventQueueSummary> {
+  const { data, error } = await client().rpc('get_sk_event_queue_window_summary', {
     p_barangay_id: barangayId,
     p_search: search.trim().slice(0, 100) || null,
     p_status: status,
+    p_starts_after: startsAfter,
+    p_starts_before: startsBefore,
   })
   if (error) throw new Error(error.message)
   const row = data?.[0] as { total_count: number; awaiting_review_count: number; changes_requested_count: number; published_count: number; completed_count: number; cancelled_count: number } | undefined
@@ -82,6 +99,8 @@ export async function getSkEventNotificationSummary(barangayId: string, eventId:
     schedule_update_read: Number(row?.schedule_update_read ?? 0),
     cancellation_sent: Number(row?.cancellation_sent ?? 0),
     cancellation_read: Number(row?.cancellation_read ?? 0),
+    completion_sent: Number(row?.completion_sent ?? 0),
+    completion_read: Number(row?.completion_read ?? 0),
   }
 }
 
@@ -94,7 +113,7 @@ export function createSkEvent(input: { barangayId: string; title: string; descri
   return rpc('create_sk_event', { p_barangay_id: input.barangayId, p_title: input.title, p_description: input.description, p_location: input.location, p_starts_at: input.startsAt, p_ends_at: input.endsAt })
 }
 export function reviewSkEvent(id: string, approve: boolean, note: string | null) { return rpc('review_sk_event', { p_event_id: id, p_approve: approve, p_note: note }) }
-export function completeSkEvent(id: string) { return rpc('complete_sk_event', { p_event_id: id }) }
+export function completeSkEvent(id: string, reason: string | null = null) { return rpc('complete_sk_event', { p_event_id: id, p_reason: reason }) }
 export function cancelSkEvent(id: string, reason: string) { return rpc('cancel_sk_event', { p_event_id: id, p_reason: reason }) }
 export function rescheduleSkEvent(input: { id: string; location: string; startsAt: string; endsAt: string; reason: string }) {
   return rpc('reschedule_sk_event', { p_event_id: input.id, p_new_location: input.location, p_new_starts_at: input.startsAt, p_new_ends_at: input.endsAt, p_reason: input.reason })

@@ -537,14 +537,15 @@ export function resubmitDocumentRequest(requestId: string, purpose: string) {
 
 export const ANNOUNCEMENT_PAGE_SIZE = 20
 
-export async function listAnnouncementPage(tenantId: string, page: number) {
-  const from = Math.max(0, page) * ANNOUNCEMENT_PAGE_SIZE
-  const { data, error, count } = await client().from('announcements')
-    .select('id,title,body,audience,audience_role_id,status,published_at,expires_at,created_at', { count: 'exact' })
-    .eq('barangay_id', tenantId).order('created_at', { ascending: false }).order('id', { ascending: false })
-    .range(from, from + ANNOUNCEMENT_PAGE_SIZE - 1)
+export async function listAnnouncementPage(tenantId: string, page: number, search = '', status = 'all', createdAfter: string | null = null, createdBefore: string | null = null) {
+  const { data, error } = await client().rpc('list_announcement_page_in_window', {
+    p_barangay_id: tenantId, p_page: page, p_page_size: ANNOUNCEMENT_PAGE_SIZE,
+    p_search: search.trim().slice(0, 100) || null, p_status: status,
+    p_created_after: createdAfter, p_created_before: createdBefore,
+  })
   if (error) throw new Error(error.message)
-  return { announcements: (data ?? []) as AnnouncementRow[], total: count ?? 0 }
+  const rows = (data ?? []) as (AnnouncementRow & { total_count: number })[]
+  return { announcements: rows, total: Number(rows[0]?.total_count ?? 0) }
 }
 
 export async function findAnnouncementPage(tenantId: string, announcementId: string) {
@@ -595,14 +596,26 @@ export function updateAnnouncementStatus(id: string, status: 'published' | 'arch
 
 export const MEETING_PAGE_SIZE = 20
 
-export async function listMeetingPage(tenantId: string, page: number, search = '', status = 'all') {
-  const { data, error } = await client().rpc('list_meeting_schedule_page', {
+export async function listMeetingPage(tenantId: string, page: number, search = '', status = 'all', startsAfter: string | null = null, startsBefore: string | null = null) {
+  const { data, error } = await client().rpc('list_meeting_schedule_page_in_window', {
     p_barangay_id: tenantId, p_page: page, p_page_size: MEETING_PAGE_SIZE,
     p_search: search.trim().slice(0, 100) || null, p_status: status,
+    p_starts_after: startsAfter, p_starts_before: startsBefore,
   })
   if (error) throw new Error(error.message)
   const rows = (data ?? []) as (MeetingRow & { total_count: number })[]
   return { meetings: rows, total: Number(rows[0]?.total_count ?? 0) }
+}
+
+export async function listAllMeetingSchedule(tenantId: string, search: string, status: string, startsAfter: string | null, startsBefore: string | null) {
+  const first = await listMeetingPage(tenantId, 0, search, status, startsAfter, startsBefore)
+  const meetings = [...first.meetings]
+  const pageCount = Math.ceil(first.total / MEETING_PAGE_SIZE)
+  for (let page = 1; page < pageCount; page += 1) {
+    const result = await listMeetingPage(tenantId, page, search, status, startsAfter, startsBefore)
+    meetings.push(...result.meetings)
+  }
+  return meetings
 }
 
 export const MEETING_MEMBER_PAGE_SIZE = 25

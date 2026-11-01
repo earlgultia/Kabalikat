@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
-import { Bell, Megaphone } from 'lucide-react'
+import { Bell, Megaphone, Search } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import { ANNOUNCEMENT_PAGE_SIZE, createAnnouncement, findAnnouncementPage, hasPermission, listAnnouncementAudienceRoles, listAnnouncementPage, updateAnnouncementStatus } from './data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
@@ -20,7 +20,30 @@ export function AnnouncementsPage({ focusId, onFocusHandled }: { focusId?: strin
   const tenantId = membership?.barangay_id ?? ''
   const queryClient = useQueryClient()
   const [page, setPage] = useState(0)
-  const announcements = useQuery({ queryKey: ['announcements', tenantId, page], queryFn: () => listAnnouncementPage(tenantId, page), enabled: Boolean(tenantId) })
+  const [searchInput, setSearchInput] = useState('')
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'draft' | 'published' | 'archived'>('all')
+  const [createdFrom, setCreatedFrom] = useState('')
+  const [createdThrough, setCreatedThrough] = useState('')
+  const localDateBoundary = (value: string, dayOffset = 0) => {
+    if (!value) return null
+    const [year, month, day] = value.split('-').map(Number)
+    const date = new Date(year, month - 1, day + dayOffset)
+    return Number.isNaN(date.getTime()) ? null : date.toISOString()
+  }
+  const dateRangeInvalid = Boolean(createdFrom && createdThrough && createdThrough < createdFrom)
+  const createdAfter = localDateBoundary(createdFrom)
+  const createdBefore = localDateBoundary(createdThrough, 1)
+  useEffect(() => {
+    const timeout = window.setTimeout(() => { setSearch(searchInput.trim()); setPage(0) }, 250)
+    return () => window.clearTimeout(timeout)
+  }, [searchInput])
+  useEffect(() => { setPage(0); setSearchInput(''); setSearch(''); setStatusFilter('all'); setCreatedFrom(''); setCreatedThrough('') }, [tenantId])
+  const announcements = useQuery({
+    queryKey: ['announcements', tenantId, page, search, statusFilter, createdFrom, createdThrough],
+    queryFn: () => listAnnouncementPage(tenantId, page, search, statusFilter, createdAfter, createdBefore),
+    enabled: Boolean(tenantId && !dateRangeInvalid),
+  })
   const [focusReadyId, setFocusReadyId] = useState('')
   const [focusError, setFocusError] = useState('')
   useEffect(() => {
@@ -29,6 +52,7 @@ export function AnnouncementsPage({ focusId, onFocusHandled }: { focusId?: strin
     setFocusReadyId('')
     setFocusError('')
     setPage(0)
+    setSearchInput(''); setSearch(''); setStatusFilter('all'); setCreatedFrom(''); setCreatedThrough('')
     void findAnnouncementPage(tenantId, focusId).then((targetPage) => {
       if (!active) return
       if (targetPage === null) {
@@ -116,11 +140,20 @@ export function AnnouncementsPage({ focusId, onFocusHandled }: { focusId?: strin
       <div className="ops-form-actions"><span className="field-hint">Keep sensitive resident or health details out of public messages.</span><button className="button primary" disabled={busy}>{busy ? 'Saving…' : 'Save announcement'}</button></div>
     </form>}
     <div className="ops-section-title"><h2>Community updates</h2><p>Published messages are visible according to their audience and tenant membership.</p></div>
-    {!tenantId ? <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to view local announcements." /> : announcements.isPending ? <LoadingNotice /> : announcements.error ? <ErrorNotice message={announcements.error.message} /> : announcements.data?.total ? announcements.data.announcements.length ?
+    {tenantId && <div className="incident-filters announcement-filters">
+      <label className="archive-search"><Search size={16} /><input type="search" aria-label="Search announcements" maxLength={100} placeholder="Search announcement title or message" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} /></label>
+      <label>Status<select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value as typeof statusFilter); setPage(0) }}><option value="all">All statuses</option><option value="published">Published</option><option value="draft">Drafts</option><option value="archived">Archived</option></select></label>
+      <label>Created on or after<input type="date" value={createdFrom} max={createdThrough || undefined} onChange={(event) => { setCreatedFrom(event.target.value); setPage(0) }} /></label>
+      <label>Created on or before<input type="date" value={createdThrough} min={createdFrom || undefined} onChange={(event) => { setCreatedThrough(event.target.value); setPage(0) }} /></label>
+      {(createdFrom || createdThrough) && <button type="button" className="button outline" onClick={() => { setCreatedFrom(''); setCreatedThrough(''); setPage(0) }}>Clear dates</button>}
+    </div>}
+    {dateRangeInvalid && <p className="account-security-error" role="alert">The end date must be the same day or later than the start date.</p>}
+    {(createdFrom || createdThrough) && !dateRangeInvalid && <p className="field-hint">Date filters use your local timezone and the announcement creation date.</p>}
+    {!tenantId ? <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to view local announcements." /> : dateRangeInvalid ? null : announcements.isPending ? <LoadingNotice /> : announcements.error ? <ErrorNotice message={announcements.error.message} /> : announcements.data?.total ? announcements.data.announcements.length ?
       <div className="ops-announcement-list">{announcements.data.announcements.map((item) => <article id={`announcement-${item.id}`} tabIndex={-1} className="ops-panel announcement-card" key={item.id}>
         <div className="announcement-top"><div><StatusPill status={item.status} /><span className="audience-label">{item.audience === 'role' ? `Role: ${audienceRoles.data?.find((role) => role.id === item.audience_role_id)?.label ?? 'selected role'}` : item.audience}</span></div>{canPublish.data && item.status !== 'archived' && <button className="text-action" onClick={() => void setStatus(item.id, item.status === 'published' ? 'archived' : 'published')}>{item.status === 'published' ? 'Archive' : 'Publish'}</button>}</div>
         <h2>{item.title}</h2><p>{item.body}</p><small>{item.published_at ? 'Published ' + new Date(item.published_at).toLocaleString() : 'Draft'}{item.expires_at ? ' · Expires ' + new Date(item.expires_at).toLocaleDateString() : ''}</small>
-      </article>)}</div> : <EmptyNotice title="No announcements on this page" detail="Move to another page to see more community updates." /> : <EmptyNotice title="No announcements yet" detail="Published community updates will appear here." />}
+    </article>)}</div> : <EmptyNotice title="No announcements on this page" detail="Move to another page to see more community updates." /> : <EmptyNotice title={search || statusFilter !== 'all' || createdFrom || createdThrough ? 'No matching announcements' : 'No announcements yet'} detail={search || statusFilter !== 'all' || createdFrom || createdThrough ? 'Try another search, status, or creation date range.' : 'Published community updates will appear here.'} />}
     {announcements.data && announcements.data.total > ANNOUNCEMENT_PAGE_SIZE && <nav className="ops-form-actions" aria-label="Announcement pages">
       <button className="button outline" disabled={page === 0 || announcements.isFetching} onClick={() => setPage((current) => Math.max(0, current - 1))}>Previous</button>
       <span className="field-hint">Page {page + 1} of {Math.ceil(announcements.data.total / ANNOUNCEMENT_PAGE_SIZE)}</span>
