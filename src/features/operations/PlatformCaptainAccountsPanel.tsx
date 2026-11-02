@@ -44,6 +44,7 @@ export function PlatformCaptainAccountsPanel() {
       ])
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to remove this Captain account.')
+      await queryClient.invalidateQueries({ queryKey: ['platform-captain-accounts'] })
     } finally {
       setBusy(false)
     }
@@ -53,7 +54,7 @@ export function PlatformCaptainAccountsPanel() {
     <div className="panel-head"><div><h2 id="platform-captain-accounts-title">Captain accounts</h2><p>Remove a Captain login and suspend every barangay membership tied to that account.</p></div><UserRoundX size={19} /></div>
     <div className="platform-captain-warning"><AlertTriangle size={17} /><p>This action cannot be undone. The Auth account is soft-deleted; memberships, profiles, and barangay records remain so existing audit and ownership links stay intact. Other roles on the same account will also lose access.</p></div>
     {success && <div className="ops-success" role="status">{success}</div>}
-    {error && <ErrorNotice message={error} />}
+    {error && <div className="platform-captain-error"><ErrorNotice message={error} /><details><summary>Removal details</summary><p>{error}</p></details></div>}
     <label className="archive-search platform-captain-search"><Search size={16} /><input type="search" maxLength={100} aria-label="Search Captain accounts" placeholder="Search Captain, email, or barangay" value={search} onChange={(event) => { setSearch(event.target.value); setPage(0) }} /></label>
     {accounts.isPending ? <LoadingNotice compact /> : accounts.error ? <ErrorNotice message="Captain accounts could not be loaded." onRetry={() => void accounts.refetch()} retrying={accounts.isFetching} /> : accounts.data?.rows.length ? <div className="platform-captain-list">
       {accounts.data.rows.map((account) => {

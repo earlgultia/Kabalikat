@@ -44,7 +44,7 @@ export function PlatformPlanRequestsPanel() {
   return <section className="platform-plan-requests" aria-labelledby="platform-plan-requests-title">
     <div className="ops-panel-heading"><div><h2 id="platform-plan-requests-title">Manual plan requests</h2><p>Confirm GCash payment with the barangay before activating a request. No payment is collected in KABALIKAT.</p></div><CircleDollarSign size={19} /></div>
     {message && <div className="ops-success" role="status"><CheckCircle2 size={16} />{message}</div>}
-    {error && <ErrorNotice message={error} />}
+    {error && <div className="platform-plan-request-error"><ErrorNotice message={error} /><details><summary>Action details</summary><p>{error}</p></details></div>}
     <div className="platform-plan-request-filters"><label>Request status<select value={status} onChange={(event) => { setStatus(event.target.value); setPage(0) }}><option value="pending">Awaiting review</option><option value="activated">Activated</option><option value="declined">Declined</option><option value="all">All requests</option></select></label><span className="field-hint">{requests.data?.total ?? 0} requests</span></div>
     {requests.isPending && <LoadingNotice compact />}{requests.error && <ErrorNotice message="Plan requests could not be loaded." onRetry={() => void requests.refetch()} retrying={requests.isFetching} />}
     {requests.data?.total === 0 && !requests.isPending && <p className="field-hint">No {status === 'pending' ? 'plan requests are awaiting review' : 'matching plan requests'}.</p>}

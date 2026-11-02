@@ -57,24 +57,24 @@ Deno.serve(async (request: Request) => {
 
   const { data: targetResult, error: lookupError } = await admin.auth.admin.getUserById(userId)
   if (lookupError && lookupError.status !== 404) {
-    return json({ error: 'Access was suspended, but the Auth account status could not be checked. Retry this action.' }, 500)
+    return json({ error: `Access was suspended, but the Auth account status could not be checked. Retry this action. Details: ${lookupError.message}` }, 500)
   }
-  if (!targetResult.user) {
+  if (!targetResult.user || targetResult.user.deleted_at) {
     // A prior request may have removed the Auth identity but failed before it
     // could mark the audit row complete. Finish that step safely on retry.
     const { error: completeError } = await admin.rpc('complete_platform_captain_account_removal', { p_user_id: userId })
-    if (completeError) return json({ error: 'Access was suspended, but account removal could not be verified. Retry from the Captain accounts list.' }, 500)
+    if (completeError) return json({ error: `Access was suspended, but account removal could not be verified. Retry from the Captain accounts list. Details: ${completeError.message}` }, 500)
     return json({ success: true, alreadyRemoved: true })
   }
 
   const { error: deleteError } = await admin.auth.admin.deleteUser(userId, true)
   if (deleteError) {
-    return json({ error: 'All barangay memberships were suspended, but Auth account removal did not finish. Retry this action to complete it.' }, 500)
+    return json({ error: `All barangay memberships were suspended, but Auth account removal did not finish. Retry this action to complete it. Details: ${deleteError.message}` }, 500)
   }
 
   const { error: completeError } = await admin.rpc('complete_platform_captain_account_removal', { p_user_id: userId })
   if (completeError) {
-    return json({ error: 'The Auth account was removed and access was suspended, but the audit record needs a retry.' }, 500)
+    return json({ error: `The Auth account was removed and access was suspended, but the audit record needs a retry. Details: ${completeError.message}` }, 500)
   }
   return json({ success: true })
 })

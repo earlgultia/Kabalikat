@@ -1173,6 +1173,15 @@
 .workspace-shell .member-access-filters select { background: #fffefa; border: 1px solid #bfcec8; border-radius: 8px; color: #24353b; font: inherit; font-weight: 400; min-height: 42px; padding: 8px 10px; width: 100%; }
 .workspace-shell .member-access-pagination { align-items: center; }
 .workspace-shell .member-access-list { display: grid; gap: 12px; }
+.workspace-shell .member-access-revoked { align-items: flex-start; background: #f7f2f0; border: 1px solid #e4d6d1; border-radius: 9px; color: #654b43; display: flex; flex-wrap: wrap; gap: 10px 16px; justify-content: space-between; padding: 12px; }
+.workspace-shell .member-access-revoked p { flex: 1 1 260px; font-size: 12px; line-height: 1.5; margin: 0; }
+.workspace-shell .member-revoke-details { border-top: 1px solid #e6ebe7; display: grid; gap: 10px; padding-top: 12px; }
+.workspace-shell .member-revoke-details > summary { color: #8a443b; cursor: pointer; font-size: 12px; font-weight: 700; }
+.workspace-shell .member-revoke-details > p { margin: 0; }
+.workspace-shell .member-revoke-details > label { color: #354f4c; display: grid; font-size: 12px; font-weight: 650; gap: 6px; }
+.workspace-shell .member-revoke-details textarea { background: #fff; border: 1px solid #cbd8d1; border-radius: 8px; color: #293f40; font: inherit; font-size: 12px; font-weight: 450; line-height: 1.5; min-height: 70px; padding: 10px 11px; resize: vertical; width: 100%; }
+.workspace-shell .member-access-event-reason { color: #687a72; line-height: 1.45; overflow-wrap: anywhere; }
+.workspace-shell .status-pill.status-revoked { background: #f5e8e5; color: #8a443b; }
 .workspace-shell .member-access-card { display: grid; gap: 14px; }
 .workspace-shell .member-access-card > header { align-items: flex-start; display: flex; flex-wrap: wrap; gap: 10px 16px; justify-content: space-between; }
 .workspace-shell .member-access-card > header h2 { color: #2b4545; font-size: 16px; line-height: 1.35; margin: 0; }
@@ -1205,6 +1214,8 @@
   .workspace-shell .member-access-filters > label:not(.archive-search) { flex: 1 1 auto; max-width: none; width: 100%; }
   .workspace-shell .member-access-pagination { align-items: stretch; flex-direction: column; }
   .workspace-shell .member-access-pagination > .button { justify-content: center; width: 100%; }
+  .workspace-shell .member-access-revoked > .button,
+  .workspace-shell .member-revoke-details > .button { justify-content: center; width: 100%; }
 }
 .workspace-shell .barangay-settings-form { display: grid; gap: 17px; }
 .workspace-shell .barangay-settings-subheading { border-top: 1px solid #e5ebe7; margin: 5px 0 0; padding-top: 17px; }
@@ -1266,6 +1277,14 @@
 .platform-plan-request-note { background: #f7f9f6; border-radius: 8px; color: #596d63; font-size: 11px; line-height: 1.5; margin: 0; overflow-wrap: anywhere; padding: 10px 12px; }
 .platform-plan-request-note strong { color: #354f4c; }
 .platform-plan-request-review { border-top: 1px solid #e5ebe7; display: grid; gap: 12px; padding-top: 13px; }
+.platform-plan-request-error { display: grid; gap: 6px; }
+.platform-plan-request-error details { color: #765148; font-size: 11px; overflow-wrap: anywhere; }
+.platform-plan-request-error summary { cursor: pointer; font-weight: 650; }
+.platform-plan-request-error p { margin: 6px 0 0; white-space: pre-wrap; }
+.platform-captain-error { display: grid; gap: 6px; }
+.platform-captain-error details { color: #765148; font-size: 11px; overflow-wrap: anywhere; }
+.platform-captain-error summary { cursor: pointer; font-weight: 650; }
+.platform-captain-error p { margin: 6px 0 0; white-space: pre-wrap; }
 .platform-plan-request-review label { color: #354f4c; display: grid; font-size: 11px; font-weight: 650; gap: 6px; }
 .platform-plan-request-review .field-hint { font-weight: 450; line-height: 1.45; }
 

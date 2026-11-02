@@ -1,15 +1,16 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
 import { CheckCircle2, ChevronLeft, ChevronRight, History, Search, UserPlus, ShieldCheck } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import { supabase } from '../../lib/supabase'
+import { ActionConfirmationDialog } from '../../components/ActionConfirmationDialog'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 
 const allowedRoles = ['secretary', 'treasurer', 'kagawad', 'sk_chairperson', 'bhw', 'tanod', 'resident'] as const
 const accessChangeSchema = z.object({ role: z.enum(allowedRoles), status: z.enum(['active', 'suspended']) })
 type MemberRow = { id: string; user_id: string; role_id: string; status: string; created_at: string; role: { key: string; label: string } | null; profile: { display_name: string } | null }
-type MemberAccessEvent = { id: string; membership_id: string; action: string; from_role: string; to_role: string; from_status: string; to_status: string; created_at: string }
+type MemberAccessEvent = { id: string; membership_id: string; action: string; from_role: string; to_role: string; from_status: string; to_status: string; reason: string | null; created_at: string }
 type RolePermission = { role_id: string; permission_id: string; permission: { id: string; key: string; description: string } | null }
 type MemberPermissionOverride = { membership_id: string; permission_id: string; effect: 'allow' | 'deny' }
 type MemberPermissionEvent = { id: string; membership_id: string; permission_key: string; previous_effect: string | null; new_effect: string | null; created_at: string }
@@ -61,7 +62,7 @@ async function listRolePermissionAssignments(members: MemberRow[]): Promise<{ ro
 
 async function listMemberAccessEvents(tenantId: string): Promise<MemberAccessEvent[]> {
   const { data, error } = await client().from('membership_access_events')
-    .select('id,membership_id,action,from_role,to_role,from_status,to_status,created_at')
+    .select('id,membership_id,action,from_role,to_role,from_status,to_status,reason,created_at')
     .eq('barangay_id', tenantId).order('created_at', { ascending: false }).limit(20)
   if (error) throw new Error(error.message)
   return (data ?? []) as MemberAccessEvent[]
@@ -98,9 +99,16 @@ export function MembersPage({ onOpenInvitations }: { onOpenInvitations?: () => v
   const [drafts, setDrafts] = useState<Record<string, { role: string; status: 'active' | 'suspended' }>>({})
   const [busyId, setBusyId] = useState('')
   const [busyPermissionId, setBusyPermissionId] = useState('')
+  const [revokeReasons, setRevokeReasons] = useState<Record<string, string>>({})
+  const [revokeTarget, setRevokeTarget] = useState<MemberRow | null>(null)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const rows = members.data?.rows ?? []
+  const totalPages = Math.max(1, Math.ceil((members.data?.total ?? 0) / MEMBER_PAGE_SIZE))
+
+  useEffect(() => {
+    if (!members.isPending && !members.error && page >= totalPages) setPage(Math.max(0, totalPages - 1))
+  }, [members.error, members.isPending, page, totalPages])
 
   async function save(member: MemberRow) {
     const currentRole = member.role?.key ?? ''
@@ -147,6 +155,30 @@ export function MembersPage({ onOpenInvitations }: { onOpenInvitations?: () => v
     finally { setBusyPermissionId('') }
   }
 
+  async function revokeAccess() {
+    if (!revokeTarget) return
+    const reason = revokeReasons[revokeTarget.id]?.trim() ?? ''
+    if (reason.length < 3 || reason.length > 500) { setError('Enter a reason between 3 and 500 characters.'); return }
+    setBusyId(revokeTarget.id); setError(''); setSuccess('')
+    try {
+      const { error: rpcError } = await client().rpc('revoke_barangay_member_access', {
+        p_barangay_id: tenantId, p_membership_id: revokeTarget.id, p_reason: reason,
+      })
+      if (rpcError) throw rpcError
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['barangay-members-access', tenantId] }),
+        queryClient.invalidateQueries({ queryKey: ['barangay-membership-access-events', tenantId] }),
+        queryClient.invalidateQueries({ queryKey: ['barangay-member-permission-assignments', tenantId] }),
+        queryClient.invalidateQueries({ queryKey: ['workspace-dashboard', tenantId] }),
+      ])
+      setRevokeReasons((current) => ({ ...current, [revokeTarget.id]: '' }))
+      setSuccess(`Access for ${revokeTarget.profile?.display_name || 'this member'} was revoked and recorded in the access history.`)
+      setRevokeTarget(null)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to revoke this member access. Refresh and try again.')
+    } finally { setBusyId('') }
+  }
+
   function draftFor(member: MemberRow) {
     return drafts[member.id] ?? { role: member.role?.key ?? 'resident', status: member.status as 'active' | 'suspended' }
   }
@@ -162,25 +194,27 @@ export function MembersPage({ onOpenInvitations }: { onOpenInvitations?: () => v
     {accessPermission.data === false && <div className="ops-panel"><strong>Staff management is restricted</strong><p>Your current role cannot manage barangay membership access.</p></div>}
     {success && <div className="ops-success" role="status"><CheckCircle2 size={16} />{success}</div>}{error && <ErrorNotice message={error} />}
     {accessPermission.data && <>
-      <div className="member-access-summary"><div><strong>{(members.data?.total ?? 0).toLocaleString()}</strong><span>Matching accounts</span></div><div><strong>{(members.data?.active ?? 0).toLocaleString()}</strong><span>Active matches</span></div><div><strong>{(members.data?.suspended ?? 0).toLocaleString()}</strong><span>Suspended matches</span></div></div>
-      <div className="member-access-filters"><label className="archive-search"><Search size={16} /><input type="search" maxLength={100} placeholder="Search member or role" aria-label="Search members by name or role" value={search} onChange={(event) => { setSearch(event.target.value); setPage(0) }} /></label><label>Access status<select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setPage(0) }}><option value="all">All statuses</option><option value="active">Active</option><option value="suspended">Suspended</option></select></label></div>
+      <div className="member-access-summary"><div><strong>{(members.data?.total ?? 0).toLocaleString()}</strong><span>Matching memberships</span></div><div><strong>{(members.data?.active ?? 0).toLocaleString()}</strong><span>Active matches</span></div><div><strong>{(members.data?.suspended ?? 0).toLocaleString()}</strong><span>Suspended matches</span></div><div><strong>{Math.max(0, (members.data?.total ?? 0) - (members.data?.active ?? 0) - (members.data?.suspended ?? 0)).toLocaleString()}</strong><span>Revoked matches</span></div></div>
+      <div className="member-access-filters"><label className="archive-search"><Search size={16} /><input type="search" maxLength={100} placeholder="Search member or role" aria-label="Search members by name or role" value={search} onChange={(event) => { setSearch(event.target.value); setPage(0) }} /></label><label>Access status<select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setPage(0) }}><option value="all">All statuses</option><option value="active">Active</option><option value="suspended">Suspended</option><option value="revoked">Revoked</option></select></label></div>
       {members.isPending ? <LoadingNotice /> : members.error ? <ErrorNotice message="Barangay memberships could not be loaded." onRetry={() => void members.refetch()} retrying={members.isFetching} /> : rows.length === 0 ? <EmptyNotice title="No memberships found" detail="Try a different name or status. Accepted staff invitations will appear here." /> : <div className="member-access-list">{rows.map((member) => {
         const draft = draftFor(member)
         const changed = draft.role !== member.role?.key || draft.status !== member.status
         const captainRecord = member.role?.key === 'captain'
         const ownRecord = member.user_id === user?.id
+        const revokedRecord = member.status === 'revoked'
         const name = member.profile?.display_name.trim() || `Member ${member.user_id.slice(0, 8)}`
         const rolePermissions = memberPermissionData.data?.rolePermissions.filter((assignment) => assignment.role_id === member.role_id && assignment.permission) ?? []
         const overrides = memberPermissionData.data?.overrides.filter((override) => override.membership_id === member.id) ?? []
         return <article className="ops-panel member-access-card" key={member.id}>
           <header><div><h2>{name}</h2><p>{member.role?.label ?? 'Unknown role'} · Joined {new Date(member.created_at).toLocaleDateString()}</p></div><StatusPill status={member.status} /></header>
-          {captainRecord || ownRecord ? <p className="member-access-protected">{captainRecord ? 'Captain role is protected from changes in this workspace.' : 'You cannot change your own access from this page.'}</p> : <>
+          {revokedRecord ? <div className="member-access-revoked"><p>Access to this barangay was revoked. To restore access, create and send this person a new invitation.</p>{onOpenInvitations && <button type="button" className="button outline" onClick={onOpenInvitations}><UserPlus size={15} />Open invitations</button>}</div> : captainRecord || ownRecord ? <p className="member-access-protected">{captainRecord ? 'Captain role is protected from changes in this workspace.' : 'You cannot change your own access from this page.'}</p> : <>
             <div className="member-access-controls">
               <label>Workspace role<select value={draft.role} disabled={busyId === member.id} onChange={(event) => setDrafts((current) => ({ ...current, [member.id]: { ...draft, role: event.target.value } }))}>{allowedRoles.map((role) => <option key={role} value={role}>{role === 'sk_chairperson' ? 'SK Chairperson' : role === 'bhw' ? 'Barangay Health Worker' : role === 'tanod' ? 'Barangay Tanod' : role === 'kagawad' ? 'Barangay Kagawad' : role === 'secretary' ? 'Barangay Secretary' : role === 'treasurer' ? 'Barangay Treasurer' : 'Resident'}</option>)}</select></label>
               <label>Access status<select value={draft.status} disabled={busyId === member.id} onChange={(event) => setDrafts((current) => ({ ...current, [member.id]: { ...draft, status: event.target.value as 'active' | 'suspended' } }))}><option value="active">Active</option><option value="suspended">Suspended</option></select></label>
               <button type="button" className="button primary" disabled={!changed || busyId === member.id} onClick={() => void save(member)}>{busyId === member.id ? 'Saving…' : 'Save access'}</button>
             </div>
             <p className="field-hint">Suspending removes access to this barangay but keeps the membership and history.</p>
+            <details className="member-revoke-details"><summary>End this membership</summary><p className="field-hint">Revoking permanently disables this membership and cancels pending invitations for this person in this barangay. Existing records and audit history remain. A new invitation is required to restore access.</p><label>Reason for revocation<textarea rows={2} maxLength={500} value={revokeReasons[member.id] ?? ''} onChange={(event) => setRevokeReasons((current) => ({ ...current, [member.id]: event.target.value }))} placeholder="Explain why access is being revoked" /></label><button type="button" className="button outline danger-action" disabled={busyId === member.id || (revokeReasons[member.id]?.trim().length ?? 0) < 3} onClick={() => { setError(''); setRevokeTarget(member) }}>Revoke member access</button></details>
             <details className="member-permission-details">
               <summary>Fine-grained permissions{rolePermissions.length ? ` (${rolePermissions.length})` : ''}</summary>
               {memberPermissionData.isPending ? <LoadingNotice compact /> : memberPermissionData.error ? <ErrorNotice message="Role permissions could not be loaded." /> : rolePermissions.length ? <>
@@ -196,14 +230,14 @@ export function MembersPage({ onOpenInvitations }: { onOpenInvitations?: () => v
           </>}
         </article>
       })}</div>}
-      {members.data && members.data.total > MEMBER_PAGE_SIZE && <nav className="ops-form-actions member-access-pagination" aria-label="Member access pages"><button type="button" className="button outline" disabled={page === 0 || members.isFetching} onClick={() => setPage((current) => Math.max(0, current - 1))}><ChevronLeft size={15} />Previous</button><span className="field-hint">Page {page + 1} of {Math.ceil(members.data.total / MEMBER_PAGE_SIZE)}</span><button type="button" className="button outline" disabled={(page + 1) * MEMBER_PAGE_SIZE >= members.data.total || members.isFetching} onClick={() => setPage((current) => current + 1)}>Next<ChevronRight size={15} /></button></nav>}
+      {members.data && members.data.total > MEMBER_PAGE_SIZE && <nav className="ops-form-actions member-access-pagination" aria-label="Member access pages"><button type="button" className="button outline" disabled={page === 0 || members.isFetching} onClick={() => setPage((current) => Math.max(0, current - 1))}><ChevronLeft size={15} />Previous</button><span className="field-hint">Page {page + 1} of {totalPages}</span><button type="button" className="button outline" disabled={page + 1 >= totalPages || members.isFetching} onClick={() => setPage((current) => current + 1)}>Next<ChevronRight size={15} /></button></nav>}
       <section className="ops-panel member-access-history"><div className="ops-panel-heading"><div><h2>Recent access history</h2><p>Role and status changes recorded in this barangay.</p></div><History size={18} /></div>
         {events.isPending ? <LoadingNotice compact /> : events.error ? <ErrorNotice message="Access history could not be loaded." /> : events.data?.length ? <ol>{events.data.map((entry) => {
           const target = rows.find((member) => member.id === entry.membership_id)
           const summary = entry.action === 'access_changed'
             ? `Role ${entry.from_role} → ${entry.to_role}; status ${entry.from_status} → ${entry.to_status}`
             : entry.action === 'role_changed' ? `Role: ${entry.from_role} → ${entry.to_role}` : `Status: ${entry.from_status} → ${entry.to_status}`
-          return <li key={entry.id}><div><strong>{summary}</strong><span>{target?.profile?.display_name || 'Barangay member'}</span></div><time dateTime={entry.created_at}>{formatEventDate(entry.created_at)}</time></li>
+          return <li key={entry.id}><div><strong>{summary}</strong><span>{target?.profile?.display_name || 'Barangay member'}</span>{entry.reason && <small className="member-access-event-reason">Reason: {entry.reason}</small>}</div><time dateTime={entry.created_at}>{formatEventDate(entry.created_at)}</time></li>
         })}</ol> : <p className="field-hint">No access changes have been recorded.</p>}
       </section>
       <section className="ops-panel member-access-history"><div className="ops-panel-heading"><div><h2>Recent permission changes</h2><p>Overrides narrow or restore the permissions included in each role.</p></div><ShieldCheck size={18} /></div>
@@ -213,6 +247,7 @@ export function MembersPage({ onOpenInvitations }: { onOpenInvitations?: () => v
         })}</ol> : <p className="field-hint">No permission overrides have been recorded.</p>}
       </section>
     </>}
+    {revokeTarget && <ActionConfirmationDialog title={`Revoke access for ${revokeTarget.profile?.display_name || 'this member'}?`} description={`This permanently revokes this membership in ${membership?.barangay?.name ?? 'this barangay'}, cancels pending invitations for the same email in this workspace, and removes custom permission overrides. Existing profile and operational records remain. Reason: ${revokeReasons[revokeTarget.id]?.trim()}`} confirmLabel="Revoke access" busy={busyId === revokeTarget.id} onCancel={() => setRevokeTarget(null)} onConfirm={() => void revokeAccess()} />}
   </section>
 }
 
