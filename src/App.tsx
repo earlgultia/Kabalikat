@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Link, Navigate, Route, Routes, useNavigate, useSearchParams } from 'react-router-dom'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { Activity, AlertTriangle, Archive, ArrowLeft, ArrowLeftRight, ArrowRight, Award, Bell, BookOpen, Building2, CalendarDays, CheckCircle2, ChevronDown, CircleDollarSign, ClipboardList, Clock3, Eye, EyeOff, FileCheck2, FileText, FolderKanban, Headset, HeartHandshake, LayoutDashboard, LogOut, Megaphone, Menu, MessageSquare, Search, Settings2, ShieldCheck, UserPlus, Users, UsersRound, WalletCards, X } from 'lucide-react'
@@ -17,7 +17,7 @@ import { getCaptainReviewQueueSummary, getOwnAccountDisplayName, getWorkspaceDas
 import { listRecentDisasterAdvisories } from './features/operations/disaster-data'
 import { countUnreadCommunityNotifications, listCommunityNotificationPage, listHealthOutreachRescheduleDetails, listHealthOutreachReviewDetails, listHealthOutreachReviewSubmissionDetails, listHealthOutreachUpdateDetails, listMeetingUpdateNotificationDetails, listSkEventCancellationDetails, listSkEventCompletionDetails, listSkEventPublicationDetails, listSkEventRescheduleDetails, listSkEventReviewFeedbackDetails, listSkEventReviewSubmissionDetails, markAllCommunityNotificationsRead, markCommunityNotificationRead } from './features/operations/notifications-data'
 import { PlatformDirectory } from './features/operations/PlatformDirectory'
-import { getSubscriptionSummary } from './features/operations/subscriptions-data'
+import { getBarangayPlanFeatures, getSubscriptionSummary } from './features/operations/subscriptions-data'
 import { listUpcomingCommunityEvents } from './features/operations/community-calendar-data'
 import { LandingPage } from './features/landing/LandingPage'
 
@@ -73,29 +73,31 @@ function SignIn() {
   </main>
 }
 
-const nav: Array<{ label: string; section: OperationSection | 'overview'; icon: typeof LayoutDashboard; roles: string[] }> = [
+type PlanFeatureKey = 'core_services' | 'finance' | 'community_programs' | 'public_safety'
+const nav: Array<{ label: string; section: OperationSection | 'overview'; icon: typeof LayoutDashboard; roles: string[]; feature?: PlanFeatureKey }> = [
   { label: 'Overview', section: 'overview', icon: LayoutDashboard, roles: [] },
   { label: 'Staff & access', section: 'members', icon: UsersRound, roles: ['captain'] },
   { label: 'Barangay settings', section: 'barangay-settings', icon: Settings2, roles: ['captain'] },
-  { label: 'Residents & households', section: 'residents', icon: Users, roles: ['captain','secretary','resident'] },
+  { label: 'Plans & subscription', section: 'tenant-subscription', icon: CircleDollarSign, roles: ['captain'] },
+  { label: 'Residents & households', section: 'residents', icon: Users, roles: ['captain','secretary','resident'], feature: 'core_services' },
   { label: 'Official invitations', section: 'invitations', icon: UserPlus, roles: ['captain'] },
-  { label: 'Document services', section: 'documents', icon: FileText, roles: ['captain','secretary','resident'] },
-  { label: 'Meetings & attendance', section: 'meetings', icon: CalendarDays, roles: ['captain','secretary','kagawad','resident'] },
-  { label: 'Announcements', section: 'announcements', icon: Bell, roles: ['captain','secretary','resident'] },
-  { label: 'Barangay archive', section: 'archive', icon: Archive, roles: ['captain','secretary'] },
-  { label: 'Budgets & finance', section: 'finance', icon: CircleDollarSign, roles: ['captain','treasurer'] },
-  { label: 'Committees', section: 'committees', icon: UsersRound, roles: ['captain','secretary','kagawad'] },
-  { label: 'Barangay projects', section: 'projects', icon: FolderKanban, roles: ['captain','secretary','treasurer','kagawad','sk_chairperson','bhw','tanod','resident'] },
-  { label: 'Inter-barangay referrals', section: 'referrals', icon: ArrowLeftRight, roles: ['captain','secretary'] },
-  { label: 'Health outreach', section: 'health-outreach', icon: HeartHandshake, roles: ['captain','secretary','treasurer','kagawad','sk_chairperson','bhw','tanod','resident'] },
-  { label: 'SK events & programs', section: 'sk-events', icon: CalendarDays, roles: ['captain','secretary','treasurer','kagawad','sk_chairperson','bhw','tanod','resident'] },
-  { label: 'Community calendar', section: 'community-calendar', icon: CalendarDays, roles: ['captain','secretary','treasurer','kagawad','sk_chairperson','bhw','tanod','resident'] },
-  { label: 'SK projects', section: 'sk-projects', icon: FileCheck2, roles: ['captain','sk_chairperson'] },
-  { label: 'SK accomplishments', section: 'sk-accomplishments', icon: Award, roles: ['captain','secretary','treasurer','kagawad','sk_chairperson','bhw','tanod','resident'] },
-  { label: 'Incident reports', section: 'incidents', icon: AlertTriangle, roles: ['captain','tanod','resident'] },
-  { label: 'Tanod patrols', section: 'patrols', icon: ClipboardList, roles: ['captain','tanod'] },
-  { label: 'Disaster advisories', section: 'advisories', icon: Megaphone, roles: ['captain','secretary','treasurer','kagawad','sk_chairperson','bhw','tanod','resident'] },
-  { label: 'Community feedback', section: 'feedback', icon: MessageSquare, roles: ['captain','secretary','resident'] },
+  { label: 'Document services', section: 'documents', icon: FileText, roles: ['captain','secretary','resident'], feature: 'core_services' },
+  { label: 'Meetings & attendance', section: 'meetings', icon: CalendarDays, roles: ['captain','secretary','kagawad','resident'], feature: 'core_services' },
+  { label: 'Announcements', section: 'announcements', icon: Bell, roles: ['captain','secretary','resident'], feature: 'core_services' },
+  { label: 'Barangay archive', section: 'archive', icon: Archive, roles: ['captain','secretary'], feature: 'core_services' },
+  { label: 'Budgets & finance', section: 'finance', icon: CircleDollarSign, roles: ['captain','treasurer'], feature: 'finance' },
+  { label: 'Committees', section: 'committees', icon: UsersRound, roles: ['captain','secretary','kagawad'], feature: 'community_programs' },
+  { label: 'Barangay projects', section: 'projects', icon: FolderKanban, roles: ['captain','secretary','treasurer','kagawad','sk_chairperson','bhw','tanod','resident'], feature: 'community_programs' },
+  { label: 'Inter-barangay referrals', section: 'referrals', icon: ArrowLeftRight, roles: ['captain','secretary'], feature: 'core_services' },
+  { label: 'Health outreach', section: 'health-outreach', icon: HeartHandshake, roles: ['captain','secretary','treasurer','kagawad','sk_chairperson','bhw','tanod','resident'], feature: 'community_programs' },
+  { label: 'SK events & programs', section: 'sk-events', icon: CalendarDays, roles: ['captain','secretary','treasurer','kagawad','sk_chairperson','bhw','tanod','resident'], feature: 'community_programs' },
+  { label: 'Community calendar', section: 'community-calendar', icon: CalendarDays, roles: ['captain','secretary','treasurer','kagawad','sk_chairperson','bhw','tanod','resident'], feature: 'community_programs' },
+  { label: 'SK projects', section: 'sk-projects', icon: FileCheck2, roles: ['captain','sk_chairperson'], feature: 'community_programs' },
+  { label: 'SK accomplishments', section: 'sk-accomplishments', icon: Award, roles: ['captain','secretary','treasurer','kagawad','sk_chairperson','bhw','tanod','resident'], feature: 'community_programs' },
+  { label: 'Incident reports', section: 'incidents', icon: AlertTriangle, roles: ['captain','tanod','resident'], feature: 'public_safety' },
+  { label: 'Tanod patrols', section: 'patrols', icon: ClipboardList, roles: ['captain','tanod'], feature: 'public_safety' },
+  { label: 'Disaster advisories', section: 'advisories', icon: Megaphone, roles: ['captain','secretary','treasurer','kagawad','sk_chairperson','bhw','tanod','resident'], feature: 'public_safety' },
+  { label: 'Community feedback', section: 'feedback', icon: MessageSquare, roles: ['captain','secretary','resident'], feature: 'core_services' },
   { label: 'Help & support', section: 'support', icon: Headset, roles: ['captain','secretary','treasurer','kagawad','sk_chairperson','bhw','tanod','resident'] },
 ]
 
@@ -209,7 +211,21 @@ function Workspace() {
   const [updatesOpen, setUpdatesOpen] = useState(false)
   const updatesDialogFocus = useModalFocus<HTMLElement>()
   const [notificationActionError, setNotificationActionError] = useState('')
-  const canReadCommunityCalendar = nav.some((item) => item.section === 'community-calendar' && (item.roles.length === 0 || item.roles.includes(membership?.role?.key ?? '')))
+  const planFeaturesQuery = useQuery({
+    queryKey: ['barangay-plan-features', membership?.barangay_id],
+    queryFn: () => getBarangayPlanFeatures(membership!.barangay_id),
+    enabled: Boolean(membership?.barangay_id), staleTime: 60_000, refetchInterval: 60_000,
+  })
+  const visibleNav = useMemo(() => nav.filter((item) =>
+    (item.roles.length === 0 || item.roles.includes(membership?.role?.key ?? ''))
+      && (!item.feature || planFeaturesQuery.isPending || planFeaturesQuery.data?.[item.feature] === true),
+  ), [membership?.role?.key, planFeaturesQuery.data, planFeaturesQuery.isPending])
+  useEffect(() => {
+    if (activeSection !== 'overview' && !visibleNav.some((item) => item.section === activeSection)) {
+      setActiveSection('overview')
+    }
+  }, [activeSection, visibleNav])
+  const canReadCommunityCalendar = visibleNav.some((item) => item.section === 'community-calendar')
   async function logout() {
     setLogoutConfirmOpen(false)
     setLogoutError('')
@@ -322,7 +338,6 @@ function Workspace() {
   if (loading) return <div className="center-state"><span className="spinner" />Loading your secure workspace…</div>
   if (!user) return <Navigate to="/sign-in" replace />
   const barangay = membership?.barangay
-  const visibleNav = nav.filter((item) => item.roles.length === 0 || item.roles.includes(membership?.role?.key ?? ''))
   const mobileShortcutOrder: Array<{ section: OperationSection; label: string }> = [
     { section: 'residents', label: 'Residents' },
     { section: 'documents', label: 'Documents' },

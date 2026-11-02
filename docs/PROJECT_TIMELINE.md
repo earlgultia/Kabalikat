@@ -15,17 +15,21 @@ The 74% figure is a rough estimate of the seven roadmap phases in the project sp
 | 3. Archives and productivity | Archive, meeting records, QR attendance, reports and OCR | 85% | Archive and productivity tools implemented; no OCR provider is configured. |
 | 4. Finance and projects | Budgets, approvals, receipts, committees and project tracking | 90% | Finance and project workflows implemented; database verification is pending. |
 | 5. Specialized workspaces | SK, health, safety, incident workflows and referrals | 83% | SK proposals, independently reviewed events, creator revision/resubmission, reasoned cancellation, early completion and rescheduling with public change history, date-filtered queues and exports, and public accomplishment summaries with activity history; BHW proposals and review, schedule cancellation and rescheduling with public change history; a unified calendar with downloadable upcoming published SK and health outreach schedules; searchable status-filtered BHW and SK event queues; searchable Tanod patrol shifts; incidents with verified handoff logging; advisories; published emergency contacts and evacuation centers with audit history; controlled referrals; and restricted incident evidence implemented. Clinical workflows and restricted youth registry/programs remain. |
-| 6. Subscriptions and integrations | Plans, billing, notifications, OCR/AI providers and support | 55% | Support portal now has searchable, status-filtered, paginated triage with conversations loaded on demand; subscription metadata includes review indicators and filtered CSV export. Payments, enforced entitlements, email/SMS, and provider integrations remain. |
+| 6. Subscriptions and integrations | Plans, billing, notifications, OCR/AI providers and support | 60% | Manual Captain plan requests and Super Admin activation are implemented without online payments. Four administrator-controlled feature groups are enforced in workspace navigation and permission-checked database actions. Email/SMS and provider integrations remain. |
 | 7. Hardening and pilot | Security verification, accessibility, performance, backups, pilot and training | 30% | SPA deployment routing and browser security headers are configured; GitHub Actions is configured for lint, TypeScript checks, Vitest, production builds, isolated migration application, and pgTAP checks. Keyboard skip links, reduced-motion preferences, keyboard-accessible mobile navigation, and consistent dialog focus handling are supported. Full accessibility and cross-tenant review, successful CI database verification, recovery, pilot and operational reviews remain. |
 
 ## Role-focused completion sequence
 
 | Order | Workspace | Current focus | Next step |
 | ---: | --- | --- | --- |
-| 1 | Captain | Membership role/status management, role-bounded permission overrides, barangay office settings, a permission-aware review queue covering SK project and accomplishment review, and issuance-time signatory snapshots are available in responsive pages (migrations `0179`-`0184`). | Review the Captain's remaining administration workflows and close gaps before moving to other roles. |
+| 1 | Captain | Membership role/status management, role-bounded permission overrides, barangay office settings, a permission-aware review queue covering SK project and accomplishment review, issuance-time signatory snapshots, and manual paid-plan requests are available in responsive pages (migrations `0179`-`0186`). | Review the Captain's remaining administration workflows and close gaps before moving to other roles. |
 | 2 | Secretary | Existing authorized workflows are available; a dedicated role-by-role completeness review is pending. | Review records, meetings, announcements, documents, archives, and resident follow-up. |
 | 3 | Treasurer | Finance tools exist; a dedicated role-by-role completeness review is pending. | Review budget, transaction, approval, export, and audit paths. |
 | 4 | Kagawad | Committee and meeting tools exist; a dedicated role-by-role completeness review is pending. | Review committee assignments, projects, meetings, and scoped approvals. |
+
+## Subscription payment approach
+
+KABALIKAT does not process online payments. Captains can request an available paid plan; the Super Admin confirms payment through the separately arranged GCash process and then activates the requested plan. The Super Admin can also cancel or suspend a subscription. Prices and GCash recipient details must be communicated directly by ArkByte; they are not stored in the application.
 
 ## Milestone timeline
 

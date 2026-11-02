@@ -1,6 +1,7 @@
 import { supabase } from '../../lib/supabase'
 
 export type SubscriptionPlan = { id: string; key: string; name: string; description: string; entitlements: Record<string, unknown>; active: boolean; assigned_barangay_count: number }
+export type PlanFeatures = { plan_name: string; subscription_status: string; core_services: boolean; finance: boolean; community_programs: boolean; public_safety: boolean }
 export type SubscriptionOverviewRow = {
   barangay_id: string; barangay_name: string; barangay_code: string; plan_key: string; plan_name: string; plan_entitlements: Record<string, unknown>
   status: string; started_at: string; trial_ends_at: string | null; grace_ends_at: string | null; admin_note: string; updated_at: string
@@ -29,6 +30,12 @@ export async function listSubscriptionPlans(): Promise<SubscriptionPlan[]> {
   const { data, error } = await client().rpc('get_platform_subscription_plans')
   if (error) throw new Error(error.message)
   return (data ?? []) as SubscriptionPlan[]
+}
+
+export async function getBarangayPlanFeatures(barangayId: string): Promise<PlanFeatures | null> {
+  const { data, error } = await client().rpc('get_barangay_plan_features', { p_barangay_id: barangayId })
+  if (error) throw new Error(error.message)
+  return ((data ?? [])[0] ?? null) as PlanFeatures | null
 }
 
 export async function listSubscriptionPage(input: { page: number; search: string; status: string }) {

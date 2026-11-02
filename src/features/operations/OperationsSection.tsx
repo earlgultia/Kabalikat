@@ -5,6 +5,7 @@ const ResidentsPage = lazy(() => import('./ResidentsPage').then((module) => ({ d
 const InvitationsPage = lazy(() => import('./InvitationsPage').then((module) => ({ default: module.InvitationsPage })))
 const MembersPage = lazy(() => import('./MembersPage').then((module) => ({ default: module.MembersPage })))
 const BarangaySettingsPage = lazy(() => import('./BarangaySettingsPage').then((module) => ({ default: module.BarangaySettingsPage })))
+const TenantSubscriptionPage = lazy(() => import('./TenantSubscriptionPage').then((module) => ({ default: module.TenantSubscriptionPage })))
 const DocumentsPage = lazy(() => import('./DocumentsPage').then((module) => ({ default: module.DocumentsPage })))
 const AnnouncementsPage = lazy(() => import('./AnnouncementsPage').then((module) => ({ default: module.AnnouncementsPage })))
 const MeetingsPage = lazy(() => import('./MeetingsPage').then((module) => ({ default: module.MeetingsPage })))
@@ -29,12 +30,13 @@ function page<Props extends object>(component: ComponentType<Props>, props?: Pro
   return <Suspense fallback={<div className="ops-loading" role="status">Loading workspace…</div>}><Page {...(props ?? {} as Props)} /></Suspense>
 }
 
-export type OperationSection = 'members' | 'barangay-settings' | 'residents' | 'invitations' | 'documents' | 'announcements' | 'meetings' | 'archive' | 'finance' | 'committees' | 'projects' | 'referrals' | 'health-outreach' | 'sk-events' | 'sk-projects' | 'sk-accomplishments' | 'incidents' | 'patrols' | 'advisories' | 'community-calendar' | 'feedback' | 'support'
+export type OperationSection = 'members' | 'barangay-settings' | 'tenant-subscription' | 'residents' | 'invitations' | 'documents' | 'announcements' | 'meetings' | 'archive' | 'finance' | 'committees' | 'projects' | 'referrals' | 'health-outreach' | 'sk-events' | 'sk-projects' | 'sk-accomplishments' | 'incidents' | 'patrols' | 'advisories' | 'community-calendar' | 'feedback' | 'support'
 
 export function OperationsSection({ section, focusId, focusPage, focusStatus, onFocusHandled, onOpenInvitations }: { section: OperationSection; focusId?: string; focusPage?: number; focusStatus?: 'draft' | 'changes_requested' | 'published' | 'cancelled' | 'completed'; onFocusHandled?: () => void; onOpenInvitations?: () => void }) {
   switch (section) {
     case 'members': return page(MembersPage, { onOpenInvitations })
     case 'barangay-settings': return page(BarangaySettingsPage)
+    case 'tenant-subscription': return page(TenantSubscriptionPage)
     case 'residents': return page(ResidentsPage, { focusId, onFocusHandled })
     case 'invitations': return page(InvitationsPage)
     case 'documents': return page(DocumentsPage, { focusId, onFocusHandled })
