@@ -3,6 +3,8 @@ import './operations.css'
 
 const ResidentsPage = lazy(() => import('./ResidentsPage').then((module) => ({ default: module.ResidentsPage })))
 const InvitationsPage = lazy(() => import('./InvitationsPage').then((module) => ({ default: module.InvitationsPage })))
+const MembersPage = lazy(() => import('./MembersPage').then((module) => ({ default: module.MembersPage })))
+const BarangaySettingsPage = lazy(() => import('./BarangaySettingsPage').then((module) => ({ default: module.BarangaySettingsPage })))
 const DocumentsPage = lazy(() => import('./DocumentsPage').then((module) => ({ default: module.DocumentsPage })))
 const AnnouncementsPage = lazy(() => import('./AnnouncementsPage').then((module) => ({ default: module.AnnouncementsPage })))
 const MeetingsPage = lazy(() => import('./MeetingsPage').then((module) => ({ default: module.MeetingsPage })))
@@ -27,10 +29,12 @@ function page<Props extends object>(component: ComponentType<Props>, props?: Pro
   return <Suspense fallback={<div className="ops-loading" role="status">Loading workspace…</div>}><Page {...(props ?? {} as Props)} /></Suspense>
 }
 
-export type OperationSection = 'residents' | 'invitations' | 'documents' | 'announcements' | 'meetings' | 'archive' | 'finance' | 'committees' | 'projects' | 'referrals' | 'health-outreach' | 'sk-events' | 'sk-projects' | 'sk-accomplishments' | 'incidents' | 'patrols' | 'advisories' | 'community-calendar' | 'feedback' | 'support'
+export type OperationSection = 'members' | 'barangay-settings' | 'residents' | 'invitations' | 'documents' | 'announcements' | 'meetings' | 'archive' | 'finance' | 'committees' | 'projects' | 'referrals' | 'health-outreach' | 'sk-events' | 'sk-projects' | 'sk-accomplishments' | 'incidents' | 'patrols' | 'advisories' | 'community-calendar' | 'feedback' | 'support'
 
-export function OperationsSection({ section, focusId, focusPage, focusStatus, onFocusHandled }: { section: OperationSection; focusId?: string; focusPage?: number; focusStatus?: 'draft' | 'changes_requested' | 'published' | 'cancelled' | 'completed'; onFocusHandled?: () => void }) {
+export function OperationsSection({ section, focusId, focusPage, focusStatus, onFocusHandled, onOpenInvitations }: { section: OperationSection; focusId?: string; focusPage?: number; focusStatus?: 'draft' | 'changes_requested' | 'published' | 'cancelled' | 'completed'; onFocusHandled?: () => void; onOpenInvitations?: () => void }) {
   switch (section) {
+    case 'members': return page(MembersPage, { onOpenInvitations })
+    case 'barangay-settings': return page(BarangaySettingsPage)
     case 'residents': return page(ResidentsPage, { focusId, onFocusHandled })
     case 'invitations': return page(InvitationsPage)
     case 'documents': return page(DocumentsPage, { focusId, onFocusHandled })
@@ -50,7 +54,7 @@ export function OperationsSection({ section, focusId, focusPage, focusStatus, on
     case 'advisories': return page(DisasterAdvisoriesPage, { focusId, onFocusHandled })
     case 'community-calendar': return page(CommunityCalendarPage)
     case 'feedback': return page(CommunityFeedbackPage, { focusId, onFocusHandled })
-    case 'support': return page(SupportPage)
+    case 'support': return page(SupportPage, { focusId, onFocusHandled })
   }
 }
 

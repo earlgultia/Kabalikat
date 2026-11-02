@@ -58,7 +58,7 @@ export type DocumentRequestRow = {
   id: string; reference_number: string; purpose: string; status: string; submitted_at: string; rejection_reason: string | null
   document_type: { name: string } | null
   resident: { first_name: string; last_name: string; user_id: string | null } | null
-  issued: { issuance_number: string; issued_at: string; expires_at: string | null; verification_status: string; events: Array<{ id: string; action: string; reason: string; created_at: string }> } | null
+  issued: { issuance_number: string; issued_at: string; expires_at: string | null; verification_status: string; signatory_name_snapshot: string; signatory_title_snapshot: string; events: Array<{ id: string; action: string; reason: string; created_at: string }> } | null
 }
 export type DocumentRequestActivityRow = { request_id: string; from_status: string | null; to_status: string; reason: string | null; actor_name: string; created_at: string }
 export type AnnouncementRow = {
@@ -108,6 +108,18 @@ export type FinanceBudgetAmendmentRow = {
 export type WorkspaceDashboardMetrics = {
   residents: number | null; pending_documents: number | null; upcoming_meetings: number | null
   pending_finance: number | null; published_announcements: number | null; generated_at: string
+}
+export type CaptainReviewQueueSummary = {
+  pending_residency_verifications: number | null
+  pending_profile_corrections: number | null
+  pending_documents: number | null
+  pending_finance: number | null
+  pending_health_schedules: number | null
+  pending_sk_events: number | null
+  pending_sk_projects: number | null
+  pending_sk_accomplishments: number | null
+  open_incidents: number | null
+  generated_at: string
 }
 export type FinancialAdjustmentRow = {
   id: string; transaction_id: string; amount_change: number; reason: string; status: 'pending' | 'approved' | 'rejected'
@@ -161,6 +173,10 @@ export function hasPermission(tenantId: string, permission: string) {
 
 export function getWorkspaceDashboardMetrics(tenantId: string) {
   return rpc<WorkspaceDashboardMetrics>('get_workspace_dashboard_metrics', { p_barangay_id: tenantId })
+}
+
+export function getCaptainReviewQueueSummary(tenantId: string) {
+  return rpc<CaptainReviewQueueSummary>('get_captain_review_queue_summary', { p_barangay_id: tenantId })
 }
 
 export function listResidents(tenantId: string) {
@@ -491,7 +507,7 @@ export async function listDocumentRequestsPage(tenantId: string, page: number, s
   if (!pageRows.length) return { requests: [] as DocumentRequestRow[], total: 0 }
   const orderedIds = pageRows.map((row) => row.request_id)
   const requests = await rows<DocumentRequestRow>(client().from('document_requests')
-    .select('id,reference_number,purpose,status,submitted_at,rejection_reason,document_type:document_types(name),resident:residents(first_name,last_name,user_id),issued:issued_documents(issuance_number,issued_at,expires_at,verification_status,events:issued_document_events(id,action,reason,created_at))')
+    .select('id,reference_number,purpose,status,submitted_at,rejection_reason,document_type:document_types(name),resident:residents(first_name,last_name,user_id),issued:issued_documents(issuance_number,issued_at,expires_at,verification_status,signatory_name_snapshot,signatory_title_snapshot,events:issued_document_events(id,action,reason,created_at))')
     .eq('barangay_id', tenantId).in('id', orderedIds))
   const byId = new Map(requests.map((request) => [request.id, request]))
   return { requests: orderedIds.map((id) => byId.get(id)).filter((request): request is DocumentRequestRow => Boolean(request)), total: Number(pageRows[0]?.total_count ?? 0) }

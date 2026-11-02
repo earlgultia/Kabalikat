@@ -1,15 +1,16 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Award, ChevronLeft, ChevronRight, Download, ShieldAlert } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import { hasPermission } from './data'
-import { listAllSkAccomplishments, listSkAccomplishments, listSkAccomplishmentYears, SK_ACCOMPLISHMENT_PAGE_SIZE } from './sk-data'
+import { listAllSkAccomplishments, listSkAccomplishments, listSkAccomplishmentYears, reviewSkAccomplishment, SK_ACCOMPLISHMENT_PAGE_SIZE } from './sk-data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 import { formatDateTime } from './format'
 import { encodeCsv } from './csv'
 
 export function SkTransparencyPage() {
-  const { membership } = useAuth()
+  const { membership, user } = useAuth()
+  const queryClient = useQueryClient()
   const tenantId = membership?.barangay_id ?? ''
   const canManage = useQuery({ queryKey: ['permission', tenantId, 'sk.manage'], queryFn: () => hasPermission(tenantId, 'sk.manage'), enabled: Boolean(tenantId) })
   const canReview = useQuery({ queryKey: ['permission', tenantId, 'sk.review'], queryFn: () => hasPermission(tenantId, 'sk.review'), enabled: Boolean(tenantId) })
@@ -18,6 +19,9 @@ export function SkTransparencyPage() {
   const [reviewPage, setReviewPage] = useState(0)
   const [exporting, setExporting] = useState(false)
   const [exportError, setExportError] = useState('')
+  const [reviewBusy, setReviewBusy] = useState(false)
+  const [reviewError, setReviewError] = useState('')
+  const [reviewMessage, setReviewMessage] = useState('')
   const yearNumber = year === 'all' ? null : Number(year)
   const years = useQuery({ queryKey: ['sk-accomplishment-years', tenantId], queryFn: () => listSkAccomplishmentYears(tenantId), enabled: Boolean(tenantId) })
   const items = useQuery({
@@ -34,6 +38,23 @@ export function SkTransparencyPage() {
   const reviewQueue = reviewItems.data?.rows ?? []
   const publishedPages = Math.ceil((items.data?.totalCount ?? 0) / SK_ACCOMPLISHMENT_PAGE_SIZE)
   const reviewPages = Math.ceil((reviewItems.data?.totalCount ?? 0) / SK_ACCOMPLISHMENT_PAGE_SIZE)
+
+  async function review(itemId: string, publish: boolean) {
+    const note = publish ? null : window.prompt('Why is this summary being returned? (3–1000 characters):')?.trim() ?? ''
+    if (!publish && (!note || note.length < 3 || note.length > 1000)) return
+    if (publish && !window.confirm('Publish this accomplishment summary to active barangay members?')) return
+    setReviewBusy(true); setReviewError(''); setReviewMessage('')
+    try {
+      await reviewSkAccomplishment(itemId, publish, note)
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['sk-accomplishments', tenantId] }),
+        queryClient.invalidateQueries({ queryKey: ['captain-review-queue', tenantId] }),
+      ])
+      setReviewMessage(publish ? 'Accomplishment summary published.' : 'Summary returned to the SK Chairperson with a reason.')
+    } catch (error) {
+      setReviewError(error instanceof Error ? error.message : 'Unable to review this summary.')
+    } finally { setReviewBusy(false) }
+  }
 
   async function exportCsv() {
     setExporting(true); setExportError('')
@@ -69,6 +90,6 @@ export function SkTransparencyPage() {
     {items.data?.totalCount === 0 && !items.isPending && <div className="ops-empty"><Award size={22} /><strong>No published accomplishments for this period</strong><p>Approved summaries will appear here after independent Captain review.</p></div>}
     <div className="sk-project-list">{published.map((item) => <article className="ops-panel sk-project-card" key={item.id}><div className="sk-project-header"><div><StatusPill status={item.status} /><h2>{item.title}</h2><p>{item.summary}</p></div><Award size={22} /></div><div className="sk-project-meta"><span>{item.published_at ? `Published ${formatDateTime(item.published_at)}` : ''}</span></div></article>)}</div>
     {publishedPages > 1 && <nav className="ops-panel ops-form-actions" aria-label="Published SK accomplishment pages"><span className="field-hint">Page {publishedPage + 1} of {publishedPages} · {items.data?.totalCount.toLocaleString()} summaries</span><div className="finance-review-actions"><button className="button outline" disabled={publishedPage === 0 || items.isFetching} onClick={() => setPublishedPage((page) => page - 1)}><ChevronLeft size={16} />Previous</button><button className="button outline" disabled={publishedPage + 1 >= publishedPages || items.isFetching} onClick={() => setPublishedPage((page) => page + 1)}>Next<ChevronRight size={16} /></button></div></nav>}
-    {(canManage.data || canReview.data) && <section className="sk-project-list"><h2>Internal review queue</h2>{reviewItems.isPending && <LoadingNotice compact />}{reviewItems.error && <ErrorNotice message="Unable to load the accomplishment review queue." />}{reviewItems.data?.totalCount === 0 && !reviewItems.isPending && <p className="field-hint">No accomplishments are waiting for review.</p>}{reviewQueue.map((item) => <article className="ops-panel sk-project-card" key={item.id}><div className="sk-project-header"><div><StatusPill status={item.status} /><h3>{item.title}</h3><p>{item.summary}</p></div></div><div className="sk-project-meta"><span>Submitted {formatDateTime(item.created_at)}</span></div>{item.review_note && <p className="finance-review-note">Captain’s note: {item.review_note}</p>}</article>)}{reviewPages > 1 && <nav className="ops-panel ops-form-actions" aria-label="Accomplishment review pages"><span className="field-hint">Page {reviewPage + 1} of {reviewPages} · {reviewItems.data?.totalCount.toLocaleString()} items</span><div className="finance-review-actions"><button className="button outline" disabled={reviewPage === 0 || reviewItems.isFetching} onClick={() => setReviewPage((page) => page - 1)}><ChevronLeft size={16} />Previous</button><button className="button outline" disabled={reviewPage + 1 >= reviewPages || reviewItems.isFetching} onClick={() => setReviewPage((page) => page + 1)}>Next<ChevronRight size={16} /></button></div></nav>}</section>}
+    {(canManage.data || canReview.data) && <section className="sk-project-list"><h2>Internal review queue</h2>{reviewMessage && <div className="ops-success" role="status">{reviewMessage}</div>}{reviewError && <ErrorNotice message={reviewError} />}{reviewItems.isPending && <LoadingNotice compact />}{reviewItems.error && <ErrorNotice message="Unable to load the accomplishment review queue." />}{reviewItems.data?.totalCount === 0 && !reviewItems.isPending && <p className="field-hint">No accomplishments are waiting for review.</p>}{reviewQueue.map((item) => <article className="ops-panel sk-project-card" key={item.id}><div className="sk-project-header"><div><StatusPill status={item.status} /><h3>{item.title}</h3><p>{item.summary}</p></div></div><div className="sk-project-meta"><span>Submitted {formatDateTime(item.created_at)}</span></div>{item.review_note && <p className="finance-review-note">Captain’s note: {item.review_note}</p>}{canReview.data && item.status === 'submitted' && item.created_by !== user?.id && <div className="finance-review-actions"><button className="button outline danger-action" disabled={reviewBusy} onClick={() => void review(item.id, false)}>Return with reason</button><button className="button primary" disabled={reviewBusy} onClick={() => void review(item.id, true)}>Publish summary</button></div>}</article>)}{reviewPages > 1 && <nav className="ops-panel ops-form-actions" aria-label="Accomplishment review pages"><span className="field-hint">Page {reviewPage + 1} of {reviewPages} · {reviewItems.data?.totalCount.toLocaleString()} items</span><div className="finance-review-actions"><button className="button outline" disabled={reviewPage === 0 || reviewItems.isFetching} onClick={() => setReviewPage((page) => page - 1)}><ChevronLeft size={16} />Previous</button><button className="button outline" disabled={reviewPage + 1 >= reviewPages || reviewItems.isFetching} onClick={() => setReviewPage((page) => page + 1)}>Next<ChevronRight size={16} /></button></div></nav>}</section>}
   </section>
 }

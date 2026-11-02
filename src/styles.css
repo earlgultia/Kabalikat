@@ -434,6 +434,9 @@ body { color: var(--ink); background: var(--canvas); font-size: 16px; line-heigh
 .dashboard-metric-icon.orange { background: #fbefdf; color: #895d21; }
 .dashboard-metric-icon.blue { background: #e5eef6; color: #315f82; }
 .dashboard-metric-icon.violet { background: #eee9f6; color: #655087; }
+.captain-review-queue { margin: 26px 0 30px; }
+.captain-review-queue .section-heading { margin-bottom: 12px; }
+.captain-review-metrics { margin: 0; }
 .dashboard-metrics-loading { color: #53696a; font-size: 14px; margin: 22px 0; }
 .platform-directory { margin-top: 20px; }
 .platform-directory-summary { display: flex; gap: 22px; margin: 16px 0; }

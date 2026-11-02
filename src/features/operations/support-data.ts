@@ -4,6 +4,7 @@ export type SupportTicket = { id: string; barangay_id: string; barangay_name?: s
 export type SupportMessage = { id: string; ticket_id: string; author_id: string; visibility: string; body: string; created_at: string }
 export type SupportEvent = { id: string; ticket_id: string; action: string; from_status: string | null; to_status: string | null; created_at: string }
 export const SUPPORT_THREAD_PAGE_SIZE = 25
+export type SupportQueueSummary = { total_count: number; new_count: number; in_progress_count: number; waiting_on_requester_count: number; resolved_count: number; closed_count: number }
 
 function client() {
   if (!supabase) throw new Error('Supabase is not configured.')
@@ -21,12 +22,33 @@ export async function listSupportTickets(tenantId?: string, page = 0, status = '
   return (data ?? []) as SupportTicket[]
 }
 
-export async function listPlatformSupportTickets(page = 0, status = 'all', search = ''): Promise<SupportTicket[]> {
-  const { data, error } = await client().rpc('list_platform_support_ticket_page', {
+export async function getSupportTicketById(ticketId: string): Promise<SupportTicket | null> {
+  const { data, error } = await client().from('support_tickets')
+    .select('id,barangay_id,requester_id,category,subject,description,status,created_at,updated_at')
+    .eq('id', ticketId).maybeSingle()
+  if (error) throw new Error(error.message)
+  return data as SupportTicket | null
+}
+
+export async function listPlatformSupportTickets(page = 0, status = 'all', search = '', needsAttention = false): Promise<SupportTicket[]> {
+  const { data, error } = await client().rpc(needsAttention ? 'list_platform_support_attention_page' : 'list_platform_support_ticket_page', {
     p_page: Math.max(page, 0), p_page_size: 50, p_status: status, p_search: search.trim() || null,
   })
   if (error) throw new Error(error.message)
   return (data ?? []) as SupportTicket[]
+}
+
+export async function getPlatformSupportAttentionCount(): Promise<number> {
+  const { data, error } = await client().rpc('get_platform_support_attention_count')
+  if (error) throw new Error(error.message)
+  return Number(data ?? 0)
+}
+
+export async function getPlatformSupportQueueSummary(): Promise<SupportQueueSummary> {
+  const { data, error } = await client().rpc('get_platform_support_queue_summary')
+  if (error) throw new Error(error.message)
+  const summary = Array.isArray(data) ? data[0] : data
+  return (summary ?? { total_count: 0, new_count: 0, in_progress_count: 0, waiting_on_requester_count: 0, resolved_count: 0, closed_count: 0 }) as SupportQueueSummary
 }
 
 export async function listSupportMessages(ticketId: string, page: number) {
@@ -61,4 +83,7 @@ export function addSupportMessage(ticketId: string, body: string, internal = fal
 }
 export function setSupportTicketStatus(ticketId: string, status: string) {
   return rpc('set_support_ticket_status', { p_ticket_id: ticketId, p_status: status })
+}
+export function reopenOwnResolvedSupportTicket(ticketId: string, message: string) {
+  return rpc('reopen_own_resolved_support_ticket', { p_ticket_id: ticketId, p_message: message })
 }
