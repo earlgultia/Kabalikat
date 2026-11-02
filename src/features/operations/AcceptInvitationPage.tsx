@@ -1,13 +1,17 @@
 import { useState, type FormEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { z } from 'zod'
-import { CheckCircle2, KeyRound } from 'lucide-react'
+import { CheckCircle2, Eye, EyeOff, KeyRound } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import { supabase } from '../../lib/supabase'
 import { LogoutConfirmationDialog } from '../../components/LogoutConfirmationDialog'
 import { ErrorNotice } from './shared'
 
-const credentialsSchema = z.object({ email: z.email(), password: z.string().min(8).max(128) })
+const signInSchema = z.object({ email: z.email(), password: z.string().min(8).max(128) })
+const createAccountSchema = z.object({ email: z.email(), display_name: z.string().trim().min(2, 'Enter the name colleagues should use.').max(100, 'Keep your name under 100 characters.'), password: z.string().min(12, 'Use at least 12 characters.').max(128)
+  .regex(/[a-z]/, 'Add a lowercase letter.').regex(/[A-Z]/, 'Add an uppercase letter.')
+  .regex(/[0-9]/, 'Add a number.'), confirmation: z.string() })
+  .refine((value) => value.password === value.confirmation, { path: ['confirmation'], message: 'The passwords do not match.' })
 
 export function AcceptInvitationPage() {
   const { user, signOut } = useAuth()
@@ -20,6 +24,8 @@ export function AcceptInvitationPage() {
   const [mode, setMode] = useState<'sign-in' | 'create-account'>('create-account')
   const [accountMessage, setAccountMessage] = useState('')
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmation, setShowConfirmation] = useState(false)
 
   async function handleDifferentAccount() {
     setLogoutConfirmOpen(false)
@@ -31,8 +37,10 @@ export function AcceptInvitationPage() {
     event.preventDefault(); setError(''); setAccountMessage('')
     if (!supabase || token.length !== 64) { setError('This invitation link is invalid. Request a fresh link from your barangay administrator.'); return }
     const form = event.currentTarget
-    const parsed = credentialsSchema.safeParse(Object.fromEntries(new FormData(form).entries()))
+    const formValues = Object.fromEntries(new FormData(form).entries())
+    const parsed = mode === 'sign-in' ? signInSchema.safeParse(formValues) : createAccountSchema.safeParse(formValues)
     if (!parsed.success) { setError(parsed.error.issues[0]?.message ?? 'Enter a valid email and password.'); return }
+    const displayName = String(formValues.display_name ?? '').trim()
     setBusy(true)
     try {
       if (mode === 'sign-in') {
@@ -40,8 +48,9 @@ export function AcceptInvitationPage() {
         if (authError) throw authError
       } else {
         const { data, error: authError } = await supabase.auth.signUp({
-          ...parsed.data,
-          options: { emailRedirectTo: window.location.href },
+          email: parsed.data.email,
+          password: parsed.data.password,
+          options: { emailRedirectTo: window.location.href, data: { display_name: displayName } },
         })
         if (authError) throw authError
         if (!data.session) setAccountMessage('Check your email to confirm your account. This invitation link will be waiting when you return.')
@@ -77,8 +86,10 @@ export function AcceptInvitationPage() {
       <p className="field-hint" style={{ marginTop: 16 }}>The invitation can only be accepted by its addressed email.</p>
     </> : <>
       <form className="form-stack" onSubmit={(event) => void authenticate(event)}>
+        {mode === 'create-account' && <label>Display name<input name="display_name" type="text" required minLength={2} maxLength={100} autoComplete="name" placeholder="How colleagues should address you" /></label>}
         <label>Email address<input name="email" type="email" required autoComplete="email" /></label>
-        <label>Password<input name="password" type="password" required minLength={8} maxLength={128} autoComplete={mode === 'sign-in' ? 'current-password' : 'new-password'} /></label>
+        <label>Password<div className="auth-password-field"><input name="password" type={showPassword ? 'text' : 'password'} required minLength={mode === 'create-account' ? 12 : 8} maxLength={128} autoComplete={mode === 'sign-in' ? 'current-password' : 'new-password'} /><button type="button" className="auth-password-toggle" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></div></label>
+        {mode === 'create-account' && <><span className="field-hint">New passwords need at least 12 characters, including uppercase, lowercase, and a number.</span><label>Confirm password<div className="auth-password-field"><input name="confirmation" type={showConfirmation ? 'text' : 'password'} required minLength={12} maxLength={128} autoComplete="new-password" /><button type="button" className="auth-password-toggle" onClick={() => setShowConfirmation((visible) => !visible)} aria-label={showConfirmation ? 'Hide password confirmation' : 'Show password confirmation'} aria-pressed={showConfirmation}>{showConfirmation ? <EyeOff size={18} /> : <Eye size={18} />}</button></div></label></>}
         <button className="button primary full" disabled={busy || token.length !== 64}>{busy ? 'Please wait...' : mode === 'sign-in' ? 'Sign in' : 'Create account'}</button>
       </form>
       <button className="button outline full" style={{ marginTop: 10 }} onClick={() => { setMode(mode === 'sign-in' ? 'create-account' : 'sign-in'); setError(''); setAccountMessage('') }}>

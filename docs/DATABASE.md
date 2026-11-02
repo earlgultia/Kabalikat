@@ -325,3 +325,7 @@ Migration `0170_snapshot_platform_activity_actor_name.sql` stores the administra
 Migration `0171_protect_platform_activity_actor_name.sql` rejects updates that would change the actor-name snapshot on an existing platform activity event. Apply after `0170_snapshot_platform_activity_actor_name.sql`; hosted database behavior has not been verified.
 
 Migration `0172_make_platform_activity_append_only.sql` rejects updates and deletes to platform activity events, preserving the history as an append-only audit trail. Apply after `0171_protect_platform_activity_actor_name.sql`; hosted database behavior has not been verified.
+
+Migration `0173_block_platform_activity_truncate.sql` also rejects `TRUNCATE`, which does not invoke row-level update/delete triggers. This protects platform activity history from an accidental table-wide clear by a role that has truncate permission. Apply after `0172_make_platform_activity_append_only.sql`; hosted database behavior has not been verified.
+
+Migration `0174_snapshot_platform_activity_export.sql` adds a platform-admin-only keyset export RPC that fixes an upper-bound event snapshot and pages by `(created_at, id)`. The platform activity CSV uses this endpoint so new events arriving during a long export do not shift offset pages and cause duplicates or omissions. Apply after `0173_block_platform_activity_truncate.sql`; hosted database behavior has not been verified.

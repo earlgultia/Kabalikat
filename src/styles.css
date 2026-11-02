@@ -370,10 +370,16 @@ body { color: var(--ink); background: var(--canvas); font-size: 16px; line-heigh
 .notification-preference small { color: var(--muted); font-size: 10px; }
 .notification-preference input { width: 18px; height: 18px; accent-color: var(--brand-700); }
 .notification-preferences > .field-hint { margin: 10px 0 0; }
+.account-profile-form { display: grid; gap: 8px; margin-top: 12px; }
+.account-profile-form > label { color: var(--ink); font-size: 12px; font-weight: 600; }
+.account-profile-form > input { background: var(--surface); border: 1px solid var(--line); border-radius: 7px; color: var(--ink); min-height: 42px; padding: 9px 11px; width: 100%; }
+.account-profile-form > input:focus-visible { border-color: var(--brand-700); outline: 3px solid #28766c33; }
+.account-profile-form > .field-hint { margin: 0; }
 .account-security-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; background: var(--brand-tint); color: var(--brand-800); }
 .account-security-form { display: grid; gap: 15px; padding: 20px; }
 .account-security-form label { display: grid; gap: 7px; color: var(--ink); font-size: 12px; font-weight: 600; }
 .account-security-form input { min-height: 42px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); color: var(--ink); }
+.account-security-form .auth-password-field input { padding-right: 46px; width: 100%; }
 .account-security-form input:focus { outline: 2px solid #28766c55; border-color: var(--brand-700); }
 .account-security-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 4px; }
 .account-security-error, .account-security-success { display: flex; align-items: center; gap: 7px; margin: 0; font-size: 12px; }
@@ -474,6 +480,11 @@ body { color: var(--ink); background: var(--canvas); font-size: 16px; line-heigh
 .platform-activity-change-fields { display: flex; flex-wrap: wrap; gap: 5px; margin: 0 0 7px; }
 .platform-activity-change-fields > span { background: #eaf1ed; border: 1px solid #d7e4dc; border-radius: 999px; color: #355c45; font-size: 10px; line-height: 1.4; padding: 3px 8px; }
 .platform-activity-card-meta { color: #687a71; display: flex; flex-wrap: wrap; font-size: 11px; gap: 4px 14px; }
+.platform-activity-result-count { color: #687a71; font-size: 12px; margin: 0 0 9px; }
+.platform-activity-export-progress { background: #edf4f0; border-radius: 8px; color: #355c45; font-size: 12px; line-height: 1.45; margin: 0; padding: 10px 12px; }
+.platform-activity-copy-ref { align-items: center; background: transparent; border: 0; border-radius: 5px; color: #426e65; cursor: pointer; display: inline-flex; font: inherit; gap: 4px; min-height: 40px; margin: -6px -5px; padding: 4px 5px; }
+.platform-activity-copy-ref:hover, .platform-activity-copy-ref:focus-visible { background: #eaf1ed; color: #234f47; outline: none; }
+.platform-activity-copy-ref:focus-visible { box-shadow: 0 0 0 2px #28766c66; }
 .platform-activity-pagination { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; }
 @media(max-width:650px) {
   .platform-activity-filters { align-items: stretch; flex-direction: column; }

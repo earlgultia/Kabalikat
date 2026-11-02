@@ -119,6 +119,12 @@ function client() {
   return supabase
 }
 
+export async function getOwnAccountDisplayName(userId: string) {
+  const { data, error } = await client().from('profiles').select('display_name').eq('id', userId).single()
+  if (error) throw new Error(error.message)
+  return data.display_name
+}
+
 async function rows<T>(request: PromiseLike<{ data: unknown; error: { message: string } | null }>): Promise<T[]> {
   const { data, error } = await request
   if (error) throw new Error(error.message)

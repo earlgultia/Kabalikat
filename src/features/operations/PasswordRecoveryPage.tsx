@@ -1,7 +1,7 @@
 import { useState, type FormEvent, type KeyboardEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { z } from 'zod'
-import { ArrowLeft, ArrowRight, HeartHandshake, KeyRound, ShieldCheck } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Eye, EyeOff, HeartHandshake, KeyRound, ShieldCheck } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import { supabase } from '../../lib/supabase'
 
@@ -18,6 +18,8 @@ export function PasswordRecoveryPage() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmation, setShowConfirmation] = useState(false)
   if (!user) return <main className="auth-page"><div className="auth-brand"><div className="brand-mark"><HeartHandshake size={24} /></div><span>KABALIKAT</span></div><section className="auth-card"><div className="eyebrow">ACCOUNT RECOVERY</div><h1>Open your recovery email</h1><p className="muted">Use the password recovery link sent to your email. If the link expired, request another one from the sign-in page.</p><Link className="auth-back-link" to="/sign-in"><ArrowLeft size={16} /> Back to sign in</Link></section><p className="auth-caption">One Barangay. One Connected Community.</p></main>
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -48,8 +50,8 @@ export function PasswordRecoveryPage() {
     <section className="auth-card recovery-card"><div className="recovery-icon"><KeyRound size={21} /></div><div className="eyebrow">ACCOUNT RECOVERY</div><h1>Choose a new password</h1><p className="muted">For {user.email}. Use a password you do not use on other sites.</p>
       {error && <div className="error-banner" role="alert">{error}</div>}{message && <div className="notice recovery-success" role="status"><ShieldCheck size={17} />{message}</div>}
       <form className="form-stack" onSubmit={(event) => void submit(event)} onKeyDown={trapFocus}>
-        <label>New password<input autoFocus name="password" type="password" autoComplete="new-password" minLength={12} maxLength={128} required /><span className="field-hint">At least 12 characters, with uppercase, lowercase, and a number.</span></label>
-        <label>Confirm new password<input name="confirmation" type="password" autoComplete="new-password" minLength={12} maxLength={128} required /></label>
+        <label>New password<div className="auth-password-field"><input autoFocus name="password" type={showPassword ? 'text' : 'password'} autoComplete="new-password" minLength={12} maxLength={128} required /><button type="button" className="auth-password-toggle" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? 'Hide new password' : 'Show new password'} aria-pressed={showPassword}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></div><span className="field-hint">At least 12 characters, with uppercase, lowercase, and a number.</span></label>
+        <label>Confirm new password<div className="auth-password-field"><input name="confirmation" type={showConfirmation ? 'text' : 'password'} autoComplete="new-password" minLength={12} maxLength={128} required /><button type="button" className="auth-password-toggle" onClick={() => setShowConfirmation((visible) => !visible)} aria-label={showConfirmation ? 'Hide password confirmation' : 'Show password confirmation'} aria-pressed={showConfirmation}>{showConfirmation ? <EyeOff size={18} /> : <Eye size={18} />}</button></div></label>
         <button className="button primary full" disabled={busy}>{busy ? 'Updating…' : 'Reset password'}<ArrowRight size={17} /></button>
       </form>
       <Link className="auth-back-link" to="/sign-in"><ArrowLeft size={16} /> Back to sign in</Link>
