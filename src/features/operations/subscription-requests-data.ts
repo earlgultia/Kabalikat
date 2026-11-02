@@ -61,6 +61,7 @@ export async function activatePlanRequest(requestId: string, paymentConfirmation
     p_request_id: requestId, p_payment_confirmation_note: paymentConfirmationNote,
   })
   if (error) throw new Error(error.message)
+  await verifyPlanRequestStatus(requestId, 'activated')
 }
 
 export async function declinePlanRequest(requestId: string, reason: string) {
@@ -68,4 +69,17 @@ export async function declinePlanRequest(requestId: string, reason: string) {
     p_request_id: requestId, p_reason: reason,
   })
   if (error) throw new Error(error.message)
+  await verifyPlanRequestStatus(requestId, 'declined')
+}
+
+async function verifyPlanRequestStatus(requestId: string, expectedStatus: 'activated' | 'declined') {
+  const { data, error } = await client()
+    .from('subscription_plan_requests')
+    .select('status')
+    .eq('id', requestId)
+    .maybeSingle()
+  if (error) throw new Error(`Decision was sent, but its saved status could not be verified: ${error.message}`)
+  if (data?.status !== expectedStatus) {
+    throw new Error(`The request is still marked ${data?.status ?? 'unknown'}. Apply the latest subscription request migration, then retry.`)
+  }
 }

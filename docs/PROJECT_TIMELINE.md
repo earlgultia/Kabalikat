@@ -276,3 +276,5 @@ Incident queue overview shortcuts: Managers can select a status or category coun
 Incident unassigned-work shortcut: The manager's active unassigned count now opens the combined unassigned plus needs-attention queue view. Selecting the count again returns to all assignments.
 
 Incident unassigned-work summary: Migration `0149_incident_unassigned_queue_summary.sql` adds a manager-only count of active reports without an assignee to the date-aware queue overview. It is aggregate-only and responsive on desktop and mobile; hosted database behavior has not been verified.
+
+Captain membership access directory: Migration `0190_paginated_barangay_membership_access.sql` adds a tenant-authorized, searchable and status-filtered page of 25 memberships for the Captain's staff access screen. Desktop and mobile views show matching active and suspended counts and preserve the existing role overrides and access audit history. Apply the migration before using the paginated directory in a hosted workspace.

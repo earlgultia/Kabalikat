@@ -12,3 +12,6 @@ schema_paths = []
 
 [db.seed]
 enabled = false
+
+[functions.remove-platform-captain-account]
+verify_jwt = true

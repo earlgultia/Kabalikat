@@ -8,6 +8,39 @@ export type PlatformBarangayRow = {
 export type PlatformDirectorySummary = { registered_count: number; active_count: number; needs_attention_count: number }
 export const PLATFORM_DIRECTORY_PAGE_SIZE = 25
 
+export type PlatformCaptainAccount = {
+  user_id: string; display_name: string; email: string; barangays: string
+  membership_count: number; active_membership_count: number
+  removal_started_at: string | null; removal_completed_at: string | null
+}
+export const PLATFORM_CAPTAIN_PAGE_SIZE = 10
+
+export async function listPlatformCaptainAccounts(page: number, search: string) {
+  if (!supabase) throw new Error('Supabase is not configured.')
+  const { data, error } = await supabase.rpc('list_platform_captain_accounts', {
+    p_page: Math.max(page, 0), p_page_size: PLATFORM_CAPTAIN_PAGE_SIZE, p_search: search.trim() || null,
+  })
+  if (error) throw new Error(error.message)
+  const rows = (data ?? []) as (PlatformCaptainAccount & { total_count: number })[]
+  return { rows, total: Number(rows[0]?.total_count ?? 0) }
+}
+
+export async function removePlatformCaptainAccount(userId: string, reason: string) {
+  if (!supabase) throw new Error('Supabase is not configured.')
+  const { data, error } = await supabase.functions.invoke('remove-platform-captain-account', {
+    body: { user_id: userId, reason },
+  })
+  if (error) {
+    const context = error.context
+    if (context instanceof Response) {
+      const detail = await context.clone().json().catch(() => null) as { error?: string } | null
+      if (detail?.error) throw new Error(detail.error)
+    }
+    throw new Error(error.message)
+  }
+  if (data?.success !== true) throw new Error('Captain account removal was not confirmed by the server.')
+}
+
 export async function listPlatformBarangayPage(input: { page: number; search: string; status: string }) {
   if (!supabase) throw new Error('Supabase is not configured.')
   const { data, error } = await supabase.rpc('list_platform_barangay_directory_page', {

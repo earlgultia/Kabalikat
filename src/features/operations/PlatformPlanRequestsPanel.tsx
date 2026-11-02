@@ -31,6 +31,10 @@ export function PlatformPlanRequestsPanel() {
         queryClient.invalidateQueries({ queryKey: ['platform-activity'] }),
       ])
       setNotes((existing) => ({ ...existing, [requestId]: '' }))
+      // Show the recorded decision immediately and keep the request out of
+      // the pending queue after the server refreshes it.
+      setStatus(decision === 'activate' ? 'activated' : 'declined')
+      setPage(0)
       setMessage(decision === 'activate' ? 'Payment confirmation recorded and requested plan activated.' : 'Plan request declined with your note.')
     } catch (reviewError) {
       setError(reviewError instanceof Error ? reviewError.message : 'Unable to process this plan request.')

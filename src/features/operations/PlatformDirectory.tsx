@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Building2, ChevronLeft, ChevronRight, Download, RefreshCw, Search } from 'lucide-react'
 import { getPlatformDirectorySummary, listPlatformBarangayPage, PLATFORM_DIRECTORY_PAGE_SIZE, type PlatformBarangayRow } from './platform-data'
 import { encodeCsv } from './csv'
+import { PlatformCaptainAccountsPanel } from './PlatformCaptainAccountsPanel'
 
 export function PlatformDirectory() {
   const [search, setSearch] = useState('')
@@ -53,7 +54,7 @@ export function PlatformDirectory() {
     }
   }
 
-  return <section className="panel platform-directory" aria-labelledby="platform-directory-title">
+  return <><section className="panel platform-directory" aria-labelledby="platform-directory-title">
     <div className="panel-head"><div><h2 id="platform-directory-title">Barangay directory</h2><p>Platform tenant metadata and aggregate active membership counts.</p></div><Building2 size={19} /></div>
     <div className="platform-directory-summary"><strong>{summary.data?.registered_count ?? '—'}<small> registered</small></strong><strong>{summary.data?.active_count ?? '—'}<small> active</small></strong><strong>{summary.data?.needs_attention_count ?? '—'}<small> suspended or archived</small></strong></div>
     <div className="platform-directory-controls">
@@ -70,5 +71,5 @@ export function PlatformDirectory() {
       {pageCount > 1 && <nav className="directory-pagination" aria-label="Barangay directory pages"><button type="button" className="button outline" disabled={currentPage === 0 || directory.isFetching} onClick={() => setPage(currentPage - 1)}><ChevronLeft size={15} />Previous</button><span aria-live="polite">Page {currentPage + 1} of {pageCount}</span><button type="button" className="button outline" disabled={currentPage + 1 === pageCount || directory.isFetching} onClick={() => setPage(currentPage + 1)}>Next<ChevronRight size={15} /></button></nav>}
     </> : <div className="ops-empty"><strong>{search || status !== 'all' ? 'No barangays match' : 'No barangays onboarded yet'}</strong><p>{search || status !== 'all' ? 'Try a different search or status.' : 'New barangays will appear here after onboarding.'}</p></div>}
     <p className="platform-directory-privacy">This directory does not include resident, document, meeting, or finance records.</p>
-  </section>
+  </section><PlatformCaptainAccountsPanel /></>
 }

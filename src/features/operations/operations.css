@@ -1167,6 +1167,11 @@
 .workspace-shell .member-access-summary > div { background: #fffefa; border: 1px solid #d9e2de; border-radius: 12px; display: grid; gap: 4px; padding: 15px 17px; }
 .workspace-shell .member-access-summary strong { color: #28685e; font-size: 23px; line-height: 1.15; }
 .workspace-shell .member-access-summary span { color: #5d6d70; font-size: 12px; }
+.workspace-shell .member-access-filters { align-items: end; display: flex; flex-wrap: wrap; gap: 12px; margin: 0 0 14px; }
+.workspace-shell .member-access-filters > .archive-search { flex: 1 1 280px; max-width: 520px; }
+.workspace-shell .member-access-filters > label:not(.archive-search) { color: #354f4c; display: grid; flex: 0 1 210px; font-size: 12px; font-weight: 700; gap: 6px; }
+.workspace-shell .member-access-filters select { background: #fffefa; border: 1px solid #bfcec8; border-radius: 8px; color: #24353b; font: inherit; font-weight: 400; min-height: 42px; padding: 8px 10px; width: 100%; }
+.workspace-shell .member-access-pagination { align-items: center; }
 .workspace-shell .member-access-list { display: grid; gap: 12px; }
 .workspace-shell .member-access-card { display: grid; gap: 14px; }
 .workspace-shell .member-access-card > header { align-items: flex-start; display: flex; flex-wrap: wrap; gap: 10px 16px; justify-content: space-between; }
@@ -1192,6 +1197,15 @@
 .workspace-shell .member-permission-list > label > span { display: grid; gap: 4px; min-width: 0; }
 .workspace-shell .member-permission-list strong { color: #354f4c; font-size: 11px; }
 .workspace-shell .member-permission-list small { color: #687a72; font-size: 11px; line-height: 1.45; }
+@media (max-width: 650px) {
+  .workspace-shell .member-access-summary { gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .workspace-shell .member-access-summary > div { min-width: 0; padding: 12px; }
+  .workspace-shell .member-access-filters { align-items: stretch; flex-direction: column; }
+  .workspace-shell .member-access-filters > .archive-search,
+  .workspace-shell .member-access-filters > label:not(.archive-search) { flex: 1 1 auto; max-width: none; width: 100%; }
+  .workspace-shell .member-access-pagination { align-items: stretch; flex-direction: column; }
+  .workspace-shell .member-access-pagination > .button { justify-content: center; width: 100%; }
+}
 .workspace-shell .barangay-settings-form { display: grid; gap: 17px; }
 .workspace-shell .barangay-settings-subheading { border-top: 1px solid #e5ebe7; margin: 5px 0 0; padding-top: 17px; }
 .workspace-shell .barangay-settings-history { margin-top: 16px; }

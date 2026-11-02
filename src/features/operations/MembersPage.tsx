@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
-import { CheckCircle2, History, UserPlus, ShieldCheck } from 'lucide-react'
+import { CheckCircle2, ChevronLeft, ChevronRight, History, Search, UserPlus, ShieldCheck } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import { supabase } from '../../lib/supabase'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
@@ -13,18 +13,34 @@ type MemberAccessEvent = { id: string; membership_id: string; action: string; fr
 type RolePermission = { role_id: string; permission_id: string; permission: { id: string; key: string; description: string } | null }
 type MemberPermissionOverride = { membership_id: string; permission_id: string; effect: 'allow' | 'deny' }
 type MemberPermissionEvent = { id: string; membership_id: string; permission_key: string; previous_effect: string | null; new_effect: string | null; created_at: string }
+type MemberPage = { rows: MemberRow[]; total: number; active: number; suspended: number }
+const MEMBER_PAGE_SIZE = 25
 
 function client() {
   if (!supabase) throw new Error('Supabase is not configured.')
   return supabase
 }
 
-async function listMembers(tenantId: string): Promise<MemberRow[]> {
-  const { data, error } = await client().from('barangay_memberships')
-    .select('id,user_id,role_id,status,created_at,role:role_definitions(key,label),profile:profiles(display_name)')
-    .eq('barangay_id', tenantId).in('status', ['active', 'suspended']).order('created_at', { ascending: true })
+async function listMembers(tenantId: string, page: number, search: string, status: string): Promise<MemberPage> {
+  const { data, error } = await client().rpc('list_barangay_membership_access_page', {
+    p_barangay_id: tenantId,
+    p_page: page,
+    p_page_size: MEMBER_PAGE_SIZE,
+    p_search: search || null,
+    p_status: status,
+  })
   if (error) throw new Error(error.message)
-  return (data ?? []) as unknown as MemberRow[]
+  const rows = (data ?? []) as Array<MemberRow & { role_key: string; role_label: string; display_name: string; total_count: number; active_count: number; suspended_count: number }>
+  return {
+    rows: rows.map(({ role_key, role_label, display_name, ...member }) => ({
+      ...member,
+      role: { key: role_key, label: role_label },
+      profile: { display_name },
+    })),
+    total: Number(rows[0]?.total_count ?? 0),
+    active: Number(rows[0]?.active_count ?? 0),
+    suspended: Number(rows[0]?.suspended_count ?? 0),
+  }
 }
 
 async function listRolePermissionAssignments(members: MemberRow[]): Promise<{ rolePermissions: RolePermission[]; overrides: MemberPermissionOverride[] }> {
@@ -63,7 +79,10 @@ export function MembersPage({ onOpenInvitations }: { onOpenInvitations?: () => v
   const { membership, user } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
   const queryClient = useQueryClient()
-  const members = useQuery({ queryKey: ['barangay-members-access', tenantId], queryFn: () => listMembers(tenantId), enabled: Boolean(tenantId) })
+  const [page, setPage] = useState(0)
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const members = useQuery({ queryKey: ['barangay-members-access', tenantId, page, search, statusFilter], queryFn: () => listMembers(tenantId, page, search, statusFilter), enabled: Boolean(tenantId) })
   const events = useQuery({ queryKey: ['barangay-membership-access-events', tenantId], queryFn: () => listMemberAccessEvents(tenantId), enabled: Boolean(tenantId) })
   const permissionEvents = useQuery({ queryKey: ['barangay-membership-permission-events', tenantId], queryFn: () => listMemberPermissionEvents(tenantId), enabled: Boolean(tenantId) })
   const accessPermission = useQuery({ queryKey: ['permission', tenantId, 'membership.manage'], queryFn: async () => {
@@ -72,16 +91,16 @@ export function MembersPage({ onOpenInvitations }: { onOpenInvitations?: () => v
     return data === true
   }, enabled: Boolean(tenantId) })
   const memberPermissionData = useQuery({
-    queryKey: ['barangay-member-permission-assignments', tenantId, members.data?.map((item) => item.id) ?? []],
-    queryFn: () => listRolePermissionAssignments(members.data ?? []),
-    enabled: Boolean(tenantId && accessPermission.data && members.data?.length),
+    queryKey: ['barangay-member-permission-assignments', tenantId, members.data?.rows.map((item) => item.id) ?? []],
+    queryFn: () => listRolePermissionAssignments(members.data?.rows ?? []),
+    enabled: Boolean(tenantId && accessPermission.data && members.data?.rows.length),
   })
   const [drafts, setDrafts] = useState<Record<string, { role: string; status: 'active' | 'suspended' }>>({})
   const [busyId, setBusyId] = useState('')
   const [busyPermissionId, setBusyPermissionId] = useState('')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
-  const rows = members.data ?? []
+  const rows = members.data?.rows ?? []
 
   async function save(member: MemberRow) {
     const currentRole = member.role?.key ?? ''
@@ -143,8 +162,9 @@ export function MembersPage({ onOpenInvitations }: { onOpenInvitations?: () => v
     {accessPermission.data === false && <div className="ops-panel"><strong>Staff management is restricted</strong><p>Your current role cannot manage barangay membership access.</p></div>}
     {success && <div className="ops-success" role="status"><CheckCircle2 size={16} />{success}</div>}{error && <ErrorNotice message={error} />}
     {accessPermission.data && <>
-      <div className="member-access-summary"><div><strong>{rows.length.toLocaleString()}</strong><span>Staff and member accounts</span></div><div><strong>{rows.filter((item) => item.status === 'active').length.toLocaleString()}</strong><span>Active</span></div><div><strong>{rows.filter((item) => item.status === 'suspended').length.toLocaleString()}</strong><span>Suspended</span></div></div>
-      {members.isPending ? <LoadingNotice /> : members.error ? <ErrorNotice message="Barangay memberships could not be loaded." /> : rows.length === 0 ? <EmptyNotice title="No memberships found" detail="Accepted staff invitations will appear here." /> : <div className="member-access-list">{rows.map((member) => {
+      <div className="member-access-summary"><div><strong>{(members.data?.total ?? 0).toLocaleString()}</strong><span>Matching accounts</span></div><div><strong>{(members.data?.active ?? 0).toLocaleString()}</strong><span>Active matches</span></div><div><strong>{(members.data?.suspended ?? 0).toLocaleString()}</strong><span>Suspended matches</span></div></div>
+      <div className="member-access-filters"><label className="archive-search"><Search size={16} /><input type="search" maxLength={100} placeholder="Search member or role" aria-label="Search members by name or role" value={search} onChange={(event) => { setSearch(event.target.value); setPage(0) }} /></label><label>Access status<select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setPage(0) }}><option value="all">All statuses</option><option value="active">Active</option><option value="suspended">Suspended</option></select></label></div>
+      {members.isPending ? <LoadingNotice /> : members.error ? <ErrorNotice message="Barangay memberships could not be loaded." onRetry={() => void members.refetch()} retrying={members.isFetching} /> : rows.length === 0 ? <EmptyNotice title="No memberships found" detail="Try a different name or status. Accepted staff invitations will appear here." /> : <div className="member-access-list">{rows.map((member) => {
         const draft = draftFor(member)
         const changed = draft.role !== member.role?.key || draft.status !== member.status
         const captainRecord = member.role?.key === 'captain'
@@ -176,6 +196,7 @@ export function MembersPage({ onOpenInvitations }: { onOpenInvitations?: () => v
           </>}
         </article>
       })}</div>}
+      {members.data && members.data.total > MEMBER_PAGE_SIZE && <nav className="ops-form-actions member-access-pagination" aria-label="Member access pages"><button type="button" className="button outline" disabled={page === 0 || members.isFetching} onClick={() => setPage((current) => Math.max(0, current - 1))}><ChevronLeft size={15} />Previous</button><span className="field-hint">Page {page + 1} of {Math.ceil(members.data.total / MEMBER_PAGE_SIZE)}</span><button type="button" className="button outline" disabled={(page + 1) * MEMBER_PAGE_SIZE >= members.data.total || members.isFetching} onClick={() => setPage((current) => current + 1)}>Next<ChevronRight size={15} /></button></nav>}
       <section className="ops-panel member-access-history"><div className="ops-panel-heading"><div><h2>Recent access history</h2><p>Role and status changes recorded in this barangay.</p></div><History size={18} /></div>
         {events.isPending ? <LoadingNotice compact /> : events.error ? <ErrorNotice message="Access history could not be loaded." /> : events.data?.length ? <ol>{events.data.map((entry) => {
           const target = rows.find((member) => member.id === entry.membership_id)
