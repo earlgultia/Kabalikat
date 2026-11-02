@@ -644,13 +644,6 @@
 .subscription-entitlements > span { color: #8a6a2d; }
 .subscription-entitlements ul { display: flex; flex-wrap: wrap; gap: 5px; list-style: none; margin: 0; padding: 0; }
 .subscription-entitlements li { background: #eaf1ed; border-radius: 999px; overflow-wrap: anywhere; padding: 4px 8px; text-transform: capitalize; }
-.subscription-feature-switches { border: 1px solid #dce6e0; border-radius: 12px; display: grid; gap: 8px; margin: 0; min-width: 0; padding: 12px; }
-.subscription-feature-switches legend { color: #354f4c; font-size: 12px; font-weight: 750; padding: 0 5px; }
-.subscription-feature-switch { align-items: flex-start; background: #f7faf8; border: 1px solid #e4ece7; border-radius: 9px; display: flex !important; gap: 10px !important; padding: 10px; }
-.subscription-feature-switch input { accent-color: #18735d; flex: none; height: 18px; margin: 2px 0 0; width: 18px; }
-.subscription-feature-switch span { display: grid; gap: 3px; min-width: 0; }
-.subscription-feature-switch strong { color: #294744; font-size: 12px; }
-.subscription-feature-switch small { color: #657b77; font-size: 11px; font-weight: 450; line-height: 1.4; }
 .subscription-table-controls { align-items: end; display: grid; grid-template-columns: minmax(220px, 1fr) minmax(150px, 220px) auto; gap: 10px; margin: 16px 0; }
 .subscription-table-controls .archive-search { grid-column: 1; grid-row: 1; min-width: 0; }
 .subscription-table-controls .archive-folder-select { grid-column: 2; grid-row: 1; min-width: 0; }
