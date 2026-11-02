@@ -32,3 +32,15 @@ export async function listPlatformBarangays() {
   if (error) throw new Error(error.message)
   return (data ?? []) as PlatformBarangayRow[]
 }
+
+export async function createExistingBarangayCaptainInvitation(barangayCode: string, captainEmail: string) {
+  if (!supabase) throw new Error('Supabase is not configured.')
+  const { data, error } = await supabase.rpc('create_platform_captain_invitation', {
+    p_barangay_code: barangayCode.trim(),
+    p_captain_email: captainEmail.trim(),
+  })
+  if (error) throw new Error(error.message)
+  const result = (data ?? [])[0] as { invitation_token: string; expires_at: string } | undefined
+  if (!result?.invitation_token) throw new Error('The Captain invitation could not be created.')
+  return result
+}

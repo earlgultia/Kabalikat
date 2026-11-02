@@ -22,7 +22,7 @@ The 74% figure is a rough estimate of the seven roadmap phases in the project sp
 
 | Order | Workspace | Current focus | Next step |
 | ---: | --- | --- | --- |
-| 1 | Captain | Membership role/status management, role-bounded permission overrides, barangay office settings, a permission-aware review queue covering SK project and accomplishment review, issuance-time signatory snapshots, and manual paid-plan requests are available in responsive pages (migrations `0179`-`0188`). | Review the Captain's remaining administration workflows and close gaps before moving to other roles. |
+| 1 | Captain | Membership role/status management, role-bounded permission overrides, barangay office settings, a permission-aware review queue covering SK project and accomplishment review, issuance-time signatory snapshots, manual paid-plan requests, and Super Admin invitations for a Captain account on an existing barangay are available in responsive pages (migrations `0179`-`0189`). | Review the Captain's remaining administration workflows and close gaps before moving to other roles. |
 | 2 | Secretary | Existing authorized workflows are available; a dedicated role-by-role completeness review is pending. | Review records, meetings, announcements, documents, archives, and resident follow-up. |
 | 3 | Treasurer | Finance tools exist; a dedicated role-by-role completeness review is pending. | Review budget, transaction, approval, export, and audit paths. |
 | 4 | Kagawad | Committee and meeting tools exist; a dedicated role-by-role completeness review is pending. | Review committee assignments, projects, meetings, and scoped approvals. |
