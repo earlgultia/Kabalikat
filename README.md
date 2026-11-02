@@ -7,7 +7,7 @@ KABALIKAT is a multi-barangay management platform by ArkByte Technologies. This 
 1. Install Node.js 20.19+ or 22.12+ and npm.
 2. Run `npm install`.
 3. Copy `.env.example` to `.env.local` and set the Supabase project URL and public anon/publishable key.
-4. Apply migrations `0001_foundation.sql` through `0158_platform_activity_log.sql` in order to a **development** Supabase project using the Supabase CLI or SQL editor.
+4. Apply migrations `0001_foundation.sql` through `0172_make_platform_activity_append_only.sql` in order to a **development** Supabase project using the Supabase CLI or SQL editor.
 5. Run `npm run dev`.
 
 Available commands: `npm run dev`, `npm run typecheck`, `npm run lint`, `npm test`, and `npm run build`.

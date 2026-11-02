@@ -1,6 +1,6 @@
 # KABALIKAT Project Timeline and Status
 
-**Status checked:** 31 October 2026
+**Status checked:** 2 November 2026
 **Estimated implementation completion:** **74%**
 **Current position:** Phase 7 hardening, with remaining Phase 5 and Phase 6 product work.
 
@@ -47,7 +47,7 @@ This is a dependency-based timeline rather than a calendar schedule. No delivery
 
 ## Main remaining work
 
-1. **Verify the database:** The isolated CI workflow applies migrations 0001-0158 and runs pgTAP suites, including role-targeted announcement, resident profile correction, private feedback, public document verification, platform subscription controls, and owner-scoped personal export coverage. Add resident directory, document queue, finance paging, archive search and folder paging, meeting resolution/member search, community calendar paging/date filters, announcement search/date filters, incident report date/severity/assignment filters and manager queue breakdown, incident assignment and status notifications, patrol assignment, cancellation, rescheduling, start, and completion notifications, completion handover, filtered patrol shift history, patrol coverage summary, platform directory/subscription paging, platform onboarding and subscription activity history, support queue/thread, committee member-picker, referral paging, Tanod picker, meeting attendee-directory, document type history, SK accomplishment paging, project-history, finance budget paging, feedback activity paging, complete personal export, health outreach search/date filters, attendance aggregate and summary, revision, cancellation, audit history, outreach completion/early completion/attendance correction/cancellation/private review/publication notification, SK event reasoned early completion and notification coverage, review queue summary, health review submission, health outreach rescheduling/history/notification summary, SK event search/date filters, review submission and publication notification, SK event queue summary coverage, patrol shift search, searchable meeting schedule/date filters, meeting status history, and meeting schedule/status notification coverage to pgTAP and review the first GitHub run. Its status has not been verified in GitHub yet.
+1. **Verify the database:** The isolated CI workflow applies migrations and runs pgTAP suites, including role-targeted announcement, resident profile correction, private feedback, public document verification, platform subscription controls, and owner-scoped personal export coverage. Add resident directory, document queue, finance paging, archive search and folder paging, meeting resolution/member search, community calendar paging/date filters, announcement search/date filters, incident report date/severity/assignment filters and manager queue breakdown, incident assignment and status notifications, patrol assignment, cancellation, rescheduling, start, and completion notifications, completion handover, filtered patrol shift history, patrol coverage summary, platform directory/subscription paging, platform onboarding and subscription activity history, support queue/thread, committee member-picker, referral paging, Tanod picker, meeting attendee-directory, document type history, SK accomplishment paging, project-history, finance budget paging, feedback activity paging, complete personal export, health outreach search/date filters, attendance aggregate and summary, revision, cancellation, audit history, outreach completion/early completion/attendance correction/cancellation/private review/publication notification, SK event reasoned early completion and notification coverage, review queue summary, health review submission, health outreach rescheduling/history/notification summary, SK event search/date filters, review submission and publication notification, SK event queue summary coverage, patrol shift search, searchable meeting schedule/date filters, meeting status history, meeting schedule/status notification coverage, subscription plan metadata editing, existing inactive plan assignment behavior, review-queue summary alignment, upcoming-trial filter/count alignment, plan usage counts, plan-change field audit coverage, subscription deadline preservation, and platform activity date filtering, actor search/snapshot, actor-name protection, and append-only behavior to pgTAP. Review the first GitHub run; its status has not been verified yet.
 2. **Complete agreed specialist modules:** Clinical BHW workflows and restricted youth registry/program workflows require explicit data minimization and access rules. Current BHW and SK event features only schedule public community events.
 3. **Decide integration behavior:** Billing, plan enforcement, email/SMS, OCR and AI require product decisions, real providers, server-side secrets, and user-facing failure handling.
 4. **Complete hardening:** Cross-tenant/RLS review, accessibility and performance checks, backup restore, operational monitoring, and incident response procedures.
@@ -219,7 +219,35 @@ Patrol coverage overview: Migration `0157_patrol_coverage_summary.sql` adds date
 
 Patrol schedule export: Captains can download every shift matching the current queue search and status filters as a spreadsheet-safe CSV. The export includes shift title, patrol area, schedule, and status, and excludes user identifiers and log contents.
 
-Platform activity history: Migration `0158_platform_activity_log.sql` records high-level tenant onboarding and subscription changes. The Super Admin dashboard provides a searchable, paginated activity page on desktop and mobile; only platform administrators can read these summaries.
+Platform activity history: Migration `0158_platform_activity_log.sql` records high-level tenant onboarding and subscription changes. The Super Admin dashboard provides a searchable, paginated activity page and filtered CSV export on desktop and mobile; only platform administrators can read these summaries.
+
+Platform activity date filters: Migration `0168_platform_activity_date_filters.sql` adds server-side date boundaries to the Super Admin activity list. The list and matching export share the selected local-day range, including all events on the chosen end date. Hosted database behavior is not yet verified.
+
+Platform activity actor search: Migration `0169_platform_activity_actor_search.sql` lets Super Admins find platform activity by the recorded administrator name as well as barangay and action summary. Date filters and matching export remain consistent. Hosted database behavior is not yet verified.
+
+Platform activity actor snapshots: Migration `0170_snapshot_platform_activity_actor_name.sql` captures the administrator display name when each event is written and backfills earlier events. The platform activity search and export use this stable snapshot so profile edits do not rewrite how older audit events appear. Hosted database behavior is not yet verified.
+
+Immutable activity attribution: Migration `0171_protect_platform_activity_actor_name.sql` prevents updates to the saved actor name on existing platform activity records, preserving attribution in the audit trail. Hosted database behavior is not yet verified.
+
+Append-only platform activity: Migration `0172_make_platform_activity_append_only.sql` blocks updates and deletes to platform activity events so saved audit entries remain intact. Hosted database behavior is not yet verified.
+
+Subscription plan editor: Migration `0159_platform_subscription_plan_editor.sql` adds an administrator-only RPC for editing plan names, descriptions, boolean entitlement metadata, and availability. The Super Admin plan catalog has responsive edit forms and writes a non-sensitive platform activity event. Entitlements remain catalog metadata and do not gate workspace features; the Free plan cannot be disabled.
+
+Existing inactive subscriptions: Migration `0160_preserve_existing_inactive_plan_assignments.sql` lets administrators continue managing a subscription on its currently assigned inactive plan without offering that plan to other barangays. The responsive editor identifies the plan as inactive and preserves it as the selected value.
+
+Subscription review queue: Migration `0161_platform_subscription_review_queue_summary.sql` aligns the “Needs review” count with its filter, including suspended accounts, elapsed trials, and past-due grace periods. Super Admins can tap the count to open the filtered queue on mobile or desktop.
+
+Upcoming trial review: Migration `0162_platform_upcoming_trial_review.sql` shows a count and filtered queue for trials expiring within seven days. The dashboard marks the matching records for manual review without altering their status.
+
+Plan assignment totals: Migration `0163_platform_subscription_plan_usage_counts.sql` adds an aggregate subscriber count to each plan card so administrators can see how many barangays are assigned before changing plan availability.
+
+Plan change audit details: Migration `0164_detailed_subscription_plan_activity.sql` records which metadata fields changed without storing the descriptions or entitlement values in the platform activity log. The responsive activity page displays the field names on each plan change.
+
+Subscription deadline preservation: Migration `0165_explicit_subscription_deadline_reset.sql` keeps current subscription dates on routine same-plan/status edits. The editor provides an explicit reset checkbox for administrators who intend to restart trial or grace timing.
+
+Upcoming grace review: Migration `0166_upcoming_subscription_grace_review.sql` adds a seven-day count and paginated filter for past-due subscriptions approaching the end of their grace period. The Super Admin UI provides a shortcut and matching row labels; the queue does not automatically change access or subscription status. Hosted database behavior is not yet verified.
+
+Subscription date audit: Migration `0167_subscription_deadline_audit_details.sql` stores before-and-after subscription start, trial-end, and grace-end timestamps in each subscription event. Super Admin history shows these date changes on desktop and mobile; earlier events are identified as lacking date snapshots. Hosted database behavior is not yet verified.
 
 Incident queue overview shortcuts: Managers can select a status or category count to filter the paginated list and select it again to clear that filter. Shortcuts use the existing server-side queue query and work on mobile and desktop.
 

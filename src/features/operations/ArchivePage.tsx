@@ -47,20 +47,25 @@ export function ArchivePage() {
   })
   const [draftText, setDraftText] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
+  const [folderBusy, setFolderBusy] = useState(false)
+  const [showFolderForm, setShowFolderForm] = useState(false)
+  const [folderName, setFolderName] = useState('')
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
 
-  async function addFolder() {
-    const name = window.prompt('Name this folder:')
-    if (!name?.trim()) return
-    const parsed = z.string().trim().min(1).max(80).safeParse(name)
-    if (!parsed.success || /[\\/]/.test(name)) { setError('Folder names must be 1 to 80 characters and cannot contain a slash.'); return }
-    setError(''); setMessage('')
+  async function addFolder(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const parsed = z.string().trim().min(1).max(80).safeParse(folderName)
+    if (!parsed.success || /[\\/]/.test(folderName)) { setError('Folder names must be 1 to 80 characters and cannot contain a slash.'); return }
+    setError(''); setMessage(''); setFolderBusy(true)
     try {
       await createArchiveFolder(tenantId, parsed.data, folderId || null)
       await queryClient.invalidateQueries({ queryKey: ['archive-folders', tenantId] })
+      setFolderName('')
+      setShowFolderForm(false)
       setMessage('Folder created.')
     } catch (err) { setError(err instanceof Error ? err.message : 'Unable to create this folder.') }
+    finally { setFolderBusy(false) }
   }
 
   async function upload(event: FormEvent<HTMLFormElement>) {
@@ -129,8 +134,9 @@ export function ArchivePage() {
 
   return <section className="operation-page">
     <PageHeading title="Barangay archive" description="Store and search private community files, with tenant permissions enforced on storage and metadata.">
-      {canManage.data && <button className="button outline" onClick={() => void addFolder()}><FolderPlus size={16} />New folder</button>}
+      {canManage.data && <button type="button" className="button outline" aria-expanded={showFolderForm} aria-controls="archive-folder-form" onClick={() => { setShowFolderForm((open) => !open); setError('') }}><FolderPlus size={16} />{showFolderForm ? 'Cancel folder' : 'New folder'}</button>}
     </PageHeading>
+    {showFolderForm && canManage.data && <form id="archive-folder-form" className="ops-panel ops-form archive-folder-form" onSubmit={(event) => void addFolder(event)}><div className="ops-panel-heading"><div><h2>Create archive folder</h2><p>Folder location: {folderId ? folderRows.find((folder) => folder.id === folderId)?.name ?? 'Selected folder' : 'Archive root'}</p></div><FolderPlus size={18} /></div><label htmlFor="archive-folder-name">Folder name</label><input id="archive-folder-name" name="name" autoFocus value={folderName} onChange={(event) => setFolderName(event.target.value)} minLength={1} maxLength={80} required aria-describedby="archive-folder-hint" /><span id="archive-folder-hint" className="field-hint">Use 1–80 characters. Slashes are not allowed.</span><div className="ops-form-actions"><button type="button" className="button outline" disabled={folderBusy} onClick={() => { setShowFolderForm(false); setFolderName('') }}>Cancel</button><button className="button primary" disabled={folderBusy}>{folderBusy ? 'Creating…' : 'Create folder'}</button></div></form>}
     {!tenantId && <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to open its private archive." />}
     {Boolean(tenantId) && canRead.isPending && <LoadingNotice compact />}
     {canRead.error && <ErrorNotice message="Your archive access could not be checked. Refresh the page or contact your barangay administrator." />}
