@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
 import { Check, ChevronLeft, ChevronRight, Download, Home, Search, UserPlus, UserRoundPen } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
-import { cancelResidentProfileChange, findResidentProfileChangePage, getOwnResidentDataExport, hasPermission, listHouseholdsPage, listResidents, listResidentsPage, listResidencyVerifications, listResidentProfileChangeRequests, registerResident, reviewResidentProfileChange, submitResidentProfileChange, verifyResident, HOUSEHOLD_PAGE_SIZE, RESIDENT_CORRECTION_PAGE_SIZE, RESIDENT_PAGE_SIZE, type HouseholdRow } from './data'
+import { cancelResidentProfileChange, findResidentProfileChangePage, getOwnResidentDataExport, hasPermission, listHouseholdsPage, listResidents, listResidentsPage, listResidentRecordsCreatedByMe, listResidencyVerifications, listResidentProfileChangeRequests, registerResident, reviewResidentProfileChange, submitResidentProfileChange, verifyResident, HOUSEHOLD_PAGE_SIZE, RESIDENT_CORRECTION_PAGE_SIZE, RESIDENT_PAGE_SIZE, type HouseholdRow } from './data'
 import { ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 
 const residentSchema = z.object({
@@ -17,7 +17,7 @@ const residentSchema = z.object({
 }).refine((value) => value.householdId || (value.address?.length ?? 0) >= 3, { message: 'Provide a household address or select an existing household.' })
 
 export function ResidentsPage({ focusId, onFocusHandled }: { focusId?: string; onFocusHandled?: () => void } = {}) {
-  const { membership } = useAuth()
+  const { membership, user } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
   const role = membership?.role?.key
   const queryClient = useQueryClient()
@@ -88,6 +88,11 @@ export function ResidentsPage({ focusId, onFocusHandled }: { focusId?: string; o
     if (householdTotalPages > 0 && householdPage >= householdTotalPages) setHouseholdPage(householdTotalPages - 1)
   }, [householdPage, householdTotalPages])
   const canVerify = useQuery({ queryKey: ['permission', tenantId, 'resident.verify'], queryFn: () => hasPermission(tenantId, 'resident.verify'), enabled: Boolean(tenantId) })
+  const residentAuthors = useQuery({
+    queryKey: ['resident-record-authors', tenantId, residentRows.map((resident) => resident.id)],
+    queryFn: () => listResidentRecordsCreatedByMe(tenantId, residentRows.map((resident) => resident.id), user!.id),
+    enabled: Boolean(tenantId && canVerify.data && user?.id && residentRows.length),
+  })
   const canReviewChanges = useQuery({ queryKey: ['permission', tenantId, 'resident.update'], queryFn: () => hasPermission(tenantId, 'resident.update'), enabled: Boolean(tenantId) })
   const profileChanges = useQuery({
     queryKey: ['resident-profile-changes', tenantId, role, correctionPage],
@@ -286,7 +291,7 @@ export function ResidentsPage({ focusId, onFocusHandled }: { focusId?: string; o
       </div>}
       {role !== 'resident' && <p className="field-hint" aria-live="polite">Showing {filteredResidents.length} resident {filteredResidents.length === 1 ? 'record' : 'records'} on this page. {residents.data?.total ?? 0} records match these filters.</p>}
       {filteredResidents.length ? <div className="ops-table-wrap"><table className="ops-table"><thead><tr><th>Resident</th><th>Household</th><th>Contact</th><th>Residency</th><th>Record</th></tr></thead><tbody>
-        {filteredResidents.map((resident) => <tr key={resident.id}><td><strong>{resident.first_name} {resident.last_name}</strong><small>{resident.birth_date ? new Date(resident.birth_date + 'T00:00:00').toLocaleDateString() : 'Birth date not recorded'}</small></td><td>{resident.household?.household_code ?? '—'}<small>{resident.household?.purok ?? resident.household?.address_line ?? 'Address unavailable'}</small></td><td>{resident.phone ?? '—'}</td><td><StatusPill status={latestVerificationByResident.get(resident.id) ?? 'pending'} />{canVerify.data && <div className="row-actions"><button onClick={() => void verify(resident.id, 'verified')}>Verify</button><button onClick={() => void verify(resident.id, 'rejected')}>Reject</button></div>}</td><td><StatusPill status={resident.record_status} /></td></tr>)}
+        {filteredResidents.map((resident) => { const ownRecord = residentAuthors.data?.has(resident.id) ?? false; return <tr key={resident.id}><td><strong>{resident.first_name} {resident.last_name}</strong><small>{resident.birth_date ? new Date(resident.birth_date + 'T00:00:00').toLocaleDateString() : 'Birth date not recorded'}</small></td><td>{resident.household?.household_code ?? '—'}<small>{resident.household?.purok ?? resident.household?.address_line ?? 'Address unavailable'}</small></td><td>{resident.phone ?? '—'}</td><td><StatusPill status={latestVerificationByResident.get(resident.id) ?? 'pending'} />{canVerify.data && (residentAuthors.isPending ? <small>Checking reviewer eligibility…</small> : residentAuthors.error ? <small>Reviewer eligibility unavailable. Refresh before making a decision.</small> : ownRecord ? <small>Another authorized reviewer must verify this record.</small> : <div className="row-actions"><button onClick={() => void verify(resident.id, 'verified')}>Verify</button><button onClick={() => void verify(resident.id, 'rejected')}>Reject</button></div>)}</td><td><StatusPill status={resident.record_status} /></td></tr>})}
       </tbody></table></div> : <div className="ops-empty"><Search size={22} /><strong>No residents on this page match that status</strong><p>Choose another status or move to another page.</p></div>}
       {role !== 'resident' && (residents.data?.total ?? 0) > RESIDENT_PAGE_SIZE && <nav className="ops-form-actions" aria-label="Resident directory pages">
         <button className="button outline" disabled={page === 0 || residents.isFetching} onClick={() => setPage((current) => Math.max(0, current - 1))}>Previous</button>

@@ -36,7 +36,10 @@ export function InvitationsPage() {
       url.searchParams.set('token', created.invitation_token)
       setInviteUrl(url.toString())
       setSuccess('Invitation link created. It expires in 7 days and can only be accepted by the invited email address.')
-      await queryClient.invalidateQueries({ queryKey: ['invitations', tenantId] })
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['invitations', tenantId] }),
+        queryClient.invalidateQueries({ queryKey: ['captain-review-queue', tenantId] }),
+      ])
       setPage(0)
       form.reset()
     } catch (err) { setError(err instanceof Error ? err.message : 'Unable to create this invitation.') }
@@ -53,7 +56,10 @@ export function InvitationsPage() {
     setError(''); setSuccess('')
     try {
       await revokeInvitation(id)
-      await queryClient.invalidateQueries({ queryKey: ['invitations', tenantId] })
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['invitations', tenantId] }),
+        queryClient.invalidateQueries({ queryKey: ['captain-review-queue', tenantId] }),
+      ])
       setSuccess('Invitation revoked. The link can no longer be accepted.')
     } catch (err) { setError(err instanceof Error ? err.message : 'Unable to revoke this invitation.') }
   }

@@ -91,6 +91,7 @@
 .request-main small { color: #9aa49d; font-size: 8px; }
 .request-main .rejection-detail { display: block; color: #9a5c4b; margin-top: 4px; }
 .request-status { display: flex; gap: 9px; align-items: center; justify-content: flex-end; flex-wrap: wrap; flex: none; }
+.document-owner-review-note { flex-basis: 100%; color: var(--muted); text-align: right; }
 .ops-section-title p { margin: 0; }
 .announcement-card { padding: 16px; }
 .announcement-top, .announcement-top > div { display: flex; align-items: center; gap: 8px; }
@@ -136,6 +137,7 @@
   .ops-request-card { align-items: flex-start; flex-direction: column; }
   .ops-request-card:has(.resident-document-timeline) { grid-template-columns: 1fr; }
   .request-status { justify-content: flex-start; }
+  .document-owner-review-note { text-align: left; }
   .ops-section-title { align-items: flex-start; flex-direction: column; }
   .invite-link-box { grid-template-columns: 1fr; }
   .meeting-card-top { align-items: flex-start; }

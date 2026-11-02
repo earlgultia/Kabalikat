@@ -113,7 +113,7 @@ export function AccountSecurityDialog({ email, userId, tenantId, onClose }: { em
           {([
             ['announcement', 'Community announcements', 'New announcements visible to your role.'],
             ['disaster_advisory', 'Disaster advisories', 'New published advisories visible to your role.'],
-            ['meeting_update', 'Meeting updates', 'Schedule changes, completions, and cancellations for meetings you are invited to.'],
+            ['meeting_update', 'Meeting updates', 'Schedule changes and resolution decisions for meetings you manage or are invited to.'],
             ['health_outreach_update', 'Health outreach schedule updates', 'Publication, completion, and cancellation alerts for outreach events, including aggregate attendance when completed.'],
             ['sk_event_update', 'SK event schedule updates', 'Publication, rescheduling, and cancellation notices for community events.'],
           ] as const).map(([resourceType,label,detail]) => {
@@ -122,7 +122,7 @@ export function AccountSecurityDialog({ email, userId, tenantId, onClose }: { em
           })}
         </div>}
         {preferenceError && <p className="account-security-error" role="alert">{preferenceError}</p>}
-        <p className="field-hint">These settings apply to announcements, advisories, meeting changes, health outreach, and SK event publication or schedule changes. Profile correction, document status, and private review feedback alerts stay enabled so you can track requests. No email or SMS is sent.</p>
+        <p className="field-hint">These settings apply to announcements, advisories, meeting changes and resolution decisions, health outreach, and SK event publication or schedule changes. Profile correction, document status, and private review feedback alerts stay enabled so you can track requests. No email or SMS is sent.</p>
       </section>
       <form className="account-security-form" onSubmit={(event) => void changePassword(event)}>
         <label>New password<div className="auth-password-field"><input name="password" type={showPassword ? 'text' : 'password'} autoComplete="new-password" minLength={12} maxLength={128} required /><button type="button" className="auth-password-toggle" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? 'Hide new password' : 'Show new password'} aria-pressed={showPassword}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></div><span className="field-hint">At least 12 characters, with uppercase, lowercase, and a number.</span></label>

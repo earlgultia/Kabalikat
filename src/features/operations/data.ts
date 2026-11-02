@@ -75,10 +75,10 @@ export type MeetingAttendeeRow = { user_id: string }
 export type MeetingStatusEventRow = {
   id: string; from_status: string | null; to_status: string; reason: string | null; actor_id: string | null; created_at: string
 }
-export type MeetingMinutesRow = { id: string; content: string; status: 'draft' | 'reviewed'; updated_at: string }
+export type MeetingMinutesRow = { id: string; content: string; status: 'draft' | 'reviewed'; drafted_by: string; updated_at: string }
 export type MeetingResolutionRow = {
   id: string; resolution_number: string; title: string; content: string
-  status: 'draft' | 'approved'; created_at: string; approved_at: string | null
+  status: 'draft' | 'approved'; proposed_by: string; created_at: string; approved_at: string | null
 }
 export type MemberRow = { user_id: string; role: { label: string } | null; profile: { display_name: string } | null }
 export type ArchiveFolderRow = { id: string; parent_id: string | null; name: string }
@@ -119,6 +119,24 @@ export type CaptainReviewQueueSummary = {
   pending_sk_projects: number | null
   pending_sk_accomplishments: number | null
   open_incidents: number | null
+  pending_referrals?: number | null
+  pending_invitations?: number | null
+  pending_meeting_resolutions?: number | null
+  generated_at: string
+}
+export type SecretaryReviewQueueSummary = {
+  pending_residency_verifications: number | null
+  pending_profile_corrections: number | null
+  pending_documents: number | null
+  pending_meeting_resolutions: number | null
+  meeting_minutes_to_review: number | null
+  generated_at: string
+}
+export type TreasurerFollowUpSummary = {
+  budgets_awaiting_approval: number | null
+  transactions_awaiting_review: number | null
+  budget_changes_awaiting_review: number | null
+  transaction_changes_awaiting_review: number | null
   generated_at: string
 }
 export type FinancialAdjustmentRow = {
@@ -179,6 +197,14 @@ export function getCaptainReviewQueueSummary(tenantId: string) {
   return rpc<CaptainReviewQueueSummary>('get_captain_review_queue_summary', { p_barangay_id: tenantId })
 }
 
+export function getSecretaryReviewQueueSummary(tenantId: string) {
+  return rpc<SecretaryReviewQueueSummary>('get_secretary_review_queue_summary', { p_barangay_id: tenantId })
+}
+
+export function getTreasurerFollowUpSummary(tenantId: string) {
+  return rpc<TreasurerFollowUpSummary>('get_treasurer_follow_up_summary', { p_barangay_id: tenantId })
+}
+
 export function listResidents(tenantId: string) {
   return rows<ResidentRow>(client().from('residents')
     .select('id,first_name,last_name,birth_date,phone,record_status,household_id,household:households(household_code,address_line,purok)')
@@ -213,6 +239,15 @@ export async function listResidentsPage(tenantId: string, page: number, search: 
     verificationStatuses: Object.fromEntries(result.map((resident) => [resident.id, resident.verification_status])) as Record<string, string>,
     total: Number(result[0]?.total_count ?? 0),
   }
+}
+
+export async function listResidentRecordsCreatedByMe(tenantId: string, residentIds: string[], userId: string) {
+  if (!residentIds.length) return new Set<string>()
+  const { data, error } = await client().from('residents')
+    .select('id').eq('barangay_id', tenantId).eq('created_by', userId)
+    .in('id', residentIds)
+  if (error) throw new Error(error.message)
+  return new Set((data ?? []).map((row) => row.id))
 }
 
 export async function getOwnResidentDataExport(tenantId: string, onProgress?: (message: string) => void): Promise<ResidentPersonalDataExport> {
@@ -736,7 +771,7 @@ export function updateMeetingStatus(id: string, status: 'completed' | 'cancelled
 
 export async function getMeetingMinutes(meetingId: string) {
   const { data, error } = await client().from('meeting_minutes')
-    .select('id,content,status,updated_at').eq('meeting_id', meetingId).maybeSingle()
+    .select('id,content,status,drafted_by,updated_at').eq('meeting_id', meetingId).maybeSingle()
   if (error) throw new Error(error.message)
   return data as MeetingMinutesRow | null
 }
@@ -746,7 +781,7 @@ export const MEETING_RESOLUTION_PAGE_SIZE = 25
 export async function listMeetingResolutionPage(meetingId: string, page: number) {
   const from = Math.max(0, page) * MEETING_RESOLUTION_PAGE_SIZE
   const { data, error, count } = await client().from('meeting_resolutions')
-    .select('id,resolution_number,title,content,status,created_at,approved_at', { count: 'exact' })
+    .select('id,resolution_number,title,content,status,proposed_by,created_at,approved_at', { count: 'exact' })
     .eq('meeting_id', meetingId).order('created_at', { ascending: false }).order('id', { ascending: false })
     .range(from, from + MEETING_RESOLUTION_PAGE_SIZE - 1)
   if (error) throw new Error(error.message)

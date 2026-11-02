@@ -2,7 +2,7 @@ import { supabase } from '../../lib/supabase'
 
 export type CommunityNotification = {
   id: string
-  resource_type: 'announcement' | 'disaster_advisory' | 'resident_profile_change' | 'document_request' | 'community_feedback' | 'meeting_update' | 'health_outreach_cancellation' | 'health_outreach_completion' | 'health_outreach_review' | 'health_outreach_published' | 'health_outreach_review_submission' | 'health_outreach_rescheduled' | 'sk_event_review_submission' | 'sk_event_published' | 'sk_event_review_feedback' | 'sk_event_cancelled' | 'sk_event_rescheduled' | 'sk_event_completed' | 'incident_assignment' | 'incident_status_change' | 'patrol_shift_assignment' | 'patrol_shift_cancelled' | 'patrol_shift_rescheduled' | 'patrol_shift_started' | 'patrol_shift_completed' | 'support_ticket_update'
+  resource_type: 'announcement' | 'disaster_advisory' | 'resident_profile_change' | 'document_request' | 'community_feedback' | 'meeting_update' | 'meeting_resolution' | 'health_outreach_cancellation' | 'health_outreach_completion' | 'health_outreach_review' | 'health_outreach_published' | 'health_outreach_review_submission' | 'health_outreach_rescheduled' | 'sk_event_review_submission' | 'sk_event_published' | 'sk_event_review_feedback' | 'sk_event_cancelled' | 'sk_event_rescheduled' | 'sk_event_completed' | 'incident_assignment' | 'incident_status_change' | 'patrol_shift_assignment' | 'patrol_shift_cancelled' | 'patrol_shift_rescheduled' | 'patrol_shift_started' | 'patrol_shift_completed' | 'support_ticket_update'
   resource_id: string
   created_at: string
   read_at: string | null
@@ -30,6 +30,12 @@ export type MeetingUpdateNotificationDetail = {
   page_number: number
   changed_fields: string[]
   reason: string | null
+}
+
+export type MeetingResolutionNotificationDetail = {
+  resolution_id: string
+  meeting_id: string
+  page_number: number
 }
 
 export type HealthOutreachNotificationDetail = {
@@ -134,6 +140,19 @@ export async function listMeetingUpdateNotificationDetails(eventIds: string[]): 
     const { data, error } = await client().rpc('list_my_meeting_update_details', { p_event_ids: eventIds.slice(offset, offset + 250) })
     if (error) throw new Error(error.message)
     details.push(...((data ?? []) as MeetingUpdateNotificationDetail[]))
+  }
+  return details
+}
+
+export async function listMeetingResolutionNotificationDetails(resolutionIds: string[]): Promise<MeetingResolutionNotificationDetail[]> {
+  if (!resolutionIds.length) return []
+  const details: MeetingResolutionNotificationDetail[] = []
+  for (let offset = 0; offset < resolutionIds.length; offset += 250) {
+    const { data, error } = await client().rpc('list_my_meeting_resolution_notification_details', {
+      p_resolution_ids: resolutionIds.slice(offset, offset + 250),
+    })
+    if (error) throw new Error(error.message)
+    details.push(...((data ?? []) as MeetingResolutionNotificationDetail[]))
   }
   return details
 }
