@@ -770,6 +770,7 @@ body { color: var(--ink); background: var(--canvas); font-size: 16px; line-heigh
 .captain-workspace .sidebar .user-details span { color: #b2c9c0; }
 
 @media (max-width: 900px) {
+  .captain-workspace .main-area { margin-left: 0; max-width: 100%; width: 100%; }
   .captain-workspace .sidebar.open { background: linear-gradient(160deg, #123f3b 0%, #0d332e 100%); border: 1px solid #ffffff24; border-radius: 26px 26px 0 0; box-shadow: 0 -20px 55px #071e194a; padding: 14px 17px calc(18px + env(safe-area-inset-bottom)); }
   .captain-workspace .sidebar.open .brand { padding: 3px 5px 17px; }
   .captain-workspace .sidebar.open .workspace-picker { margin-bottom: 18px; }
