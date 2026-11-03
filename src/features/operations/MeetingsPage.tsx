@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { CalendarDays, CalendarPlus, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Download, History, Pencil, Search, X } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import {
-  createMeeting, decideMeetingAttendanceCorrection, getMeetingInvitationResponseSummary, hasPermission, listAllMeetingSchedule, listAttendance, listKagawadAttendanceCorrectionRequests, listKagawadInvitedMeetings, listKagawadMeetingAttendanceHistory, listMeetingAttendanceCorrectionQueue, listMeetingAttendeeMembers, listMeetingAttendees, listMeetingMemberPage, listMeetingPage, requestKagawadAttendanceCorrection, setKagawadMeetingInvitationResponse, updateMeetingDetails,
+  createMeeting, decideMeetingAttendanceCorrection, getMeetingInvitationResponseSummary, hasPermission, listAllMeetingSchedule, listAttendance, listKagawadAttendanceCorrectionRequests, listKagawadInvitedMeetings, listKagawadMeetingAttendanceHistory, listKagawadMeetingInvitationResponseHistory, listMeetingAttendanceCorrectionQueue, listMeetingAttendeeMembers, listMeetingAttendees, listMeetingMemberPage, listMeetingPage, requestKagawadAttendanceCorrection, setKagawadMeetingInvitationResponse, updateMeetingDetails,
   markAttendance, recordAttendance, updateMeetingStatus, MEETING_MEMBER_PAGE_SIZE, MEETING_PAGE_SIZE,
 } from './data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
@@ -34,6 +34,7 @@ export function MeetingsPage({ focusId, focusPage, onFocusHandled }: { focusId?:
   const [page, setPage] = useState(0)
   const [invitedMeetingPage, setInvitedMeetingPage] = useState(0)
   const [meetingHistoryPage, setMeetingHistoryPage] = useState(0)
+  const [rsvpHistoryPage, setRsvpHistoryPage] = useState(0)
   const [correctionRequestPage, setCorrectionRequestPage] = useState(0)
   const [correctionQueuePage, setCorrectionQueuePage] = useState(0)
   const [correctionMeetingId, setCorrectionMeetingId] = useState('')
@@ -61,6 +62,7 @@ export function MeetingsPage({ focusId, focusPage, onFocusHandled }: { focusId?:
     setPage(0)
     setInvitedMeetingPage(0)
     setMeetingHistoryPage(0)
+    setRsvpHistoryPage(0)
     setCorrectionRequestPage(0)
     setCorrectionQueuePage(0)
     setCorrectionMeetingId('')
@@ -96,6 +98,7 @@ export function MeetingsPage({ focusId, focusPage, onFocusHandled }: { focusId?:
   const meetings = useQuery({ queryKey: ['meetings', tenantId, page, meetingSearch, meetingStatus, startsOnOrAfter, startsOnOrBefore], queryFn: () => listMeetingPage(tenantId, page, meetingSearch, meetingStatus, startsAfter, startsBefore), enabled: Boolean(tenantId && !dateRangeInvalid) })
   const invitedMeetings = useQuery({ queryKey: ['kagawad-invited-meetings', tenantId, invitedMeetingPage], queryFn: () => listKagawadInvitedMeetings(tenantId, invitedMeetingPage), enabled: Boolean(tenantId && isKagawad) })
   const meetingHistory = useQuery({ queryKey: ['kagawad-meeting-attendance-history', tenantId, meetingHistoryPage], queryFn: () => listKagawadMeetingAttendanceHistory(tenantId, meetingHistoryPage), enabled: Boolean(tenantId && isKagawad) })
+  const rsvpHistory = useQuery({ queryKey: ['kagawad-meeting-rsvp-history', tenantId, rsvpHistoryPage], queryFn: () => listKagawadMeetingInvitationResponseHistory(tenantId, rsvpHistoryPage), enabled: Boolean(tenantId && isKagawad) })
   const correctionRequests = useQuery({ queryKey: ['kagawad-attendance-correction-requests', tenantId, correctionRequestPage], queryFn: () => listKagawadAttendanceCorrectionRequests(tenantId, correctionRequestPage), enabled: Boolean(tenantId && isKagawad) })
   useEffect(() => {
     if (!focusId) return
@@ -432,6 +435,16 @@ export function MeetingsPage({ focusId, focusPage, onFocusHandled }: { focusId?:
         </li>)}</ul>
         {Number(invitedMeetings.data[0]?.total_count ?? 0) > 10 && <nav className="committee-picker-pagination" aria-label="Invited meeting pages"><span>Page {invitedMeetingPage + 1} of {Math.ceil(Number(invitedMeetings.data[0]?.total_count ?? 0) / 10)} · {invitedMeetings.data[0]?.total_count} meetings</span><div><button type="button" className="button outline" disabled={invitedMeetingPage === 0 || invitedMeetings.isFetching} onClick={() => setInvitedMeetingPage((current) => current - 1)}>Previous</button><button type="button" className="button outline" disabled={(invitedMeetingPage + 1) * 10 >= Number(invitedMeetings.data[0]?.total_count ?? 0) || invitedMeetings.isFetching} onClick={() => setInvitedMeetingPage((current) => current + 1)}>Next</button></div></nav>}
       </> : <p className="field-hint">You have no upcoming invitations that need check-in.</p>}
+    </section>}
+    {isKagawad && <section className="ops-panel kagawad-invited-meetings" aria-labelledby="kagawad-meeting-rsvp-history-title">
+      <div className="ops-panel-heading"><div><h2 id="kagawad-meeting-rsvp-history-title">My RSVP history</h2><p>Review your previous availability responses. These entries are not attendance records.</p></div><History size={19} /></div>
+      {rsvpHistory.isPending ? <LoadingNotice compact /> : rsvpHistory.error ? <ErrorNotice message="Your RSVP history could not be loaded." onRetry={() => void rsvpHistory.refetch()} retrying={rsvpHistory.isFetching} /> : rsvpHistory.data?.length ? <>
+        <ul className="kagawad-invited-meeting-list">{rsvpHistory.data.map((entry) => <li key={entry.id}>
+          <div><strong>{entry.meeting_title}</strong><small>Meeting date: {formatDateTime(entry.meeting_starts_at)}</small><small>Response: {entry.response === 'attending' ? 'Plan to attend' : 'Unavailable'} · Saved {formatDateTime(entry.responded_at)}</small></div>
+          <StatusPill status={entry.response} />
+        </li>)}</ul>
+        {Number(rsvpHistory.data[0]?.total_count ?? 0) > 10 && <nav className="committee-picker-pagination" aria-label="RSVP history pages"><span>Page {rsvpHistoryPage + 1} of {Math.ceil(Number(rsvpHistory.data[0]?.total_count ?? 0) / 10)} · {rsvpHistory.data[0]?.total_count} responses</span><div><button type="button" className="button outline" disabled={rsvpHistoryPage === 0 || rsvpHistory.isFetching} onClick={() => setRsvpHistoryPage((current) => current - 1)}>Previous</button><button type="button" className="button outline" disabled={(rsvpHistoryPage + 1) * 10 >= Number(rsvpHistory.data[0]?.total_count ?? 0) || rsvpHistory.isFetching} onClick={() => setRsvpHistoryPage((current) => current + 1)}>Next</button></div></nav>}
+      </> : <p className="field-hint">Your RSVP changes will appear here.</p>}
     </section>}
     {isKagawad && <section className="ops-panel kagawad-invited-meetings" aria-labelledby="kagawad-meeting-history-title">
       <div className="ops-panel-heading"><div><h2 id="kagawad-meeting-history-title">My meeting history</h2><p>Past meetings you were invited to and your recorded attendance.</p></div><History size={19} /></div>

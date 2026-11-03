@@ -354,3 +354,7 @@ Kagawad attendance corrections: Migration `0228_kagawad_attendance_correction_re
 Attendance correction notifications: Migration `0229_attendance_correction_notifications.sql` alerts attendance managers about new Kagawad requests and sends the requester a Community updates notice after approval or decline. Access and read status follow the requester or active attendance-management permission. Apply after `0228` before using these notices.
 
 Kagawad meeting RSVP: Migration `0230_kagawad_meeting_availability_responses.sql` lets invited Kagawads indicate whether they plan to attend or are unavailable before a scheduled meeting. The meeting workspace shows aggregate totals to authorized meeting and attendance managers, keeping RSVP separate from actual attendance. Apply after `0229` before using this workflow.
+
+Kagawad RSVP history: Migration `0231_kagawad_meeting_rsvp_history.sql` stores each distinct RSVP change and adds a private, paginated history for the responding Kagawad. The Meetings page labels these as availability responses rather than attendance. Apply after `0230` before using this history.
+
+Kagawad task assignment history: Migration `0232_kagawad_task_assignment_history.sql` records action-item assignment events and backfills current assignments. The Committees page presents a private paginated history with task status, due date, and assignment timestamp, including transferred assignments and archived committees. Apply after `0231` before using this history.

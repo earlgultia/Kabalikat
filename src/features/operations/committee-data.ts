@@ -11,6 +11,11 @@ export type CommitteeTaskRow = {
 export type CommitteeTaskPage = { rows: CommitteeTaskRow[]; totalCount: number }
 export type KagawadAssignedActionItem = CommitteeTaskRow & { committee_name: string; total_count: number }
 export type KagawadAssignedActionItemPage = { rows: KagawadAssignedActionItem[]; totalCount: number }
+export type KagawadTaskAssignmentEvent = {
+  id: string; task_id: string; committee_name: string; task_title: string
+  task_status: CommitteeTaskRow['status']; due_date: string | null; assigned_at: string; total_count: number
+}
+export type KagawadTaskAssignmentHistoryPage = { rows: KagawadTaskAssignmentEvent[]; totalCount: number }
 export type KagawadActionItemNote = { id: string; note: string; author_name: string; created_at: string }
 export type CommitteeTaskNotificationContext = {
   id: string; committee_id: string; committee_name: string; title: string; description: string
@@ -93,6 +98,15 @@ export async function listKagawadAssignedActionItems(tenantId: string, page: num
   })
   if (error) throw new Error(error.message)
   const rows = (data ?? []) as KagawadAssignedActionItem[]
+  return { rows, totalCount: Number(rows[0]?.total_count ?? 0) }
+}
+
+export async function listKagawadTaskAssignmentHistory(tenantId: string, page: number): Promise<KagawadTaskAssignmentHistoryPage> {
+  const { data, error } = await client().rpc('list_kagawad_task_assignment_history', {
+    p_barangay_id: tenantId, p_page: page, p_page_size: 10,
+  })
+  if (error) throw new Error(error.message)
+  const rows = (data ?? []) as KagawadTaskAssignmentEvent[]
   return { rows, totalCount: Number(rows[0]?.total_count ?? 0) }
 }
 

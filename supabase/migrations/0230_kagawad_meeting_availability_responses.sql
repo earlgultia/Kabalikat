@@ -57,7 +57,8 @@ begin
   insert into public.meeting_invitation_responses(meeting_id, barangay_id, user_id, response, responded_at)
   values (p_meeting_id, v_barangay_id, (select auth.uid()), p_response, now())
   on conflict (meeting_id, user_id) do update
-    set response = excluded.response, responded_at = excluded.responded_at;
+    set response = excluded.response, responded_at = excluded.responded_at
+    where public.meeting_invitation_responses.response is distinct from excluded.response;
 end;
 $$;
 

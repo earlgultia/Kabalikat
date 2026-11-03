@@ -159,6 +159,10 @@ export type KagawadInvitedMeeting = {
 export type MeetingInvitationResponseSummary = {
   invited_count: number; attending_count: number; unavailable_count: number; no_response_count: number
 }
+export type KagawadMeetingInvitationResponseHistory = {
+  id: string; meeting_id: string; meeting_title: string; meeting_starts_at: string
+  response: 'attending' | 'unavailable'; responded_at: string; total_count: number
+}
 export type KagawadMeetingAttendanceHistory = {
   meeting_id: string; title: string; location: string; starts_at: string; ends_at: string | null
   meeting_status: string; attendance_status: string | null; attendance_recorded_at: string | null; total_count: number
@@ -256,6 +260,12 @@ export function listKagawadInvitedMeetings(tenantId: string, page: number) {
 
 export function setKagawadMeetingInvitationResponse(meetingId: string, response: 'attending' | 'unavailable') {
   return rpc<void>('set_kagawad_meeting_invitation_response', { p_meeting_id: meetingId, p_response: response })
+}
+
+export function listKagawadMeetingInvitationResponseHistory(tenantId: string, page: number) {
+  return rpc<KagawadMeetingInvitationResponseHistory[]>('list_kagawad_meeting_invitation_response_history', {
+    p_barangay_id: tenantId, p_page: page, p_page_size: 10,
+  })
 }
 
 export function getMeetingInvitationResponseSummary(meetingId: string) {

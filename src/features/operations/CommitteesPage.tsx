@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
 import { CheckCircle2, ChevronLeft, ChevronRight, History, MessageSquareText, UsersRound } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
-import { addCommitteeTaskProgressNote, addKagawadActionItemNote, assignCommitteeMember, completeKagawadTask, COMMITTEE_CONTENT_PAGE_SIZE, COMMITTEE_MEMBER_PAGE_SIZE, COMMITTEE_PAGE_SIZE, createCommittee, createCommitteeTask, decideCommitteeTaskDueDateRequest, getCommitteeTaskNotificationContext, listAssignableCommitteeMembers, listCommitteeMembers, listCommitteeTasks, listCommitteeTaskDueDateRequests, listKagawadActionItemNotes, listKagawadAssignedActionItems, listKagawadTaskDueDateRequestHistory, listKagawadTaskStatusHistory, requestCommitteeTaskDueDate, reportKagawadTaskBlocker, updateCommitteeTaskStatus, type CommitteeTaskDueDateReview, type CommitteeTaskRow } from './committee-data'
+import { addCommitteeTaskProgressNote, addKagawadActionItemNote, assignCommitteeMember, completeKagawadTask, COMMITTEE_CONTENT_PAGE_SIZE, COMMITTEE_MEMBER_PAGE_SIZE, COMMITTEE_PAGE_SIZE, createCommittee, createCommitteeTask, decideCommitteeTaskDueDateRequest, getCommitteeTaskNotificationContext, listAssignableCommitteeMembers, listCommitteeMembers, listCommitteeTasks, listCommitteeTaskDueDateRequests, listKagawadActionItemNotes, listKagawadAssignedActionItems, listKagawadTaskAssignmentHistory, listKagawadTaskDueDateRequestHistory, listKagawadTaskStatusHistory, requestCommitteeTaskDueDate, reportKagawadTaskBlocker, updateCommitteeTaskStatus, type CommitteeTaskDueDateReview, type CommitteeTaskRow } from './committee-data'
 import { hasPermission } from './data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 
@@ -274,6 +274,7 @@ export function CommitteesPage({ focusId, onFocusHandled }: { focusId?: string; 
   const queryClient = useQueryClient()
   const [page, setPage] = useState(0)
   const [myTaskPage, setMyTaskPage] = useState(0)
+  const [taskAssignmentHistoryPage, setTaskAssignmentHistoryPage] = useState(0)
   const [myTaskStatus, setMyTaskStatus] = useState<'all' | CommitteeTaskRow['status']>('all')
   const [myTaskDueFilter, setMyTaskDueFilter] = useState<'all' | 'due_soon' | 'overdue'>('all')
   const [myTaskSearchInput, setMyTaskSearchInput] = useState('')
@@ -284,7 +285,7 @@ export function CommitteesPage({ focusId, onFocusHandled }: { focusId?: string; 
   const [taskActionReason, setTaskActionReason] = useState('')
   const [focusedTaskId, setFocusedTaskId] = useState('')
   const isKagawad = membership?.role?.key === 'kagawad'
-  useEffect(() => { setPage(0); setMyTaskPage(0); setMyTaskStatus('all'); setMyTaskDueFilter('all'); setMyTaskSearch(''); setMyTaskSearchInput(''); setTaskNotesFor(''); setTaskNoteDraft('') }, [tenantId])
+  useEffect(() => { setPage(0); setMyTaskPage(0); setTaskAssignmentHistoryPage(0); setMyTaskStatus('all'); setMyTaskDueFilter('all'); setMyTaskSearch(''); setMyTaskSearchInput(''); setTaskNotesFor(''); setTaskNoteDraft('') }, [tenantId])
   useEffect(() => {
     if (!focusId) return
     setFocusedTaskId(focusId)
@@ -293,6 +294,7 @@ export function CommitteesPage({ focusId, onFocusHandled }: { focusId?: string; 
   const canManage = useQuery({ queryKey: ['permission', tenantId, 'committee.manage'], queryFn: () => hasPermission(tenantId, 'committee.manage'), enabled: Boolean(tenantId) })
   const committees = useQuery({ queryKey: ['committees', tenantId, page], queryFn: () => listCommittees(tenantId, page), enabled: Boolean(tenantId) })
   const myTasks = useQuery({ queryKey: ['kagawad-my-action-items', tenantId, myTaskPage, myTaskStatus, myTaskDueFilter, myTaskSearch], queryFn: () => listKagawadAssignedActionItems(tenantId, myTaskPage, myTaskStatus, myTaskSearch, myTaskDueFilter), enabled: Boolean(tenantId && isKagawad) })
+  const taskAssignmentHistory = useQuery({ queryKey: ['kagawad-task-assignment-history', tenantId, taskAssignmentHistoryPage], queryFn: () => listKagawadTaskAssignmentHistory(tenantId, taskAssignmentHistoryPage), enabled: Boolean(tenantId && isKagawad) })
   const taskNotes = useQuery({ queryKey: ['kagawad-action-item-notes', tenantId, taskNotesFor], queryFn: () => listKagawadActionItemNotes(taskNotesFor), enabled: Boolean(tenantId && taskNotesFor && isKagawad) })
   const myTaskPages = Math.ceil((myTasks.data?.totalCount ?? 0) / 10)
   const totalPages = Math.ceil((committees.data?.totalCount ?? 0) / COMMITTEE_PAGE_SIZE)
@@ -308,6 +310,7 @@ export function CommitteesPage({ focusId, onFocusHandled }: { focusId?: string; 
       queryClient.invalidateQueries({ queryKey: ['committee-members', tenantId] }),
       queryClient.invalidateQueries({ queryKey: ['committee-member-picker', tenantId] }),
       queryClient.invalidateQueries({ queryKey: ['kagawad-my-action-items', tenantId] }),
+      queryClient.invalidateQueries({ queryKey: ['kagawad-task-assignment-history', tenantId] }),
       queryClient.invalidateQueries({ queryKey: ['kagawad-action-item-notes', tenantId, taskNotesFor] }),
     ])
   }
@@ -396,6 +399,16 @@ export function CommitteesPage({ focusId, onFocusHandled }: { focusId?: string; 
     {focusedTaskId && <FocusedCommitteeTask taskId={focusedTaskId} onClose={() => setFocusedTaskId('')} />}
     {canManage.data && tenantId && <CommitteeDueDateReviewQueue tenantId={tenantId} />}
     {Boolean(tenantId) && !canManage.isPending && !canManage.error && !canManage.data && <div className="ops-panel archive-access"><UsersRound size={20} /><div><strong>Committee access is assignment-based</strong><p>You will see committees after an authorized administrator assigns you to one.</p></div></div>}
+    {isKagawad && <section className="ops-panel kagawad-invited-meetings" aria-labelledby="kagawad-task-assignment-history-title">
+      <div className="ops-panel-heading"><div><h2 id="kagawad-task-assignment-history-title">Task assignment history</h2><p>Assignments recorded for you, including completed work and tasks later transferred away.</p></div><History size={19} /></div>
+      {taskAssignmentHistory.isPending ? <LoadingNotice compact /> : taskAssignmentHistory.error ? <ErrorNotice message="Your task assignment history could not be loaded." onRetry={() => void taskAssignmentHistory.refetch()} retrying={taskAssignmentHistory.isFetching} /> : taskAssignmentHistory.data?.rows.length ? <>
+        <ul className="kagawad-invited-meeting-list">{taskAssignmentHistory.data.rows.map((entry) => <li key={entry.id}>
+          <div><strong>{entry.task_title}</strong><small>{entry.committee_name}{entry.due_date ? ` · Due ${new Date(`${entry.due_date}T00:00:00`).toLocaleDateString()}` : ' · No due date'}</small><small>Assigned {new Date(entry.assigned_at).toLocaleString()}</small></div>
+          <StatusPill status={entry.task_status} />
+        </li>)}</ul>
+        {taskAssignmentHistory.data.totalCount > 10 && <div className="committee-picker-pagination"><span>Page {taskAssignmentHistoryPage + 1} of {Math.ceil(taskAssignmentHistory.data.totalCount / 10)} · {taskAssignmentHistory.data.totalCount} assignments</span><div><button type="button" className="button outline" disabled={taskAssignmentHistoryPage === 0 || taskAssignmentHistory.isFetching} onClick={() => setTaskAssignmentHistoryPage((current) => current - 1)}>Previous</button><button type="button" className="button outline" disabled={(taskAssignmentHistoryPage + 1) * 10 >= taskAssignmentHistory.data.totalCount || taskAssignmentHistory.isFetching} onClick={() => setTaskAssignmentHistoryPage((current) => current + 1)}>Next</button></div></div>}
+      </> : <p className="field-hint">No task assignments have been recorded yet.</p>}
+    </section>}
     {isKagawad && <section className="ops-panel kagawad-my-work" aria-labelledby="kagawad-my-work-title">
       <div className="ops-panel-heading"><div><h2 id="kagawad-my-work-title">My assigned action items</h2><p>All active committee tasks assigned to you in one list.</p></div><UsersRound size={19} /></div>
       <form className="kagawad-action-item-filters" onSubmit={(event) => { event.preventDefault(); setMyTaskPage(0); setMyTaskSearch(myTaskSearchInput.trim()) }}>
