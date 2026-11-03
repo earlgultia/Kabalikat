@@ -916,3 +916,33 @@ body { color: var(--ink); background: var(--canvas); font-size: 16px; line-heigh
   .pwa-update-prompt .button { min-height: 38px; padding: 6px 9px; }
   .pwa-update-dismiss { min-height: 36px; min-width: 36px; }
 }
+
+/* Captain workspace viewport and safe-area refinements. */
+.captain-workspace,
+.captain-workspace .main-area,
+.captain-workspace .content-wrap { min-width: 0; max-width: 100%; }
+.captain-workspace .sidebar { height: 100vh; height: 100dvh; }
+.captain-workspace .sidebar nav { min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
+.captain-workspace .sidebar .nav-link { min-width: 0; }
+.captain-workspace .sidebar .nav-link > span:not(.nav-count) { min-width: 0; overflow-wrap: anywhere; }
+.captain-workspace .topbar .top-actions > * { flex: 0 0 auto; }
+.captain-workspace .topbar .crumb { flex: 1 1 auto; }
+
+@media (max-width: 900px) {
+  .captain-workspace .sidebar.open { height: auto; max-height: min(84vh, 760px); max-height: min(84dvh, 760px); }
+  .captain-workspace .sidebar.open nav { min-height: 0; overscroll-behavior-y: contain; }
+  .captain-workspace .mobile-shortcut-bar { padding-left: max(8px, env(safe-area-inset-left)); padding-right: max(8px, env(safe-area-inset-right)); }
+}
+
+@media (max-width: 650px) {
+  .captain-workspace .topbar { padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right)); }
+  .captain-workspace .content-wrap { padding-left: max(14px, env(safe-area-inset-left)); padding-right: max(14px, env(safe-area-inset-right)); }
+  .captain-workspace .mobile-shortcut-bar { min-height: calc(68px + env(safe-area-inset-bottom)); padding-bottom: max(5px, env(safe-area-inset-bottom)); }
+  .captain-workspace .mobile-shortcut { min-width: 0; }
+  .captain-workspace .mobile-shortcut span { line-height: 1.2; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .captain-workspace .tool-finder-backdrop { align-items: flex-start; max-height: 100vh; max-height: 100dvh; overflow-y: auto; padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) calc(12px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); }
+  .captain-workspace .tool-finder,
+  .captain-workspace .community-updates-dialog,
+  .captain-workspace .account-security-dialog { max-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 24px); max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 24px); min-width: 0; }
+  .captain-workspace :where(.action-confirm-dialog, .logout-confirm-dialog, .meeting-reason-dialog) { max-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 24px); max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 24px); overflow-y: auto; overscroll-behavior: contain; }
+}

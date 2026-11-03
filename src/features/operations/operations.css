@@ -1786,3 +1786,111 @@
   .platform-shell .platform-content .support-ticket-controls > .support-search-clear { grid-column: 1; min-width: 0; width: 100%; }
   .platform-shell .platform-content .support-ticket-controls > .support-search-clear { justify-self: stretch; }
 }
+
+/* Captain workspace responsive safeguards. Keep page content inside its
+   available column and let filters/actions reflow before they collide. */
+.captain-workspace .operation-page,
+.captain-workspace .operation-page > *,
+.captain-workspace .operation-page :where(article, section, form, fieldset, ul, ol, dl, nav) {
+  max-width: 100%;
+  min-width: 0;
+}
+.captain-workspace .operation-page :where(h1, h2, h3, h4, p, small, strong, span, label, dt, dd, li, a) {
+  overflow-wrap: anywhere;
+}
+.captain-workspace .operation-page :where(input, select, textarea, button) { max-width: 100%; }
+.captain-workspace .operation-page :where(.operation-heading, .ops-panel-heading, .ops-section-title, article > header, .card-header, .meeting-card-top, .incident-card > header, .finance-budget-head) {
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+}
+.captain-workspace .operation-page :where(.row-actions, .meeting-actions, .finance-review-actions, .ops-form-actions, .archive-document-actions, .committee-picker-pagination, .referral-destination-pagination) {
+  min-width: 0;
+}
+.captain-workspace .operation-page :where(.ops-table-wrap, .subscription-table-wrap, .table-wrap) {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+.captain-workspace .operation-page :where(.archive-search, .community-calendar-search, .committee-member-search, .meeting-member-search, .kagawad-contribution-search) {
+  max-width: 100%;
+  min-width: 0;
+}
+.captain-workspace .operation-page .archive-search > input {
+  min-width: 0;
+  width: 100%;
+}
+.captain-workspace .operation-page :where(.incident-filters, .health-outreach-filters, .community-calendar-filters, .advisory-filters, .emergency-resource-filters, .ops-filter-row, .archive-toolbar, .member-access-filters, .kagawad-contribution-filters, .kagawad-assignment-history-filters, .kagawad-rsvp-history-filters) > * {
+  min-width: 0;
+  max-width: 100%;
+}
+.captain-workspace .operation-page :where(.ops-panel, .ops-request-card, .incident-card, .support-ticket, .referral-card, .sk-project-card, .finance-budget, .meeting-card, .resident-card) {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 900px) {
+  .captain-workspace .operation-page :where(.incident-filters, .health-outreach-filters, .community-calendar-filters, .advisory-filters, .emergency-resource-filters, .ops-filter-row, .archive-toolbar, .member-access-filters) {
+    align-items: stretch;
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .captain-workspace .operation-page :where(.incident-filters, .health-outreach-filters, .community-calendar-filters, .advisory-filters, .emergency-resource-filters, .archive-toolbar) > .archive-search,
+  .captain-workspace .operation-page :where(.incident-filters, .health-outreach-filters, .community-calendar-filters, .advisory-filters, .emergency-resource-filters, .archive-toolbar) > :first-child.archive-search {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+  .captain-workspace .operation-page :where(.incident-filters, .health-outreach-filters, .community-calendar-filters, .advisory-filters, .emergency-resource-filters, .archive-toolbar) label,
+  .captain-workspace .operation-page :where(.incident-filters, .health-outreach-filters, .community-calendar-filters, .advisory-filters, .emergency-resource-filters, .archive-toolbar) select,
+  .captain-workspace .operation-page :where(.incident-filters, .health-outreach-filters, .community-calendar-filters, .advisory-filters, .emergency-resource-filters, .archive-toolbar) input { width: 100%; min-width: 0; }
+  .captain-workspace .operation-page :where(.member-access-summary, .health-outreach-summary) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 650px) {
+  .captain-workspace .operation-page { font-size: 14px; }
+  .captain-workspace .operation-page .operation-heading { align-items: stretch; margin-bottom: 18px; }
+  .captain-workspace .operation-page .operation-heading > button,
+  .captain-workspace .operation-page .operation-heading > .button { align-self: stretch; justify-content: center; min-height: 44px; width: 100%; }
+  .captain-workspace .operation-page :where(.incident-filters, .health-outreach-filters, .community-calendar-filters, .advisory-filters, .emergency-resource-filters, .ops-filter-row, .archive-toolbar, .member-access-filters, .subscription-table-controls, .kagawad-contribution-filters, .kagawad-assignment-history-filters, .kagawad-rsvp-history-filters) {
+    align-items: stretch;
+    display: grid;
+    gap: 11px;
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+  }
+  .captain-workspace .operation-page :where(.incident-filters, .health-outreach-filters, .community-calendar-filters, .advisory-filters, .emergency-resource-filters, .ops-filter-row, .archive-toolbar, .member-access-filters, .subscription-table-controls, .kagawad-contribution-filters, .kagawad-assignment-history-filters, .kagawad-rsvp-history-filters) > *,
+  .captain-workspace .operation-page :where(.incident-filters, .health-outreach-filters, .community-calendar-filters, .advisory-filters, .emergency-resource-filters, .ops-filter-row, .archive-toolbar, .member-access-filters, .subscription-table-controls, .kagawad-contribution-filters, .kagawad-assignment-history-filters, .kagawad-rsvp-history-filters) > .archive-search {
+    grid-column: 1;
+    min-width: 0;
+    width: 100%;
+  }
+  .captain-workspace .operation-page :where(input:not([type=checkbox]):not([type=radio]), select, textarea) {
+    font-size: 16px;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .captain-workspace .operation-page :where(button, .button, .text-action) { min-height: 44px; }
+  .captain-workspace .operation-page :where(.row-actions, .meeting-actions, .finance-review-actions, .ops-form-actions, .archive-document-actions, .committee-picker-pagination, .referral-destination-pagination) {
+    align-items: stretch;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .captain-workspace .operation-page :where(.row-actions, .meeting-actions, .finance-review-actions, .archive-document-actions) > button { flex: 1 1 140px; }
+  .captain-workspace .operation-page :where(.ops-form-grid, .meeting-record-grid, .incident-summary, .finance-report, .member-permission-list, .health-outreach-summary, .referral-detail-grid) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .captain-workspace .operation-page :where(.ops-form-grid, .meeting-record-grid, .incident-summary, .finance-report, .member-permission-list, .health-outreach-summary, .referral-detail-grid) > * { grid-column: 1 / -1; }
+  .captain-workspace .operation-page .ops-panel { border-radius: 12px; padding: 14px; }
+  .captain-workspace .operation-page :where(.ops-request-card, .incident-card, .support-ticket, .referral-card, .sk-project-card, .finance-budget, .meeting-card) { padding: 14px; }
+  .captain-workspace .operation-page .ops-table { min-width: 640px; }
+  .captain-workspace .operation-page :where(.ops-table-wrap, .subscription-table-wrap, .table-wrap) { max-width: 100%; }
+  .captain-workspace .operation-page :where(.ops-empty, .ops-loading, .field-hint) { line-height: 1.55; }
+  .captain-workspace .operation-page :where(.member-access-summary, .health-outreach-summary) { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 380px) {
+  .captain-workspace .operation-page :where(.ops-panel, .ops-request-card, .incident-card, .support-ticket, .referral-card, .sk-project-card, .finance-budget, .meeting-card) { padding: 12px; }
+  .captain-workspace .operation-page .status-pill { max-width: 100%; white-space: normal; }
+}
