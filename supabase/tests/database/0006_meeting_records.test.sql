@@ -20,10 +20,10 @@ insert into public.meetings (id, barangay_id, title, location, starts_at, create
 values
   ('90000000-1000-4000-8000-000000000009', 'acadacad-0000-4000-8000-000000000009', 'Assembly A', 'Hall A', now(), '90000000-0000-4000-8000-000000000009'),
   ('a0000000-1000-4000-8000-00000000000a', 'badbadba-0000-4000-8000-00000000000a', 'Assembly B', 'Hall B', now(), 'a0000000-0000-4000-8000-00000000000a');
-insert into public.meeting_minutes (barangay_id, meeting_id, content, status, updated_by)
+insert into public.meeting_minutes (barangay_id, meeting_id, content, status, updated_by, drafted_by)
 values
-  ('acadacad-0000-4000-8000-000000000009', '90000000-1000-4000-8000-000000000009', 'Minutes for assembly A', 'reviewed', '90000000-0000-4000-8000-000000000009'),
-  ('badbadba-0000-4000-8000-00000000000a', 'a0000000-1000-4000-8000-00000000000a', 'Minutes for assembly B', 'reviewed', 'a0000000-0000-4000-8000-00000000000a');
+  ('acadacad-0000-4000-8000-000000000009', '90000000-1000-4000-8000-000000000009', 'Minutes for assembly A', 'reviewed', '90000000-0000-4000-8000-000000000009', '90000000-0000-4000-8000-000000000009'),
+  ('badbadba-0000-4000-8000-00000000000a', 'a0000000-1000-4000-8000-00000000000a', 'Minutes for assembly B', 'reviewed', 'a0000000-0000-4000-8000-00000000000a', 'a0000000-0000-4000-8000-00000000000a');
 insert into public.meeting_resolutions (barangay_id, meeting_id, resolution_number, title, content, status, proposed_by)
 values
   ('acadacad-0000-4000-8000-000000000009', '90000000-1000-4000-8000-000000000009', 'RES-2026-900001', 'Resolution A', 'Decision for assembly A', 'draft', '90000000-0000-4000-8000-000000000009'),
