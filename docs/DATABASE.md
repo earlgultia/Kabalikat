@@ -375,3 +375,43 @@ Migration `0208_secretary_actionable_review_queue.sql` adds a Secretary-specific
 Migration `0209_treasurer_submission_follow_up.sql` adds a private Treasurer summary of their own draft budgets, submitted transactions, pending budget amendments, and pending transaction adjustments. It reveals no other user's submission details and links to Finance; the generic dashboard no longer mislabels the Treasurer's own finance entries as items to review. Apply after `0208`; hosted database behavior has not been verified.
 
 Migration `0210_kagawad_action_item_summary.sql` adds a Kagawad-only dashboard summary of the signed-in member's open, in-progress, blocked, and overdue tasks in active committees. It does not reveal other members' assignments and links to the existing Committees workspace. Apply after `0209`; hosted database behavior has not been verified.
+
+Migration `0211_kagawad_meeting_participation_summary.sql` adds a Kagawad-only summary of scheduled meetings where the signed-in member is an invited attendee and has not yet recorded attendance, including meetings currently inside their self check-in window. It exposes aggregate counts only and links to Meetings. Apply after `0210`; hosted database behavior has not been verified.
+
+Migration `0212_kagawad_project_contribution_history.sql` adds a Kagawad-only, paginated history of the signed-in member's own project progress reports and milestones. It returns project title and status only for entries authored by that Kagawad. The Projects page shows this responsive personal history. Apply after `0211`; hosted database behavior has not been verified.
+
+Migration `0213_kagawad_assigned_action_item_queue.sql` adds a role-checked, searchable and paginated queue of the signed-in Kagawad's assigned committee tasks, with status filtering. The Committees page allows updates only through the existing assigned-member status RPC. Apply after `0212`; hosted database behavior has not been verified.
+
+Migration `0214_kagawad_action_item_due_filters.sql` extends the Kagawad assigned-task queue with server-side overdue and next-seven-days due filters, excluding completed work from those date filters. The Committees page exposes the filters alongside status and search controls. Apply after `0213`; hosted database behavior has not been verified.
+
+Migration `0215_kagawad_invited_meeting_queue.sql` adds a role-checked, paginated list of the signed-in Kagawad's upcoming invited meetings and reports whether the self check-in window is open or attendance is already recorded. The Meetings page adds a responsive personal invitation panel and only offers Kagawads check-in from an eligible invitation. Apply after `0214`; hosted database behavior has not been verified.
+
+Migration `0216_kagawad_action_item_progress_notes.sql` adds private, append-only progress notes for a Kagawad's own assigned action items. The Committees page shows the note history and composer inline; database functions enforce assignment, active committee membership, and note length. Apply after `0215`; hosted database behavior has not been verified.
+
+Migration `0217_committee_manager_progress_note_visibility.sql` lets active committee managers read progress notes attached to tasks in committees they manage, while Kagawad note creation remains restricted to the assigned member. The committee task cards add a manager-only history view. Apply after `0216`; hosted database behavior has not been verified.
+
+Migration `0218_committee_task_progress_note_responses.sql` adds manager-authored responses to task progress histories. Committee managers can respond only within active committees they manage, and the assigned Kagawad can continue adding notes to their own task. The manager note history includes a responsive response form. Apply after `0217`; hosted database behavior has not been verified.
+
+Migration `0219_notify_kagawad_of_manager_task_response.sql` sends an in-app Community updates notice to an active task assignee when a committee manager adds a response. Access and read status are limited to the current assignee, and repeated responses update the task's existing notice. The notice opens the Committees workspace. Apply after `0218`; hosted database behavior has not been verified.
+
+Migration `0220_notify_committee_managers_of_kagawad_progress.sql` alerts authorized committee managers when an assigned Kagawad posts progress or a blocker note. Manager and assignee notifications use separate inbox types, refresh on subsequent notes, and are visible only to the active assignee or a committee manager. The app routes either alert to Committees. Apply after `0219`; hosted database behavior has not been verified.
+
+Migration `0221_committee_task_notification_context.sql` provides a minimal task lookup for the active assignee or an active committee manager. Community update alerts now open the specific task conversation, with a response or progress composer limited by the returned role flags and enforced again by the write RPC. Apply after `0220`; hosted database behavior has not been verified.
+
+Migration `0222_kagawad_task_status_history.sql` adds an indexed, paginated status-change history for the signed-in Kagawad's currently assigned tasks. The Committees page exposes it alongside each task's progress notes; the lookup is limited to active Kagawad assignees. Apply after `0221`; hosted database behavior has not been verified.
+
+Migration `0223_kagawad_blocker_reports.sql` lets an active Kagawad atomically mark their assigned task blocked, save the reason in the task progress thread, and trigger the existing manager notification. The Committees page requires a reason before reporting a newly blocked task. Apply after `0222`; hosted database behavior has not been verified.
+
+Migration `0224_kagawad_task_completion_summaries.sql` requires an active Kagawad to include a completion summary when completing an assigned task. Status, audit event, and summary are saved together, and the existing task progress notification alerts committee managers. The responsive Committees page provides the summary form. Apply after `0223`; hosted database behavior has not been verified.
+
+Migration `0225_committee_task_due_date_requests.sql` lets active Kagawads request a different future due date for their assigned, unfinished tasks. The request is private, manager review is paginated and permission-checked, approvals update the task and audit event, declines require a note, and new requests notify committee managers in Community updates. Kagawads see their latest request and decision on the task card. Apply after `0224`; hosted database behavior has not been verified.
+
+Migration `0226_kagawad_due_date_request_history.sql` adds a paginated, requester-only history of due-date proposals and manager decisions for each assigned task. The responsive task card shows prior dates, reasons, decision notes, and submission times, and allows a new request after the latest request has been reviewed. Apply after `0225`; hosted database behavior has not been verified.
+
+Migration `0227_kagawad_meeting_attendance_history.sql` adds a paginated, Kagawad-only history of meetings that the signed-in member was invited to, with only their own attendance status and record time. The Meetings page displays this history beside upcoming invitations. Apply after `0226`; hosted database behavior has not been verified.
+
+Migration `0228_kagawad_attendance_correction_requests.sql` lets a Kagawad request a correction to their own attendance for a past invited meeting. Officials with `attendance.manage` can approve or decline from a paginated queue; approvals update the official attendance record and audit event, while declines require a review note. The Meetings page includes requester history and review controls. Apply after `0227`; hosted database behavior has not been verified.
+
+Migration `0229_attendance_correction_notifications.sql` sends an in-app Community updates notice to attendance managers when a Kagawad submits a correction and to the requester when a decision is made. Notification visibility and read status are limited to the requester and active members authorized to manage attendance. Apply after `0228`; hosted database behavior has not been verified.
+
+Migration `0230_kagawad_meeting_availability_responses.sql` lets invited Kagawads RSVP as attending or unavailable before a scheduled meeting. The private paginated invitation queue includes each member's own response, while meeting and attendance managers can view aggregate response totals. RSVP does not create or update attendance records. Apply after `0229`; hosted database behavior has not been verified.

@@ -44,7 +44,7 @@ export function OperationsSection({ section, focusId, focusPage, focusStatus, on
     case 'meetings': return page(MeetingsPage, { focusId, focusPage, onFocusHandled })
     case 'archive': return page(ArchivePage)
     case 'finance': return page(FinancePage)
-    case 'committees': return page(CommitteesPage)
+    case 'committees': return page(CommitteesPage, { focusId, onFocusHandled })
     case 'sk-projects': return page(SkProjectsPage)
     case 'sk-accomplishments': return page(SkTransparencyPage)
     case 'projects': return page(ProjectsPage)

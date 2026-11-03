@@ -2,7 +2,7 @@ import { supabase } from '../../lib/supabase'
 
 export type CommunityNotification = {
   id: string
-  resource_type: 'announcement' | 'disaster_advisory' | 'resident_profile_change' | 'document_request' | 'community_feedback' | 'meeting_update' | 'meeting_resolution' | 'health_outreach_cancellation' | 'health_outreach_completion' | 'health_outreach_review' | 'health_outreach_published' | 'health_outreach_review_submission' | 'health_outreach_rescheduled' | 'sk_event_review_submission' | 'sk_event_published' | 'sk_event_review_feedback' | 'sk_event_cancelled' | 'sk_event_rescheduled' | 'sk_event_completed' | 'incident_assignment' | 'incident_status_change' | 'patrol_shift_assignment' | 'patrol_shift_cancelled' | 'patrol_shift_rescheduled' | 'patrol_shift_started' | 'patrol_shift_completed' | 'support_ticket_update'
+  resource_type: 'announcement' | 'disaster_advisory' | 'resident_profile_change' | 'document_request' | 'community_feedback' | 'meeting_update' | 'meeting_resolution' | 'health_outreach_cancellation' | 'health_outreach_completion' | 'health_outreach_review' | 'health_outreach_published' | 'health_outreach_review_submission' | 'health_outreach_rescheduled' | 'sk_event_review_submission' | 'sk_event_published' | 'sk_event_review_feedback' | 'sk_event_cancelled' | 'sk_event_rescheduled' | 'sk_event_completed' | 'incident_assignment' | 'incident_status_change' | 'patrol_shift_assignment' | 'patrol_shift_cancelled' | 'patrol_shift_rescheduled' | 'patrol_shift_started' | 'patrol_shift_completed' | 'support_ticket_update' | 'committee_task_update' | 'committee_task_progress' | 'committee_due_date_request' | 'attendance_correction_request'
   resource_id: string
   created_at: string
   read_at: string | null

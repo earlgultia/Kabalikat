@@ -146,6 +146,34 @@ export type KagawadActionItemSummary = {
   overdue_action_items: number | null
   generated_at: string
 }
+export type KagawadMeetingParticipationSummary = {
+  upcoming_meetings: number | null
+  check_in_available: number | null
+  generated_at: string
+}
+export type KagawadInvitedMeeting = {
+  id: string; title: string; location: string; starts_at: string; ends_at: string | null
+  attendance_status: string | null; check_in_open: boolean
+  invitation_response: 'attending' | 'unavailable' | null; response_updated_at: string | null; total_count: number
+}
+export type MeetingInvitationResponseSummary = {
+  invited_count: number; attending_count: number; unavailable_count: number; no_response_count: number
+}
+export type KagawadMeetingAttendanceHistory = {
+  meeting_id: string; title: string; location: string; starts_at: string; ends_at: string | null
+  meeting_status: string; attendance_status: string | null; attendance_recorded_at: string | null; total_count: number
+}
+export type KagawadAttendanceCorrectionRequest = {
+  id: string; meeting_id: string; meeting_title: string; meeting_starts_at: string
+  requested_status: 'present' | 'absent' | 'excused'; current_status: string | null
+  reason: string; status: 'pending' | 'approved' | 'rejected'; review_note: string | null
+  created_at: string; reviewed_at: string | null; total_count: number
+}
+export type MeetingAttendanceCorrectionQueueItem = {
+  id: string; meeting_id: string; meeting_title: string; meeting_starts_at: string
+  requester_name: string; requested_status: 'present' | 'absent' | 'excused'
+  current_status: string | null; reason: string; created_at: string; total_count: number
+}
 export type FinancialAdjustmentRow = {
   id: string; transaction_id: string; amount_change: number; reason: string; status: 'pending' | 'approved' | 'rejected'
   requested_by: string; reviewed_by: string | null; review_note: string | null; created_at: string
@@ -214,6 +242,54 @@ export function getTreasurerFollowUpSummary(tenantId: string) {
 
 export function getKagawadActionItemSummary(tenantId: string) {
   return rpc<KagawadActionItemSummary>('get_kagawad_action_item_summary', { p_barangay_id: tenantId })
+}
+
+export function getKagawadMeetingParticipationSummary(tenantId: string) {
+  return rpc<KagawadMeetingParticipationSummary>('get_kagawad_meeting_participation_summary', { p_barangay_id: tenantId })
+}
+
+export function listKagawadInvitedMeetings(tenantId: string, page: number) {
+  return rpc<KagawadInvitedMeeting[]>('list_kagawad_invited_meetings', {
+    p_barangay_id: tenantId, p_page: page, p_page_size: 10,
+  })
+}
+
+export function setKagawadMeetingInvitationResponse(meetingId: string, response: 'attending' | 'unavailable') {
+  return rpc<void>('set_kagawad_meeting_invitation_response', { p_meeting_id: meetingId, p_response: response })
+}
+
+export function getMeetingInvitationResponseSummary(meetingId: string) {
+  return rpc<MeetingInvitationResponseSummary>('get_meeting_invitation_response_summary', { p_meeting_id: meetingId })
+}
+
+export function listKagawadMeetingAttendanceHistory(tenantId: string, page: number) {
+  return rpc<KagawadMeetingAttendanceHistory[]>('list_kagawad_meeting_attendance_history', {
+    p_barangay_id: tenantId, p_page: page, p_page_size: 10,
+  })
+}
+
+export function requestKagawadAttendanceCorrection(meetingId: string, requestedStatus: string, reason: string) {
+  return rpc<string>('request_kagawad_attendance_correction', {
+    p_meeting_id: meetingId, p_requested_status: requestedStatus, p_reason: reason,
+  })
+}
+
+export function listKagawadAttendanceCorrectionRequests(tenantId: string, page: number) {
+  return rpc<KagawadAttendanceCorrectionRequest[]>('list_kagawad_attendance_correction_requests', {
+    p_barangay_id: tenantId, p_page: page, p_page_size: 10,
+  })
+}
+
+export function listMeetingAttendanceCorrectionQueue(tenantId: string, page: number) {
+  return rpc<MeetingAttendanceCorrectionQueueItem[]>('list_meeting_attendance_correction_queue', {
+    p_barangay_id: tenantId, p_page: page, p_page_size: 10,
+  })
+}
+
+export function decideMeetingAttendanceCorrection(requestId: string, decision: 'approved' | 'rejected', reviewNote: string) {
+  return rpc<void>('decide_meeting_attendance_correction', {
+    p_request_id: requestId, p_decision: decision, p_review_note: reviewNote,
+  })
 }
 
 export function listResidents(tenantId: string) {

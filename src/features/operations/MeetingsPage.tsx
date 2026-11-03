@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
-import { CalendarDays, CalendarPlus, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Download, Pencil, Search, X } from 'lucide-react'
+import { CalendarDays, CalendarPlus, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Download, History, Pencil, Search, X } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import {
-  createMeeting, hasPermission, listAllMeetingSchedule, listAttendance, listMeetingAttendeeMembers, listMeetingAttendees, listMeetingMemberPage, listMeetingPage, updateMeetingDetails,
+  createMeeting, decideMeetingAttendanceCorrection, getMeetingInvitationResponseSummary, hasPermission, listAllMeetingSchedule, listAttendance, listKagawadAttendanceCorrectionRequests, listKagawadInvitedMeetings, listKagawadMeetingAttendanceHistory, listMeetingAttendanceCorrectionQueue, listMeetingAttendeeMembers, listMeetingAttendees, listMeetingMemberPage, listMeetingPage, requestKagawadAttendanceCorrection, setKagawadMeetingInvitationResponse, updateMeetingDetails,
   markAttendance, recordAttendance, updateMeetingStatus, MEETING_MEMBER_PAGE_SIZE, MEETING_PAGE_SIZE,
 } from './data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
@@ -29,8 +29,17 @@ const meetingSchema = z.object({
 export function MeetingsPage({ focusId, focusPage, onFocusHandled }: { focusId?: string; focusPage?: number; onFocusHandled?: () => void }) {
   const { membership, user } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
+  const isKagawad = membership?.role?.key === 'kagawad'
   const queryClient = useQueryClient()
   const [page, setPage] = useState(0)
+  const [invitedMeetingPage, setInvitedMeetingPage] = useState(0)
+  const [meetingHistoryPage, setMeetingHistoryPage] = useState(0)
+  const [correctionRequestPage, setCorrectionRequestPage] = useState(0)
+  const [correctionQueuePage, setCorrectionQueuePage] = useState(0)
+  const [correctionMeetingId, setCorrectionMeetingId] = useState('')
+  const [correctionStatus, setCorrectionStatus] = useState<'present' | 'absent' | 'excused'>('present')
+  const [correctionReason, setCorrectionReason] = useState('')
+  const [correctionReviewNotes, setCorrectionReviewNotes] = useState<Record<string, string>>({})
   const [meetingSearchInput, setMeetingSearchInput] = useState('')
   const [meetingSearch, setMeetingSearch] = useState('')
   const [meetingStatus, setMeetingStatus] = useState<'all' | 'draft' | 'scheduled' | 'completed' | 'cancelled'>('all')
@@ -50,6 +59,11 @@ export function MeetingsPage({ focusId, focusPage, onFocusHandled }: { focusId?:
   const [scheduleExportError, setScheduleExportError] = useState('')
   useEffect(() => {
     setPage(0)
+    setInvitedMeetingPage(0)
+    setMeetingHistoryPage(0)
+    setCorrectionRequestPage(0)
+    setCorrectionQueuePage(0)
+    setCorrectionMeetingId('')
     setMeetingSearchInput('')
     setMeetingSearch('')
     setMeetingStatus('all')
@@ -80,6 +94,9 @@ export function MeetingsPage({ focusId, focusPage, onFocusHandled }: { focusId?:
   const startsAfter = localDateBoundary(startsOnOrAfter)
   const startsBefore = localDateBoundary(startsOnOrBefore, 1)
   const meetings = useQuery({ queryKey: ['meetings', tenantId, page, meetingSearch, meetingStatus, startsOnOrAfter, startsOnOrBefore], queryFn: () => listMeetingPage(tenantId, page, meetingSearch, meetingStatus, startsAfter, startsBefore), enabled: Boolean(tenantId && !dateRangeInvalid) })
+  const invitedMeetings = useQuery({ queryKey: ['kagawad-invited-meetings', tenantId, invitedMeetingPage], queryFn: () => listKagawadInvitedMeetings(tenantId, invitedMeetingPage), enabled: Boolean(tenantId && isKagawad) })
+  const meetingHistory = useQuery({ queryKey: ['kagawad-meeting-attendance-history', tenantId, meetingHistoryPage], queryFn: () => listKagawadMeetingAttendanceHistory(tenantId, meetingHistoryPage), enabled: Boolean(tenantId && isKagawad) })
+  const correctionRequests = useQuery({ queryKey: ['kagawad-attendance-correction-requests', tenantId, correctionRequestPage], queryFn: () => listKagawadAttendanceCorrectionRequests(tenantId, correctionRequestPage), enabled: Boolean(tenantId && isKagawad) })
   useEffect(() => {
     if (!focusId) return
     if (meetingSearchInput) skipNextMeetingSearchReset.current = true
@@ -98,6 +115,7 @@ export function MeetingsPage({ focusId, focusPage, onFocusHandled }: { focusId?:
   }, [meetings.data?.meetings.length, meetings.isError, meetings.isPending, page])
   const canManage = useQuery({ queryKey: ['permission', tenantId, 'meeting.manage'], queryFn: () => hasPermission(tenantId, 'meeting.manage'), enabled: Boolean(tenantId) })
   const canManageAttendance = useQuery({ queryKey: ['permission', tenantId, 'attendance.manage'], queryFn: () => hasPermission(tenantId, 'attendance.manage'), enabled: Boolean(tenantId) })
+  const correctionQueue = useQuery({ queryKey: ['meeting-attendance-correction-queue', tenantId, correctionQueuePage], queryFn: () => listMeetingAttendanceCorrectionQueue(tenantId, correctionQueuePage), enabled: Boolean(tenantId && canManageAttendance.data) })
   const canSelectAttendees = useQuery({ queryKey: ['permission', tenantId, 'membership.read'], queryFn: () => hasPermission(tenantId, 'membership.read'), enabled: Boolean(tenantId) })
   const members = useQuery({ queryKey: ['meeting-attendee-members', selectedMeeting], queryFn: () => listMeetingAttendeeMembers(selectedMeeting), enabled: Boolean(selectedMeeting && canManage.data) })
   const memberDirectory = useQuery({
@@ -106,6 +124,7 @@ export function MeetingsPage({ focusId, focusPage, onFocusHandled }: { focusId?:
     enabled: Boolean(tenantId && canSelectAttendees.data && open),
   })
   const [busy, setBusy] = useState(false)
+  const [rsvpBusyMeetingId, setRsvpBusyMeetingId] = useState('')
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const attendance = useQuery({
@@ -114,6 +133,11 @@ export function MeetingsPage({ focusId, focusPage, onFocusHandled }: { focusId?:
   const attendees = useQuery({
     queryKey: ['meeting-attendees', selectedMeeting], queryFn: () => listMeetingAttendees(selectedMeeting),
     enabled: Boolean(selectedMeeting && canManage.data),
+  })
+  const invitationResponseSummary = useQuery({
+    queryKey: ['meeting-invitation-response-summary', tenantId, selectedMeeting],
+    queryFn: () => getMeetingInvitationResponseSummary(selectedMeeting),
+    enabled: Boolean(selectedMeeting && tenantId && (canManage.data || canManageAttendance.data)),
   })
   const attendanceSearchTerm = attendanceSearch.trim().toLocaleLowerCase()
   const visibleAttendance = (attendance.data ?? []).filter((item) => {
@@ -170,11 +194,69 @@ export function MeetingsPage({ focusId, focusPage, onFocusHandled }: { focusId?:
   }
 
   async function checkIn(id: string) {
+    setBusy(true); setError(''); setMessage('')
     try {
       await markAttendance(id)
       await queryClient.invalidateQueries({ queryKey: ['attendance', id] })
+      await queryClient.invalidateQueries({ queryKey: ['kagawad-invited-meetings', tenantId] })
+      await queryClient.invalidateQueries({ queryKey: ['kagawad-meeting-participation', tenantId] })
       setMessage('Your attendance has been recorded.')
     } catch (err) { setError(err instanceof Error ? err.message : 'Attendance could not be recorded.') }
+    finally { setBusy(false) }
+  }
+
+  async function respondToMeetingInvitation(meetingId: string, response: 'attending' | 'unavailable') {
+    setRsvpBusyMeetingId(meetingId); setError(''); setMessage('')
+    try {
+      await setKagawadMeetingInvitationResponse(meetingId, response)
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['kagawad-invited-meetings', tenantId] }),
+        queryClient.invalidateQueries({ queryKey: ['meeting-invitation-response-summary', tenantId, meetingId] }),
+      ])
+      setMessage(response === 'attending' ? 'Your plan to attend has been saved.' : 'Your unavailability has been saved.')
+    } catch (err) { setError(err instanceof Error ? err.message : 'Your meeting response could not be saved.') }
+    finally { setRsvpBusyMeetingId('') }
+  }
+
+  async function submitAttendanceCorrection(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!correctionMeetingId || correctionReason.trim().length < 3) {
+      setError('Choose a past meeting and explain the attendance correction in at least 3 characters.')
+      return
+    }
+    setBusy(true); setError(''); setMessage('')
+    try {
+      await requestKagawadAttendanceCorrection(correctionMeetingId, correctionStatus, correctionReason.trim())
+      setCorrectionReason('')
+      setCorrectionMeetingId('')
+      setCorrectionRequestPage(0)
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['kagawad-attendance-correction-requests', tenantId] }),
+        queryClient.invalidateQueries({ queryKey: ['meeting-attendance-correction-queue', tenantId] }),
+      ])
+      setMessage('Attendance correction request sent for review.')
+    } catch (err) { setError(err instanceof Error ? err.message : 'Unable to submit the attendance correction request.') }
+    finally { setBusy(false) }
+  }
+
+  async function reviewAttendanceCorrection(requestId: string, decision: 'approved' | 'rejected') {
+    const reviewNote = correctionReviewNotes[requestId]?.trim() ?? ''
+    if (decision === 'rejected' && reviewNote.length < 3) {
+      setError('Add a review note of at least 3 characters before declining a request.')
+      return
+    }
+    setBusy(true); setError(''); setMessage('')
+    try {
+      await decideMeetingAttendanceCorrection(requestId, decision, reviewNote)
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['meeting-attendance-correction-queue', tenantId] }),
+        queryClient.invalidateQueries({ queryKey: ['kagawad-attendance-correction-requests', tenantId] }),
+        queryClient.invalidateQueries({ queryKey: ['kagawad-meeting-attendance-history', tenantId] }),
+        queryClient.invalidateQueries({ queryKey: ['meetings', tenantId] }),
+      ])
+      setMessage(decision === 'approved' ? 'Attendance correction approved and recorded.' : 'Attendance correction request declined.')
+    } catch (err) { setError(err instanceof Error ? err.message : 'Unable to review the attendance correction request.') }
+    finally { setBusy(false) }
   }
 
   async function setAttendance(id: string, attendeeId: string, status: 'present' | 'absent' | 'excused') {
@@ -334,6 +416,65 @@ export function MeetingsPage({ focusId, focusPage, onFocusHandled }: { focusId?:
     {Boolean(tenantId) && (canManage.isPending || canManageAttendance.isPending || canSelectAttendees.isPending) && <LoadingNotice compact />}
     {(canManage.error || canManageAttendance.error || canSelectAttendees.error) && <ErrorNotice message="Some meeting permissions could not be checked. Related scheduling, attendance, or invite controls may be unavailable until access can be verified." />}
     {message && <div className="ops-success"><CheckCircle2 size={16} />{message}</div>}{error && <ErrorNotice message={error} />}
+    {isKagawad && <section className="ops-panel kagawad-invited-meetings" aria-labelledby="kagawad-invited-meetings-title">
+      <div className="ops-panel-heading"><div><h2 id="kagawad-invited-meetings-title">My invited meetings</h2><p>Share your plan ahead of time. RSVP does not record attendance; check in when the window opens.</p></div><CalendarDays size={19} /></div>
+      {invitedMeetings.isPending ? <LoadingNotice compact /> : invitedMeetings.error ? <ErrorNotice message="Your meeting invitations could not be loaded." onRetry={() => void invitedMeetings.refetch()} retrying={invitedMeetings.isFetching} /> : invitedMeetings.data?.length ? <>
+        <ul className="kagawad-invited-meeting-list">{invitedMeetings.data.map((meeting) => <li key={meeting.id}>
+          <div><strong>{meeting.title}</strong><small>{meeting.location} · {formatDateTime(meeting.starts_at)}</small></div>
+          <div className="kagawad-meeting-response-actions" aria-label={`Your response for ${meeting.title}`}>
+            <span className="field-hint">{meeting.invitation_response === 'attending' ? 'You plan to attend' : meeting.invitation_response === 'unavailable' ? 'You are unavailable' : new Date(meeting.starts_at).getTime() > Date.now() ? 'No response yet' : 'RSVP is closed'}</span>
+            <button type="button" className={`button ${meeting.invitation_response === 'attending' ? 'primary' : 'outline'}`} disabled={rsvpBusyMeetingId === meeting.id || Boolean(meeting.attendance_status) || new Date(meeting.starts_at).getTime() <= Date.now()} onClick={() => void respondToMeetingInvitation(meeting.id, 'attending')}>{rsvpBusyMeetingId === meeting.id ? 'Saving…' : 'Plan to attend'}</button>
+            <button type="button" className={`button ${meeting.invitation_response === 'unavailable' ? 'primary' : 'outline'}`} disabled={rsvpBusyMeetingId === meeting.id || Boolean(meeting.attendance_status) || new Date(meeting.starts_at).getTime() <= Date.now()} onClick={() => void respondToMeetingInvitation(meeting.id, 'unavailable')}>Unavailable</button>
+          </div>
+          {meeting.attendance_status ? <StatusPill status={meeting.attendance_status} /> : meeting.check_in_open
+            ? <button type="button" className="button primary" disabled={busy} onClick={() => void checkIn(meeting.id)}>I’m attending</button>
+            : <span className="field-hint">Check-in opens 30 minutes before start</span>}
+        </li>)}</ul>
+        {Number(invitedMeetings.data[0]?.total_count ?? 0) > 10 && <nav className="committee-picker-pagination" aria-label="Invited meeting pages"><span>Page {invitedMeetingPage + 1} of {Math.ceil(Number(invitedMeetings.data[0]?.total_count ?? 0) / 10)} · {invitedMeetings.data[0]?.total_count} meetings</span><div><button type="button" className="button outline" disabled={invitedMeetingPage === 0 || invitedMeetings.isFetching} onClick={() => setInvitedMeetingPage((current) => current - 1)}>Previous</button><button type="button" className="button outline" disabled={(invitedMeetingPage + 1) * 10 >= Number(invitedMeetings.data[0]?.total_count ?? 0) || invitedMeetings.isFetching} onClick={() => setInvitedMeetingPage((current) => current + 1)}>Next</button></div></nav>}
+      </> : <p className="field-hint">You have no upcoming invitations that need check-in.</p>}
+    </section>}
+    {isKagawad && <section className="ops-panel kagawad-invited-meetings" aria-labelledby="kagawad-meeting-history-title">
+      <div className="ops-panel-heading"><div><h2 id="kagawad-meeting-history-title">My meeting history</h2><p>Past meetings you were invited to and your recorded attendance.</p></div><History size={19} /></div>
+      {meetingHistory.isPending ? <LoadingNotice compact /> : meetingHistory.error ? <ErrorNotice message="Your meeting history could not be loaded." onRetry={() => void meetingHistory.refetch()} retrying={meetingHistory.isFetching} /> : meetingHistory.data?.length ? <>
+        <ul className="kagawad-invited-meeting-list">{meetingHistory.data.map((meeting) => <li key={meeting.meeting_id}>
+          <div><strong>{meeting.title}</strong><small>{meeting.location} · {formatDateTime(meeting.starts_at)}</small><small>Meeting: {meeting.meeting_status} · Attendance: {meeting.attendance_status ?? 'Not recorded'}{meeting.attendance_recorded_at ? ` · Recorded ${formatDateTime(meeting.attendance_recorded_at)}` : ''}</small></div>
+          <StatusPill status={meeting.attendance_status ?? meeting.meeting_status} />
+        </li>)}</ul>
+        {Number(meetingHistory.data[0]?.total_count ?? 0) > 10 && <nav className="committee-picker-pagination" aria-label="Meeting history pages"><span>Page {meetingHistoryPage + 1} of {Math.ceil(Number(meetingHistory.data[0]?.total_count ?? 0) / 10)} · {meetingHistory.data[0]?.total_count} meetings</span><div><button type="button" className="button outline" disabled={meetingHistoryPage === 0 || meetingHistory.isFetching} onClick={() => setMeetingHistoryPage((current) => current - 1)}>Previous</button><button type="button" className="button outline" disabled={(meetingHistoryPage + 1) * 10 >= Number(meetingHistory.data[0]?.total_count ?? 0) || meetingHistory.isFetching} onClick={() => setMeetingHistoryPage((current) => current + 1)}>Next</button></div></nav>}
+      </> : <p className="field-hint">No past invited meetings are available yet.</p>}
+      {meetingHistory.data?.length ? <form className="ops-form kagawad-attendance-correction-form" onSubmit={(event) => void submitAttendanceCorrection(event)}>
+        <h3>Request an attendance correction</h3>
+        <p className="field-hint">Choose a past meeting and explain what should be corrected. An authorized official will review the request.</p>
+        <div className="ops-form-grid">
+          <label>Meeting<select required value={correctionMeetingId} onChange={(event) => setCorrectionMeetingId(event.target.value)}><option value="">Choose a past meeting</option>{meetingHistory.data.map((meeting) => <option key={meeting.meeting_id} value={meeting.meeting_id}>{meeting.title} · {new Date(meeting.starts_at).toLocaleDateString()}</option>)}</select></label>
+          <label>Correct attendance<select value={correctionStatus} onChange={(event) => setCorrectionStatus(event.target.value as typeof correctionStatus)}><option value="present">Present</option><option value="absent">Absent</option><option value="excused">Excused</option></select></label>
+          <label className="span-two">Reason<textarea required minLength={3} maxLength={1000} rows={3} value={correctionReason} onChange={(event) => setCorrectionReason(event.target.value)} placeholder="Explain why this attendance record needs correction" /></label>
+        </div>
+        <div className="ops-form-actions"><span className="field-hint">Requests are saved in your history and cannot be edited while awaiting review.</span><button className="button primary" disabled={busy || correctionReason.trim().length < 3}>{busy ? 'Sending…' : 'Send for review'}</button></div>
+      </form> : null}
+      <div className="kagawad-attendance-correction-history">
+        <h3>Correction requests</h3>
+        {correctionRequests.isPending ? <LoadingNotice compact /> : correctionRequests.error ? <ErrorNotice message="Your correction requests could not be loaded." onRetry={() => void correctionRequests.refetch()} retrying={correctionRequests.isFetching} /> : correctionRequests.data?.length ? <>
+          <ul className="kagawad-invited-meeting-list">{correctionRequests.data.map((request) => <li key={request.id}>
+            <div><strong>{request.meeting_title}</strong><small>{request.current_status ? `Recorded ${request.current_status} → requested ${request.requested_status}` : `Requested ${request.requested_status}; no prior record`}</small><small>{request.reason} · Submitted {formatDateTime(request.created_at)}</small>{request.review_note && <small>Review note: {request.review_note}</small>}</div>
+            <StatusPill status={request.status} />
+          </li>)}</ul>
+          {Number(correctionRequests.data[0]?.total_count ?? 0) > 10 && <nav className="committee-picker-pagination" aria-label="Attendance correction request pages"><span>Page {correctionRequestPage + 1} of {Math.ceil(Number(correctionRequests.data[0]?.total_count ?? 0) / 10)} · {correctionRequests.data[0]?.total_count} requests</span><div><button type="button" className="button outline" disabled={correctionRequestPage === 0 || correctionRequests.isFetching} onClick={() => setCorrectionRequestPage((current) => current - 1)}>Previous</button><button type="button" className="button outline" disabled={(correctionRequestPage + 1) * 10 >= Number(correctionRequests.data[0]?.total_count ?? 0) || correctionRequests.isFetching} onClick={() => setCorrectionRequestPage((current) => current + 1)}>Next</button></div></nav>}
+        </> : <p className="field-hint">You have not requested an attendance correction.</p>}
+      </div>
+    </section>}
+    {canManageAttendance.data && <section className="ops-panel kagawad-invited-meetings" aria-labelledby="attendance-correction-queue-title">
+      <div className="ops-panel-heading"><div><h2 id="attendance-correction-queue-title">Attendance corrections</h2><p>Review corrections submitted by invited Kagawads.</p></div><ClipboardList size={19} /></div>
+      {correctionQueue.isPending ? <LoadingNotice compact /> : correctionQueue.error ? <ErrorNotice message="Attendance correction requests could not be loaded." onRetry={() => void correctionQueue.refetch()} retrying={correctionQueue.isFetching} /> : correctionQueue.data?.length ? <>
+        <ul className="kagawad-invited-meeting-list">{correctionQueue.data.map((request) => <li key={request.id} className="attendance-correction-review-item">
+          <div><strong>{request.meeting_title}</strong><small>{request.requester_name} · {formatDateTime(request.meeting_starts_at)}</small><small>{request.current_status ? `Recorded ${request.current_status} → requested ${request.requested_status}` : `No attendance recorded → requested ${request.requested_status}`}</small><small>{request.reason}</small>
+            <label className="attendance-correction-review-note">Review note<textarea maxLength={1000} rows={2} value={correctionReviewNotes[request.id] ?? ''} onChange={(event) => setCorrectionReviewNotes((current) => ({ ...current, [request.id]: event.target.value }))} placeholder="Required when declining" /></label>
+            <div className="ops-form-actions"><button type="button" className="button outline" disabled={busy} onClick={() => void reviewAttendanceCorrection(request.id, 'rejected')}>Decline</button><button type="button" className="button primary" disabled={busy} onClick={() => void reviewAttendanceCorrection(request.id, 'approved')}>Approve correction</button></div>
+          </div>
+        </li>)}</ul>
+        {Number(correctionQueue.data[0]?.total_count ?? 0) > 10 && <nav className="committee-picker-pagination" aria-label="Attendance correction review pages"><span>Page {correctionQueuePage + 1} of {Math.ceil(Number(correctionQueue.data[0]?.total_count ?? 0) / 10)} · {correctionQueue.data[0]?.total_count} requests</span><div><button type="button" className="button outline" disabled={correctionQueuePage === 0 || correctionQueue.isFetching} onClick={() => setCorrectionQueuePage((current) => current - 1)}>Previous</button><button type="button" className="button outline" disabled={(correctionQueuePage + 1) * 10 >= Number(correctionQueue.data[0]?.total_count ?? 0) || correctionQueue.isFetching} onClick={() => setCorrectionQueuePage((current) => current + 1)}>Next</button></div></nav>}
+      </> : <p className="field-hint">No attendance corrections are waiting for review.</p>}
+    </section>}
     {open && canManage.data && <form className="ops-panel ops-form" onSubmit={(event) => void submit(event)}>
       <div className="ops-panel-heading"><div><h2>Meeting details</h2><p>Invited members are validated as active members of this barangay.</p></div><CalendarDays size={18} /></div>
       <div className="ops-form-grid"><label>Meeting title<input name="title" required maxLength={180} /></label><label>Location<input name="location" required maxLength={180} /></label>
@@ -358,7 +499,7 @@ export function MeetingsPage({ focusId, focusPage, onFocusHandled }: { focusId?:
         <div className="meeting-card-top"><div className="request-icon"><CalendarDays size={18} /></div><div className="meeting-title"><h2>{meeting.title}</h2><p>{meeting.location} · {formatDateTime(meeting.starts_at)}</p></div><StatusPill status={meeting.status} /></div>
         {meeting.agenda && <div className="meeting-agenda"><strong><ClipboardList size={14} />Agenda</strong><p>{meeting.agenda}</p></div>}
         <div className="meeting-actions"><button className="button outline" onClick={() => { setAttendanceSearch(''); setSelectedMeeting((current) => current === meeting.id ? '' : meeting.id) }}>{selectedMeeting === meeting.id ? 'Hide meeting details' : 'View attendance & records'}</button>
-          {meeting.status === 'scheduled' && <button className="button primary" onClick={() => void checkIn(meeting.id)}>I’m attending</button>}
+          {meeting.status === 'scheduled' && !isKagawad && <button className="button primary" onClick={() => void checkIn(meeting.id)}>I’m attending</button>}
           {meeting.status === 'scheduled' && <button className="button outline" onClick={() => exportMeetingCalendarFile(meeting)}><CalendarPlus size={15} />Add to calendar</button>}
           {canManage.data && (meeting.status === 'scheduled' || meeting.status === 'draft') && <button className="button outline" onClick={() => setEditingMeeting((current) => current === meeting.id ? '' : meeting.id)}>{editingMeeting === meeting.id ? <><X size={15} />Close editor</> : <><Pencil size={15} />Edit meeting</>}</button>}
           {canManage.data && meeting.status === 'scheduled' && <><button className="text-action" onClick={() => void setStatus(meeting.id, 'completed')}>Complete</button><button className="text-action danger-action" onClick={() => void setStatus(meeting.id, 'cancelled')}>Cancel</button></>}
@@ -371,6 +512,11 @@ export function MeetingsPage({ focusId, focusPage, onFocusHandled }: { focusId?:
           <div className="ops-form-actions"><span className="field-hint">Edits update the schedule, location, and agenda. Status and invitees stay unchanged.</span><button className="button primary" disabled={busy}>{busy ? 'Saving…' : 'Save changes'}</button></div>
         </form>}
         {selectedMeeting === meeting.id && <div className="attendance-panel">
+          {(canManage.data || canManageAttendance.data) && <div className="meeting-attendance-summary" aria-label="Meeting invitation responses">
+            {invitationResponseSummary.isPending ? <span>Loading RSVP totals…</span> : invitationResponseSummary.error ? <span>RSVP totals are unavailable.</span> : invitationResponseSummary.data && <>
+              <span><strong>{invitationResponseSummary.data.invited_count}</strong> Invited</span><span><strong>{invitationResponseSummary.data.attending_count}</strong> Plan to attend</span><span><strong>{invitationResponseSummary.data.unavailable_count}</strong> Unavailable</span><span><strong>{invitationResponseSummary.data.no_response_count}</strong> No response</span>
+            </>}
+          </div>}
           {canManage.data && attendees.data && attendance.data && <div className="meeting-attendance-summary" aria-label="Attendance summary">
             <span><strong>{attendanceSummary.present}</strong> Present</span><span><strong>{attendanceSummary.absent}</strong> Absent</span><span><strong>{attendanceSummary.excused}</strong> Excused</span><span><strong>{unrecordedAttendeeCount}</strong> Not recorded</span>
             <button type="button" className="button outline" onClick={() => exportAttendanceCSV(meeting.title)}><Download size={15} />Export attendance CSV</button>

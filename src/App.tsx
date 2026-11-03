@@ -13,7 +13,7 @@ import { AttendanceQrCheckInPage } from './features/operations/AttendanceQrCheck
 import { PublicDocumentVerificationPage } from './features/operations/PublicDocumentVerificationPage'
 import { OnboardingPage } from './features/operations/OnboardingPage'
 import { OperationsSection, type OperationSection } from './features/operations/OperationsSection'
-import { getCaptainReviewQueueSummary, getSecretaryReviewQueueSummary, getTreasurerFollowUpSummary, getKagawadActionItemSummary, getOwnAccountDisplayName, getWorkspaceDashboardMetrics, listRecentAnnouncements } from './features/operations/data'
+import { getCaptainReviewQueueSummary, getSecretaryReviewQueueSummary, getTreasurerFollowUpSummary, getKagawadActionItemSummary, getKagawadMeetingParticipationSummary, getOwnAccountDisplayName, getWorkspaceDashboardMetrics, listRecentAnnouncements } from './features/operations/data'
 import { listRecentDisasterAdvisories } from './features/operations/disaster-data'
 import { countUnreadCommunityNotifications, listCommunityNotificationPage, listHealthOutreachRescheduleDetails, listHealthOutreachReviewDetails, listHealthOutreachReviewSubmissionDetails, listHealthOutreachUpdateDetails, listMeetingResolutionNotificationDetails, listMeetingUpdateNotificationDetails, listSkEventCancellationDetails, listSkEventCompletionDetails, listSkEventPublicationDetails, listSkEventRescheduleDetails, listSkEventReviewFeedbackDetails, listSkEventReviewSubmissionDetails, markAllCommunityNotificationsRead, markCommunityNotificationRead } from './features/operations/notifications-data'
 import { PlatformDirectory } from './features/operations/PlatformDirectory'
@@ -200,7 +200,7 @@ function Workspace() {
   }, [menuOpen])
   const [workspacePickerOpen, setWorkspacePickerOpen] = useState(false)
   const [activeSection, setActiveSection] = useState<OperationSection | 'overview'>('overview')
-  const [focusedCommunityUpdate, setFocusedCommunityUpdate] = useState<{ section: 'announcements' | 'advisories' | 'documents' | 'feedback' | 'support' | 'residents' | 'meetings' | 'health-outreach' | 'sk-events' | 'incidents' | 'patrols'; id: string; page?: number; healthStatus?: 'draft' | 'changes_requested' | 'published' | 'cancelled' | 'completed' } | null>(null)
+  const [focusedCommunityUpdate, setFocusedCommunityUpdate] = useState<{ section: 'announcements' | 'advisories' | 'documents' | 'feedback' | 'support' | 'residents' | 'meetings' | 'health-outreach' | 'sk-events' | 'incidents' | 'patrols' | 'committees'; id: string; page?: number; healthStatus?: 'draft' | 'changes_requested' | 'published' | 'cancelled' | 'completed' } | null>(null)
   const clearFocusedCommunityUpdate = useCallback(() => setFocusedCommunityUpdate(null), [])
   const [toolFinderOpen, setToolFinderOpen] = useState(false)
   const [toolQuery, setToolQuery] = useState('')
@@ -242,6 +242,7 @@ function Workspace() {
   const secretaryReviewQueue = useQuery({ queryKey: ['secretary-review-queue', membership?.barangay_id], queryFn: () => getSecretaryReviewQueueSummary(membership!.barangay_id), enabled: Boolean(membership?.barangay_id && membership.role?.key === 'secretary' && activeSection === 'overview'), staleTime: 0 })
   const treasurerFollowUp = useQuery({ queryKey: ['treasurer-follow-up', membership?.barangay_id], queryFn: () => getTreasurerFollowUpSummary(membership!.barangay_id), enabled: Boolean(membership?.barangay_id && membership.role?.key === 'treasurer' && activeSection === 'overview'), staleTime: 0 })
   const kagawadActionItems = useQuery({ queryKey: ['kagawad-action-items', membership?.barangay_id], queryFn: () => getKagawadActionItemSummary(membership!.barangay_id), enabled: Boolean(membership?.barangay_id && membership.role?.key === 'kagawad' && activeSection === 'overview'), staleTime: 0 })
+  const kagawadMeetingParticipation = useQuery({ queryKey: ['kagawad-meeting-participation', membership?.barangay_id], queryFn: () => getKagawadMeetingParticipationSummary(membership!.barangay_id), enabled: Boolean(membership?.barangay_id && membership.role?.key === 'kagawad' && activeSection === 'overview'), staleTime: 0 })
   const notifications = useInfiniteQuery({ queryKey: ['community-notifications', membership?.barangay_id], queryFn: ({ pageParam }) => listCommunityNotificationPage(membership!.barangay_id, pageParam), initialPageParam: 0, getNextPageParam: (lastPage, allPages) => allPages.reduce((total, page) => total + page.rows.length, 0) < lastPage.totalCount ? allPages.length : undefined, enabled: Boolean(membership?.barangay_id), staleTime: 20_000, refetchInterval: 60_000, refetchIntervalInBackground: false })
   const unreadNotificationCount = useQuery({ queryKey: ['community-notification-unread-count', membership?.barangay_id], queryFn: () => countUnreadCommunityNotifications(membership!.barangay_id), enabled: Boolean(membership?.barangay_id), staleTime: 20_000, refetchInterval: 60_000, refetchIntervalInBackground: false })
   const announcements = useInfiniteQuery({ queryKey: ['workspace-updates-announcements', membership?.barangay_id], queryFn: ({ pageParam }) => listRecentAnnouncements(membership!.barangay_id, pageParam), initialPageParam: 0, getNextPageParam: (lastPage, allPages) => allPages.reduce((total, page) => total + page.announcements.length, 0) < lastPage.totalCount ? allPages.length : undefined, enabled: Boolean(updatesOpen && membership?.barangay_id), staleTime: 60_000 })
@@ -380,6 +381,14 @@ function Workspace() {
       }),
     ...notificationRows.filter((item) => item.resource_type === 'support_ticket_update')
       .map((item) => ({ id: item.resource_id, title: 'The support team updated your request', kind: 'Support update', resourceType: 'support_ticket_update' as const, timestamp: item.created_at, section: 'support' as const })),
+    ...notificationRows.filter((item) => item.resource_type === 'committee_task_update')
+      .map((item) => ({ id: item.resource_id, title: 'A committee manager responded to your task update', kind: 'Task response', resourceType: 'committee_task_update' as const, timestamp: item.created_at, section: 'committees' as const })),
+    ...notificationRows.filter((item) => item.resource_type === 'committee_task_progress')
+      .map((item) => ({ id: item.resource_id, title: 'A Kagawad added progress to an assigned task', kind: 'Task progress', resourceType: 'committee_task_progress' as const, timestamp: item.created_at, section: 'committees' as const })),
+    ...notificationRows.filter((item) => item.resource_type === 'committee_due_date_request')
+      .map((item) => ({ id: item.resource_id, title: 'A Kagawad requested a task due-date change', kind: 'Due-date request', resourceType: 'committee_due_date_request' as const, timestamp: item.created_at, section: 'committees' as const })),
+    ...notificationRows.filter((item) => item.resource_type === 'attendance_correction_request')
+      .map((item) => ({ id: item.resource_id, title: 'An attendance correction request needs review or has a decision', kind: 'Attendance correction', resourceType: 'attendance_correction_request' as const, timestamp: item.created_at, section: 'meetings' as const })),
     ...notificationRows.filter((item) => item.resource_type === 'incident_assignment')
       .map((item) => ({ id: item.resource_id, title: 'A safety report has been assigned to you', kind: 'Incident assignment', resourceType: 'incident_assignment' as const, timestamp: item.created_at, section: 'incidents' as const })),
     ...notificationRows.filter((item) => item.resource_type === 'incident_status_change')
@@ -460,10 +469,13 @@ function Workspace() {
   const unreadCount = unreadNotificationCount.data
   async function openCommunityUpdate(item: (typeof currentUpdates)[number]) {
     setNotificationActionError('')
-    setFocusedCommunityUpdate(item.resourceType === 'incident_assignment' || item.resourceType === 'incident_status_change'
+    setFocusedCommunityUpdate(item.resourceType === 'committee_task_update' || item.resourceType === 'committee_task_progress'
+      ? { section: 'committees', id: item.id }
+      : item.resourceType === 'incident_assignment' || item.resourceType === 'incident_status_change'
       ? { section: 'incidents', id: item.id }
       : item.resourceType === 'meeting_update' || item.resourceType === 'meeting_resolution'
       ? 'meetingId' in item && item.meetingId ? { section: 'meetings', id: item.meetingId, page: item.meetingPage } : null
+      : item.resourceType === 'attendance_correction_request' ? null
       : ['announcement', 'disaster_advisory', 'document_request', 'community_feedback', 'support_ticket_update', 'health_outreach_published', 'health_outreach_cancellation', 'health_outreach_completion', 'health_outreach_review', 'health_outreach_review_submission', 'health_outreach_rescheduled', 'sk_event_review_submission', 'sk_event_published', 'sk_event_completed', 'sk_event_review_feedback', 'sk_event_cancelled', 'sk_event_rescheduled', 'patrol_shift_assignment', 'patrol_shift_cancelled', 'patrol_shift_rescheduled', 'patrol_shift_started', 'patrol_shift_completed'].includes(item.resourceType)
       ? { section: item.section as 'announcements' | 'advisories' | 'documents' | 'feedback' | 'support' | 'health-outreach' | 'sk-events' | 'patrols', id: 'focusId' in item && item.focusId ? item.focusId : item.id, page: 'page' in item ? item.page : undefined, healthStatus: 'healthStatus' in item ? item.healthStatus : undefined }
       : item.resourceType === 'resident_profile_change' ? { section: 'residents', id: item.id }
@@ -572,6 +584,15 @@ function Workspace() {
               {kagawadActionItems.data.in_progress_action_items !== null && <button className="dashboard-metric" onClick={() => setActiveSection('committees')}><span className="dashboard-metric-icon violet"><Activity size={19} /></span><span><small>In progress</small><strong>{kagawadActionItems.data.in_progress_action_items.toLocaleString()}</strong></span><ArrowRight size={16} /></button>}
               {kagawadActionItems.data.blocked_action_items !== null && <button className="dashboard-metric" onClick={() => setActiveSection('committees')}><span className="dashboard-metric-icon orange"><AlertTriangle size={19} /></span><span><small>Blocked</small><strong>{kagawadActionItems.data.blocked_action_items.toLocaleString()}</strong></span><ArrowRight size={16} /></button>}
               {kagawadActionItems.data.overdue_action_items !== null && <button className="dashboard-metric" onClick={() => setActiveSection('committees')}><span className="dashboard-metric-icon orange"><Clock3 size={19} /></span><span><small>Overdue</small><strong>{kagawadActionItems.data.overdue_action_items.toLocaleString()}</strong></span><ArrowRight size={16} /></button>}
+            </div>}
+          </section>}
+          {membership.role?.key === 'kagawad' && <section className="captain-review-queue" aria-labelledby="kagawad-meetings-title">
+            <div className="section-heading"><div><h2 id="kagawad-meetings-title">Meeting participation</h2><p>Scheduled meetings you are invited to attend.</p></div><span className="role-pill">Private summary</span></div>
+            {kagawadMeetingParticipation.isPending && <div className="dashboard-metrics-loading" role="status">Loading your meeting schedule...</div>}
+            {kagawadMeetingParticipation.error && <div className="error-banner" role="alert">Your meeting summary could not be loaded. Open Meetings to check your invitations.</div>}
+            {kagawadMeetingParticipation.data && <div className="dashboard-metrics captain-review-metrics" aria-label="Kagawad meeting participation totals">
+              {kagawadMeetingParticipation.data.upcoming_meetings !== null && <button className="dashboard-metric" onClick={() => setActiveSection('meetings')}><span className="dashboard-metric-icon blue"><CalendarDays size={19} /></span><span><small>Upcoming invitations</small><strong>{kagawadMeetingParticipation.data.upcoming_meetings.toLocaleString()}</strong></span><ArrowRight size={16} /></button>}
+              {kagawadMeetingParticipation.data.check_in_available !== null && <button className="dashboard-metric" onClick={() => setActiveSection('meetings')}><span className="dashboard-metric-icon green"><CheckCircle2 size={19} /></span><span><small>Ready to check in</small><strong>{kagawadMeetingParticipation.data.check_in_available.toLocaleString()}</strong></span><ArrowRight size={16} /></button>}
             </div>}
           </section>}
           <div className="section-heading"><div><h2>Your workspace</h2><p>Tools available to your account</p></div><span className="role-pill">{membership.role?.label ?? 'Member'}</span></div>

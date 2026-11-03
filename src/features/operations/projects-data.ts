@@ -4,6 +4,10 @@ export type BarangayProject = { id: string; title: string; description: string; 
 export type BarangayProjectUpdate = { id: string; project_id: string; update_type: 'milestone' | 'progress'; title: string; details: string; created_at: string }
 export type BarangayProjectPage = { rows: BarangayProject[]; totalCount: number }
 export type BarangayProjectUpdatePage = { rows: BarangayProjectUpdate[]; totalCount: number }
+export type KagawadProjectContribution = {
+  update_id: string; project_id: string; project_title: string; project_status: string
+  update_type: 'milestone' | 'progress'; title: string; details: string; created_at: string; total_count: number
+}
 export const BARANGAY_PROJECT_PAGE_SIZE = 20
 export const BARANGAY_PROJECT_UPDATE_PAGE_SIZE = 25
 
@@ -37,6 +41,15 @@ export async function listBarangayProjectUpdates(projectId: string, page: number
   })
   if (error) throw new Error(error.message)
   const rows = (data ?? []) as Array<BarangayProjectUpdate & { total_count: number }>
+  return { rows, totalCount: Number(rows[0]?.total_count ?? 0) }
+}
+
+export async function listKagawadProjectContributions(tenantId: string, page: number) {
+  const { data, error } = await client().rpc('list_kagawad_project_contribution_page', {
+    p_barangay_id: tenantId, p_page: page, p_page_size: 10,
+  })
+  if (error) throw new Error(error.message)
+  const rows = (data ?? []) as KagawadProjectContribution[]
   return { rows, totalCount: Number(rows[0]?.total_count ?? 0) }
 }
 

@@ -25,7 +25,7 @@ The 74% figure is a rough estimate of the seven roadmap phases in the project sp
 | 1 | Captain | Membership role/status management, audited member offboarding, role-bounded permission overrides, barangay office settings, a permission-aware review queue covering SK project and accomplishment review, issuance-time signatory snapshots, manual paid-plan requests, and Super Admin invitations for a Captain account on an existing barangay are available in responsive pages (migrations `0179`-`0192`). | Review the Captain's remaining administration workflows and close gaps before moving to other roles. |
 | 2 | Secretary | Existing authorized workflows are available; a dedicated role-by-role completeness review is pending. | Review records, meetings, announcements, documents, archives, and resident follow-up. |
 | 3 | Treasurer | Finance tools exist; a dedicated role-by-role completeness review is pending. | Review budget, transaction, approval, export, and audit paths. |
-| 4 | Kagawad | Committee and meeting tools exist; a dedicated role-by-role completeness review is pending. | Review committee assignments, projects, meetings, and scoped approvals. |
+| 4 | Kagawad | Committee task tracking, a private assigned-task summary and searchable queue, due-date filters, progress notes with manager review, response, and two-way in-app alerts, invited-meeting counts and actionable invitations, and a personal project contribution history are implemented (migrations `0210`-`0220`). | Review project contribution and meeting follow-through, then verify role scoping and UI access. |
 
 ## Subscription payment approach
 
@@ -314,3 +314,43 @@ Secretary work queue: Migration `0208_secretary_actionable_review_queue.sql` add
 Treasurer submission follow-up: Migration `0209_treasurer_submission_follow_up.sql` adds private counts of the Treasurer's own budgets, transactions, and change requests awaiting Captain review. The mobile and desktop overview links these counts to Finance and no longer labels the Treasurer's own submissions as items they need to review. Apply the migration after `0208` before using the summary in a hosted workspace.
 
 Kagawad action item overview: Migration `0210_kagawad_action_item_summary.sql` adds a role-checked, private summary of the signed-in Kagawad's assigned committee tasks, with open, in-progress, blocked, and overdue counts. The responsive overview links those counts to Committees. Apply after `0209` before using the migration in a hosted workspace.
+
+Kagawad meeting participation: Migration `0211_kagawad_meeting_participation_summary.sql` adds private counts for the Kagawad's upcoming meeting invitations and meetings currently open for self check-in. The responsive overview links both counts to Meetings. Apply after `0210` before using the feature in a hosted workspace.
+
+Kagawad project contribution history: Migration `0212_kagawad_project_contribution_history.sql` adds a role-checked, paginated view of a Kagawad's own progress reports and milestones. The responsive Projects page presents the history with project status and submission time. Apply after `0211` before using the hosted workspace.
+
+Kagawad assigned action queue: Migration `0213_kagawad_assigned_action_item_queue.sql` adds a private, searchable queue spanning the Kagawad's active committees. The responsive Committees page provides status filters, task updates, and pagination. Apply after `0212` before using the hosted workspace.
+
+Kagawad due-date filters: Migration `0214_kagawad_action_item_due_filters.sql` adds server-side filters for assigned work due within seven days and unfinished overdue work. The responsive Committees queue retains search, status selection, task updates, and pagination. Apply after `0213` before using the hosted workspace.
+
+Kagawad meeting invitations: Migration `0215_kagawad_invited_meeting_queue.sql` adds a private paginated queue of the signed-in Kagawad's upcoming invited meetings, including attendance state and check-in availability. The Meetings page shows the responsive list, provides check-in only for invited Kagawads during the allowed window, and refreshes the queue after attendance is recorded. Apply after `0214` before using the hosted workspace.
+
+Kagawad task progress notes: Migration `0216_kagawad_action_item_progress_notes.sql` adds append-only notes on tasks assigned to the signed-in Kagawad. The responsive Committees queue allows the assignee to explain progress or blockers and view their note history; the database rejects notes for other members' tasks. Apply after `0215` before using the hosted workspace.
+
+Committee manager note review: Migration `0217_committee_manager_progress_note_visibility.sql` permits a committee manager to read notes on tasks in active committees they manage. Committee task cards show a responsive progress-note history to managers; only the assigned Kagawad can add notes. Apply after `0216` before using the hosted workspace.
+
+Committee manager task responses: Migration `0218_committee_task_progress_note_responses.sql` lets authorized committee managers append guidance or follow-up to the task progress history. The manager history panel includes the response form, and the database limits manager responses to tasks in active committees they manage. Apply after `0217` before using the hosted workspace.
+
+Kagawad task-response alerts: Migration `0219_notify_kagawad_of_manager_task_response.sql` places an in-app alert in the assigned Kagawad's Community updates inbox when a committee manager responds. Repeated replies refresh the task's existing alert; read access follows the task's current assignee. Opening the alert leads to Committees. Apply after `0218` before using the hosted workspace.
+
+Kagawad progress alerts: Migration `0220_notify_committee_managers_of_kagawad_progress.sql` adds an in-app Community updates alert for active committee managers when an assigned Kagawad posts progress. Alerts refresh per task, and inbox access is restricted to the assignee and managers. Apply after `0219` before using the hosted workspace.
+
+Committee task notification deep links: Migration `0221_committee_task_notification_context.sql` adds a minimal, role-scoped task context lookup. Opening either side's task alert now displays the task and its chronological progress and response thread, with the appropriate note composer on mobile and desktop. Apply after `0220` before using this hosted workflow.
+
+Kagawad task status history: Migration `0222_kagawad_task_status_history.sql` adds an indexed, paginated view of status changes for tasks assigned to the signed-in Kagawad. A responsive history panel sits beside each task's progress notes and includes changes made by authorized committee managers. Apply after `0221` before using this hosted workflow.
+
+Kagawad blocker reporting: Migration `0223_kagawad_blocker_reports.sql` lets an assigned Kagawad mark work blocked with a required reason. The database atomically changes status, appends the reason to the task progress thread, and sends the existing manager notification; the reason form adapts to desktop and mobile. Apply after `0222` before using this hosted workflow.
+
+Kagawad completion summaries: Migration `0224_kagawad_task_completion_summaries.sql` asks the assigned Kagawad for a short completion summary. Status, history event, and note are recorded atomically, and committee managers are notified through the existing task progress alert. The responsive task form guides the member through completion. Apply after `0223` before using this hosted workflow.
+
+Kagawad due-date requests: Migration `0225_committee_task_due_date_requests.sql` allows assigned Kagawads to propose a future task due date with a reason. Committee managers receive an in-app alert and can approve or decline from a paginated review queue; declines require an explanation. The Kagawad task card shows the latest decision, and desktop and mobile use the same responsive workflow. Apply after `0224` before using this hosted workflow.
+
+Kagawad due-date request history: Migration `0226_kagawad_due_date_request_history.sql` exposes a paginated history of the signed-in Kagawad's own proposals and decisions for an assigned task. The task panel supports multiple reviewed requests and keeps the next-request form available only when no request is awaiting review. Apply after `0225` before using this hosted workflow.
+
+Kagawad meeting history: Migration `0227_kagawad_meeting_attendance_history.sql` adds a private, paginated record of past meetings the signed-in Kagawad was invited to, showing only their own attendance status and recording time. The Meetings page includes a responsive history panel alongside upcoming invitations. Apply after `0226` before using this hosted workflow.
+
+Kagawad attendance corrections: Migration `0228_kagawad_attendance_correction_requests.sql` adds a reviewable workflow for attendance corrections on past meetings. Kagawads submit a reason and requested status; officials with attendance management access approve or decline, with approved changes written to the attendance audit log. Request history and reviewer controls are available in the responsive Meetings page. Apply after `0227` before using this hosted workflow.
+
+Attendance correction notifications: Migration `0229_attendance_correction_notifications.sql` alerts attendance managers about new Kagawad requests and sends the requester a Community updates notice after approval or decline. Access and read status follow the requester or active attendance-management permission. Apply after `0228` before using these notices.
+
+Kagawad meeting RSVP: Migration `0230_kagawad_meeting_availability_responses.sql` lets invited Kagawads indicate whether they plan to attend or are unavailable before a scheduled meeting. The meeting workspace shows aggregate totals to authorized meeting and attendance managers, keeping RSVP separate from actual attendance. Apply after `0229` before using this workflow.

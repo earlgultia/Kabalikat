@@ -746,8 +746,9 @@
 .meeting-qr-panel p { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 5px 0 0; }
 
 @media(max-width:900px) {
-  .platform-shell .support-ticket-list { gap: 16px; }
-  .platform-shell .support-ticket { gap: 16px; padding: clamp(14px,3vw,20px); }
+  .platform-shell .support-ticket-list { align-content: start; gap: 16px; grid-auto-rows: max-content; }
+  .platform-shell .support-ticket { align-content: start; align-items: start; gap: 16px; height: auto; min-height: 0; padding: clamp(14px,3vw,20px); }
+  .platform-shell .support-ticket > * { align-self: start; }
   .platform-shell .support-ticket > header { align-items: flex-start; flex-direction: column; gap: 9px; }
   .platform-shell .support-ticket > header > div { flex: 1 1 auto; gap: 8px; min-width: 0; }
   .platform-shell .support-ticket > header > small { font-size: 12px; line-height: 1.45; text-align: left; }
@@ -1369,8 +1370,18 @@
 }
 
 @media (max-width: 600px) {
+  .platform-shell .support-ticket-list { gap: 10px; }
   .platform-shell .support-ticket,
   .platform-shell .support-conversation { min-width: 0; }
+  .platform-shell .support-ticket { align-content: start; gap: 12px; padding: 14px; }
+  .platform-shell .support-ticket-controls { align-items: stretch; grid-template-columns: minmax(0,1fr); }
+  .platform-shell .support-ticket-controls > * { grid-column: 1; min-width: 0; width: 100%; }
+  .platform-shell .support-ticket-controls > label:first-child { min-height: 44px; }
+  .platform-shell .support-ticket-controls > label:nth-child(2) { gap: 5px; }
+  .platform-shell .support-ticket-controls select,
+  .platform-shell .support-ticket-controls > .button { min-height: 44px; width: 100%; }
+  .platform-shell .support-ticket h2 { font-size: 17px; line-height: 1.3; }
+  .platform-shell .support-ticket-description { font-size: 13px; line-height: 1.55; }
   .platform-shell .support-conversation summary { align-items: center; font-size: 14px; gap: 9px; line-height: 1.4; min-height: 48px; }
   .platform-shell .support-conversation > ol { gap: 10px; margin: 10px 0 14px; max-height: min(52vh, 440px); overflow-y: auto; overscroll-behavior: contain; padding: 1px 3px 1px 0; }
   .platform-shell .support-conversation > ol > li { border: 1px solid #e1e8e3; border-radius: 11px; padding: 12px; }
@@ -1388,4 +1399,120 @@
   .platform-shell .support-reply-form > .support-internal-toggle { align-items: flex-start; line-height: 1.45; }
   .platform-shell .support-reply-form > .support-internal-toggle input { flex: none; margin-top: 2px; }
   .platform-shell .support-reply-form > button { grid-column: 1; justify-content: center; min-height: 46px; width: 100%; }
+}
+
+.kagawad-project-contributions { display: grid; gap: 12px; min-width: 0; }
+.kagawad-project-contributions > .ops-panel-heading { margin-bottom: 0; }
+.kagawad-contribution-list { display: grid; gap: 9px; list-style: none; margin: 0; padding: 0; }
+.kagawad-contribution-list > li { background: #f8faf7; border: 1px solid #e2e9e4; border-radius: 10px; display: grid; gap: 7px; min-width: 0; padding: 12px 14px; }
+.kagawad-contribution-list > li > div { align-items: flex-start; display: flex; flex-wrap: wrap; gap: 7px 10px; justify-content: space-between; min-width: 0; }
+.kagawad-contribution-list strong,
+.kagawad-contribution-project { color: #354f4c; overflow-wrap: anywhere; }
+.kagawad-contribution-list p { color: #596d63; font-size: 12px; line-height: 1.55; margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+.kagawad-contribution-list .kagawad-contribution-project { color: #28766c; font-size: 11px; font-weight: 700; text-transform: capitalize; }
+.kagawad-contribution-list time { color: #697a72; font-size: 10px; line-height: 1.4; }
+.kagawad-my-work { display: grid; gap: 12px; margin-bottom: 16px; min-width: 0; }
+.kagawad-invited-meetings { display: grid; gap: 12px; margin-bottom: 16px; min-width: 0; }
+.kagawad-invited-meeting-list { display: grid; list-style: none; margin: 0; padding: 0; }
+.kagawad-invited-meeting-list > li { align-items: center; border-top: 1px solid #e8ede8; display: flex; flex-wrap: wrap; gap: 10px 14px; justify-content: space-between; min-width: 0; padding: 12px 0; }
+.kagawad-invited-meeting-list > li > div { flex: 1 1 220px; min-width: 0; }
+.kagawad-meeting-response-actions { align-items: center; display: flex; flex: 1 1 100%; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.kagawad-meeting-response-actions .field-hint { margin-right: auto; }
+.kagawad-invited-meeting-list strong { color: #293f40; display: block; font-size: 13px; overflow-wrap: anywhere; }
+.kagawad-invited-meeting-list small { color: #596a6d; display: block; font-size: 11px; line-height: 1.45; margin-top: 4px; overflow-wrap: anywhere; }
+.kagawad-attendance-correction-form { border-top: 1px solid #e2e9e4; display: grid; gap: 10px; min-width: 0; padding-top: 14px; }
+.kagawad-attendance-correction-form h3,
+.kagawad-attendance-correction-history h3 { color: #293f40; font-size: 14px; margin: 0; }
+.kagawad-attendance-correction-form > p { margin: 0; }
+.kagawad-attendance-correction-history { border-top: 1px solid #e2e9e4; display: grid; gap: 10px; min-width: 0; padding-top: 14px; }
+.attendance-correction-review-item > div { display: grid; flex-basis: 100%; gap: 8px; }
+.attendance-correction-review-note { color: #354f4c; display: grid; font-size: 11px; font-weight: 700; gap: 5px; min-width: 0; }
+.attendance-correction-review-note textarea { background: #fffefa; border: 1px solid #bfcec8; border-radius: 8px; color: #24353b; font: inherit; min-height: 64px; min-width: 0; padding: 8px 10px; resize: vertical; width: 100%; }
+.kagawad-action-item-filters { align-items: end; display: grid; gap: 10px; grid-template-columns: minmax(0,1fr) minmax(145px,190px) minmax(145px,190px) auto; }
+.kagawad-action-item-filters label { color: #354f4c; display: grid; font-size: 11px; font-weight: 700; gap: 5px; min-width: 0; }
+.kagawad-action-item-filters input,
+.kagawad-action-item-filters select { background: #fffefa; border: 1px solid #bfcec8; border-radius: 8px; color: #24353b; font: inherit; min-height: 42px; min-width: 0; padding: 8px 10px; width: 100%; }
+.kagawad-my-task-list { display: grid; list-style: none; margin: 0; padding: 0; }
+.kagawad-my-task-list > li { align-items: flex-start; border-top: 1px solid #e8ede8; display: flex; gap: 14px; justify-content: space-between; min-width: 0; padding: 12px 0; }
+.kagawad-my-task-list > li > div:first-child { min-width: 0; }
+.kagawad-my-task-list strong { color: #293f40; font-size: 13px; overflow-wrap: anywhere; }
+.kagawad-my-task-list small { color: #596a6d; display: block; font-size: 11px; line-height: 1.45; margin-top: 4px; overflow-wrap: anywhere; }
+.kagawad-my-task-list p { color: #53696a; font-size: 12px; line-height: 1.5; margin: 5px 0 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+.kagawad-task-note-toggle { align-items: center; display: inline-flex; gap: 6px; margin-top: 8px; }
+.kagawad-task-notes { background: #f8faf7; border: 1px solid #e2e9e4; border-radius: 10px; display: grid; gap: 10px; margin-top: 10px; max-width: 680px; min-width: 0; padding: 12px; }
+.kagawad-task-notes ol { display: grid; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.kagawad-task-notes ol > li { border-bottom: 1px solid #e2e9e4; min-width: 0; padding-bottom: 8px; }
+.kagawad-task-notes ol > li:last-child { border-bottom: 0; padding-bottom: 0; }
+.kagawad-task-notes ol p { margin: 0; }
+.kagawad-task-notes ol small { color: #697a72; display: block; font-size: 10px; margin-top: 4px; }
+.focused-committee-task { display: grid; gap: 14px; }
+.focused-committee-task-summary { background: #f8faf7; border: 1px solid #e2e9e4; border-radius: 12px; display: grid; gap: 8px; min-width: 0; padding: 14px; }
+.focused-committee-task-summary > p, .focused-committee-task-summary h3 { margin: 0; overflow-wrap: anywhere; }
+.focused-committee-task-summary > p:first-child { color: #65766f; font-size: 12px; font-weight: 700; }
+.focused-committee-task-summary > div { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; }
+.focused-committee-task-thread { margin-top: 0; max-width: none; }
+.focused-committee-task-thread > h3 { font-size: 14px; margin: 0; }
+.kagawad-task-notes form { align-items: end; display: grid; gap: 8px; grid-template-columns: minmax(0,1fr) auto; }
+.kagawad-task-notes form label { color: #354f4c; display: grid; font-size: 11px; font-weight: 700; gap: 5px; min-width: 0; }
+.kagawad-task-notes textarea { background: #fffefa; border: 1px solid #bfcec8; border-radius: 8px; color: #24353b; font: inherit; min-height: 72px; min-width: 0; padding: 9px 10px; resize: vertical; width: 100%; }
+.kagawad-status-history { min-width: 0; }
+.kagawad-status-history-content { background: #f8faf7; border: 1px solid #e2e9e4; border-radius: 10px; display: grid; gap: 10px; margin-top: 8px; max-width: 680px; min-width: 0; padding: 12px; }
+.kagawad-status-history-content ol { display: grid; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.kagawad-status-history-content li { border-bottom: 1px solid #e2e9e4; min-width: 0; padding-bottom: 8px; }
+.kagawad-status-history-content li:last-child { border-bottom: 0; padding-bottom: 0; }
+.kagawad-status-history-content li strong { display: block; overflow-wrap: anywhere; }
+.kagawad-status-history-content li small { color: #697a72; display: block; font-size: 10px; margin-top: 4px; }
+.kagawad-task-action-form { background: #f3f8f4; border: 1px solid #cadfcf; border-radius: 10px; display: grid; gap: 9px; margin-top: 10px; max-width: 680px; min-width: 0; padding: 12px; }
+.kagawad-task-action-form.blocked { background: #fff8f2; border-color: #f0d5bd; }
+.kagawad-task-action-form label { color: #354f4c; display: grid; font-size: 11px; font-weight: 700; gap: 5px; min-width: 0; }
+.kagawad-task-action-form.blocked label { color: #684c3d; }
+.kagawad-task-action-form textarea { background: #fffefa; border: 1px solid #bfcec8; border-radius: 8px; color: #24353b; font: inherit; min-height: 72px; min-width: 0; padding: 9px 10px; resize: vertical; width: 100%; }
+.kagawad-task-action-form.blocked textarea { border-color: #d9bca6; }
+.kagawad-task-action-form > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.kagawad-due-date-request, .committee-due-date-review-queue { min-width: 0; }
+.kagawad-due-date-request-content { background: #f8faf7; border: 1px solid #e2e9e4; border-radius: 10px; display: grid; gap: 10px; margin-top: 8px; max-width: 680px; min-width: 0; padding: 12px; }
+.kagawad-due-date-request-content form, .committee-due-request-card form { display: grid; gap: 9px; min-width: 0; }
+.kagawad-due-date-request-content label, .committee-due-request-card label { color: #354f4c; display: grid; font-size: 11px; font-weight: 700; gap: 5px; min-width: 0; }
+.kagawad-due-date-request-content input, .kagawad-due-date-request-content textarea, .committee-due-request-card textarea { background: #fffefa; border: 1px solid #bfcec8; border-radius: 8px; color: #24353b; font: inherit; min-height: 42px; min-width: 0; padding: 9px 10px; width: 100%; }
+.kagawad-due-date-request-content textarea, .committee-due-request-card textarea { min-height: 72px; resize: vertical; }
+.due-date-request-status { background: #fffefa; border: 1px solid #e2e9e4; border-radius: 8px; display: grid; gap: 5px; padding: 10px; }
+.due-date-request-status strong { color: #8b6b34; }
+.due-date-request-status.approved strong { color: #28766c; }
+.due-date-request-status.declined strong { color: #a0443c; }
+.due-date-request-status p { margin: 2px 0 0; white-space: pre-wrap; }
+.committee-due-date-review-queue { display: grid; gap: 12px; margin-bottom: 16px; }
+.committee-due-date-review-queue > summary { align-items: center; cursor: pointer; display: flex; gap: 12px; justify-content: space-between; list-style: none; }
+.committee-due-date-review-queue > summary::-webkit-details-marker { display: none; }
+.committee-due-date-review-queue > summary h2 { align-items: center; color: #354f4c; display: flex; font-size: 15px; gap: 8px; margin: 0; }
+.committee-due-date-review-queue > summary h2 span { background: #eaf1ed; border-radius: 999px; color: #3a6555; font-size: 11px; padding: 3px 8px; }
+.committee-due-date-review-queue > summary p { color: #697a72; font-size: 12px; margin: 5px 0 0; }
+.committee-due-request-card { background: #fffefa; border: 1px solid #e2e9e4; border-radius: 11px; display: grid; gap: 10px; min-width: 0; padding: 13px; }
+.committee-due-request-card h3 { color: #293f40; font-size: 13px; margin: 7px 0 3px; overflow-wrap: anywhere; }
+.committee-due-request-card > div:first-child p { color: #697a72; font-size: 11px; margin: 0; }
+.committee-due-request-dates { align-items: center; color: #596d63; display: flex; flex-wrap: wrap; gap: 8px; font-size: 12px; }
+.committee-due-request-dates strong { color: #28766c; }
+.committee-due-request-reason { background: #f8faf7; border-radius: 8px; color: #435957; font-size: 12px; line-height: 1.5; margin: 0; overflow-wrap: anywhere; padding: 10px; white-space: pre-wrap; }
+.committee-due-request-card form > div { display: flex; flex-wrap: wrap; gap: 8px; }
+@media (max-width: 650px) {
+  .kagawad-project-contributions { gap: 10px; padding: 14px; }
+  .kagawad-contribution-list > li { padding: 11px; }
+  .kagawad-contribution-list > li > div { flex-direction: column; }
+  .kagawad-contribution-list .status-pill { align-self: flex-start; }
+  .kagawad-my-work { gap: 10px; padding: 14px; }
+  .kagawad-invited-meetings { gap: 10px; padding: 14px; }
+  .kagawad-invited-meeting-list > li { align-items: flex-start; flex-direction: column; }
+  .kagawad-invited-meeting-list > li > * { max-width: 100%; }
+  .kagawad-action-item-filters { grid-template-columns: minmax(0,1fr); }
+  .kagawad-action-item-filters > * { width: 100%; }
+  .kagawad-action-item-filters > .button { justify-content: center; }
+  .kagawad-my-task-list > li { flex-direction: column; }
+  .kagawad-my-task-list .committee-task-status { align-items: flex-start; }
+  .kagawad-task-notes form { grid-template-columns: minmax(0,1fr); }
+  .kagawad-task-notes form > .button { justify-content: center; width: 100%; }
+  .kagawad-task-action-form > div { display: grid; grid-template-columns: minmax(0,1fr); }
+  .kagawad-task-action-form .button { justify-content: center; width: 100%; }
+  .committee-due-request-card form > div { display: grid; grid-template-columns: minmax(0,1fr); }
+  .committee-due-request-card form > div .button { justify-content: center; width: 100%; }
+  .focused-committee-task .ops-panel-heading { align-items: flex-start; }
+  .focused-committee-task .ops-panel-heading > .button { flex: 0 0 auto; }
 }

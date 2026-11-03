@@ -1,10 +1,10 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
 import { CheckCircle2, ChevronLeft, ChevronRight, FolderKanban, Plus, Waypoints } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import { hasPermission } from './data'
-import { addBarangayProjectUpdate, BARANGAY_PROJECT_PAGE_SIZE, createBarangayProject, listBarangayProjects, updateBarangayProjectStatus, type BarangayProject } from './projects-data'
+import { addBarangayProjectUpdate, BARANGAY_PROJECT_PAGE_SIZE, createBarangayProject, listBarangayProjects, listKagawadProjectContributions, updateBarangayProjectStatus, type BarangayProject } from './projects-data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 import { formatDateTime } from './format'
 import { ProjectProgressHistory } from './ProjectHistory'
@@ -25,8 +25,13 @@ export function ProjectsPage() {
   const tenantId = membership?.barangay_id ?? ''
   const queryClient = useQueryClient()
   const [page, setPage] = useState(0)
+  const [contributionPage, setContributionPage] = useState(0)
+  const isKagawad = membership?.role?.key === 'kagawad'
+  useEffect(() => { setPage(0); setContributionPage(0) }, [tenantId])
   const canManage = useQuery({ queryKey: ['permission', tenantId, 'project.manage'], queryFn: () => hasPermission(tenantId, 'project.manage'), enabled: Boolean(tenantId) })
   const projects = useQuery({ queryKey: ['barangay-projects', tenantId, page], queryFn: () => listBarangayProjects(tenantId, page), enabled: Boolean(tenantId) })
+  const contributions = useQuery({ queryKey: ['kagawad-project-contributions', tenantId, contributionPage], queryFn: () => listKagawadProjectContributions(tenantId, contributionPage), enabled: Boolean(tenantId && isKagawad) })
+  const contributionPages = Math.ceil((contributions.data?.totalCount ?? 0) / 10)
   const totalPages = Math.ceil((projects.data?.totalCount ?? 0) / BARANGAY_PROJECT_PAGE_SIZE)
   const [showForm, setShowForm] = useState(false)
   const [updateProject, setUpdateProject] = useState('')
@@ -38,6 +43,7 @@ export function ProjectsPage() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['barangay-projects', tenantId] }),
       queryClient.invalidateQueries({ queryKey: ['project-progress-history', 'barangay', tenantId] }),
+      queryClient.invalidateQueries({ queryKey: ['kagawad-project-contributions', tenantId] }),
     ])
   }
 
@@ -85,6 +91,19 @@ export function ProjectsPage() {
     {message && <div className="ops-success" role="status"><CheckCircle2 size={16} />{message}</div>}{error && <ErrorNotice message={error} />}
     {Boolean(tenantId) && !canManage.data && !canManage.isPending && !canManage.error && <div className="ops-panel archive-access"><FolderKanban size={20} /><div><strong>Read-only project access</strong><p>Active barangay members can view project status. Creating projects and recording updates is limited to authorized officials.</p></div></div>}
     {showForm && canManage.data && <form className="ops-panel ops-form" onSubmit={(event) => void createProject(event)}><div className="ops-panel-heading"><div><h2>New barangay project</h2><p>Project notes are separate from the official finance ledger.</p></div><FolderKanban size={19} /></div><div className="ops-form-grid"><label>Project title<input name="title" minLength={3} maxLength={180} required /></label><label>Planned start<input name="start" type="date" /></label><label>Planned end<input name="end" type="date" /></label><label className="span-two">Description<textarea name="description" maxLength={4000} /></label></div><div className="ops-form-actions"><button className="button primary" disabled={busy}>Create project</button></div></form>}
+    {isKagawad && <section className="ops-panel kagawad-project-contributions" aria-labelledby="kagawad-project-contributions-title">
+      <div className="ops-panel-heading"><div><h2 id="kagawad-project-contributions-title">Your project contributions</h2><p>Progress reports and milestones you have recorded.</p></div><FolderKanban size={19} /></div>
+      {contributions.isPending && <LoadingNotice compact />}
+      {contributions.error && <ErrorNotice message="Your project contribution history could not be loaded." />}
+      {contributions.data?.totalCount === 0 && <p className="field-hint">You have not recorded any project updates yet.</p>}
+      {Boolean(contributions.data?.rows.length) && <ol className="kagawad-contribution-list">{contributions.data?.rows.map((entry) => <li key={entry.update_id}>
+        <div><strong>{entry.title}</strong><span className="status-pill">{entry.update_type === 'milestone' ? 'Milestone' : 'Progress report'}</span></div>
+        <p className="kagawad-contribution-project">{entry.project_title} · {entry.project_status.replaceAll('_', ' ')}</p>
+        {entry.details && <p>{entry.details}</p>}
+        <time dateTime={entry.created_at}>{formatDateTime(entry.created_at)}</time>
+      </li>)}</ol>}
+      {contributionPages > 1 && <div className="committee-picker-pagination"><span>Page {contributionPage + 1} of {contributionPages} · {contributions.data?.totalCount ?? 0} updates</span><div><button type="button" className="button outline" disabled={contributionPage === 0 || contributions.isFetching} onClick={() => setContributionPage((current) => current - 1)}>Previous</button><button type="button" className="button outline" disabled={contributionPage + 1 >= contributionPages || contributions.isFetching} onClick={() => setContributionPage((current) => current + 1)}>Next</button></div></div>}
+    </section>}
     {projects.isPending && tenantId && <LoadingNotice />}
     {projects.error && <ErrorNotice message="Unable to load project records." />}
     {projects.data?.totalCount === 0 && <div className="ops-empty"><FolderKanban size={22} /><strong>No barangay projects yet</strong><p>When an authorized official adds a project, its status and progress will appear here.</p></div>}

@@ -9,6 +9,26 @@ export type CommitteeTaskRow = {
   assignee_name?: string | null
 }
 export type CommitteeTaskPage = { rows: CommitteeTaskRow[]; totalCount: number }
+export type KagawadAssignedActionItem = CommitteeTaskRow & { committee_name: string; total_count: number }
+export type KagawadAssignedActionItemPage = { rows: KagawadAssignedActionItem[]; totalCount: number }
+export type KagawadActionItemNote = { id: string; note: string; author_name: string; created_at: string }
+export type CommitteeTaskNotificationContext = {
+  id: string; committee_id: string; committee_name: string; title: string; description: string
+  status: CommitteeTaskRow['status']; due_date: string | null; can_add_note: boolean; can_respond: boolean
+}
+export type KagawadTaskStatusEvent = { id: string; actor_name: string; details: string; created_at: string; total_count: number }
+export type KagawadTaskStatusHistoryPage = { rows: KagawadTaskStatusEvent[]; totalCount: number }
+export type KagawadTaskDueDateRequest = {
+  id: string; current_due_date: string | null; proposed_due_date: string; reason: string
+  status: 'pending' | 'approved' | 'declined'; decision_note: string; created_at: string; reviewed_at: string | null; total_count: number
+}
+export type KagawadTaskDueDateRequestPage = { rows: KagawadTaskDueDateRequest[]; totalCount: number }
+export type CommitteeTaskDueDateReview = {
+  id: string; task_id: string; task_title: string; committee_name: string
+  current_due_date: string | null; proposed_due_date: string; reason: string
+  requester_name: string; created_at: string; total_count: number
+}
+export type CommitteeTaskDueDateReviewPage = { rows: CommitteeTaskDueDateReview[]; totalCount: number }
 export type AssignableMemberRow = { user_id: string; display_name: string; role_label: string }
 export type AssignableMemberPage = { rows: AssignableMemberRow[]; totalCount: number }
 export type CommitteePage = { rows: CommitteeRow[]; totalCount: number }
@@ -65,6 +85,92 @@ export async function listCommitteeTasks(tenantId: string, committeeId: string, 
     for (const task of rows) task.assignee_name = task.assigned_to ? nameById.get(task.assigned_to) : null
   }
   return { rows, totalCount: count ?? 0 }
+}
+
+export async function listKagawadAssignedActionItems(tenantId: string, page: number, status: 'all' | CommitteeTaskRow['status'], search: string, dueFilter: 'all' | 'due_soon' | 'overdue'): Promise<KagawadAssignedActionItemPage> {
+  const { data, error } = await client().rpc('list_kagawad_assigned_action_items', {
+    p_barangay_id: tenantId, p_page: page, p_page_size: 10, p_status: status, p_search: search.trim() || null, p_due_filter: dueFilter,
+  })
+  if (error) throw new Error(error.message)
+  const rows = (data ?? []) as KagawadAssignedActionItem[]
+  return { rows, totalCount: Number(rows[0]?.total_count ?? 0) }
+}
+
+export async function listKagawadActionItemNotes(taskId: string): Promise<KagawadActionItemNote[]> {
+  const { data, error } = await client().rpc('list_kagawad_action_item_notes', { p_task_id: taskId })
+  if (error) throw new Error(error.message)
+  return (data ?? []) as KagawadActionItemNote[]
+}
+
+export async function getCommitteeTaskNotificationContext(taskId: string): Promise<CommitteeTaskNotificationContext | null> {
+  const { data, error } = await client().rpc('get_committee_task_notification_context', { p_task_id: taskId })
+  if (error) throw new Error(error.message)
+  return ((data ?? []) as CommitteeTaskNotificationContext[])[0] ?? null
+}
+
+export async function listKagawadTaskStatusHistory(taskId: string, page: number): Promise<KagawadTaskStatusHistoryPage> {
+  const { data, error } = await client().rpc('list_kagawad_task_status_history', {
+    p_task_id: taskId, p_page: page, p_page_size: 10,
+  })
+  if (error) throw new Error(error.message)
+  const rows = (data ?? []) as KagawadTaskStatusEvent[]
+  return { rows, totalCount: Number(rows[0]?.total_count ?? 0) }
+}
+
+export async function addKagawadActionItemNote(taskId: string, note: string): Promise<void> {
+  const { error } = await client().rpc('add_kagawad_action_item_note', { p_task_id: taskId, p_note: note.trim() })
+  if (error) throw new Error(error.message)
+}
+
+export async function addCommitteeTaskProgressNote(taskId: string, note: string): Promise<void> {
+  const { error } = await client().rpc('add_committee_task_progress_note', { p_task_id: taskId, p_note: note.trim() })
+  if (error) throw new Error(error.message)
+}
+
+export async function reportKagawadTaskBlocker(taskId: string, reason: string): Promise<void> {
+  const { error } = await client().rpc('report_kagawad_task_blocker', {
+    p_task_id: taskId, p_reason: reason.trim(),
+  })
+  if (error) throw new Error(error.message)
+}
+
+export async function completeKagawadTask(taskId: string, summary: string): Promise<void> {
+  const { error } = await client().rpc('complete_kagawad_task', {
+    p_task_id: taskId, p_summary: summary.trim(),
+  })
+  if (error) throw new Error(error.message)
+}
+
+export async function listKagawadTaskDueDateRequestHistory(taskId: string, page: number): Promise<KagawadTaskDueDateRequestPage> {
+  const { data, error } = await client().rpc('list_kagawad_task_due_date_request_history', {
+    p_task_id: taskId, p_page: page, p_page_size: 5,
+  })
+  if (error) throw new Error(error.message)
+  const rows = (data ?? []) as KagawadTaskDueDateRequest[]
+  return { rows, totalCount: Number(rows[0]?.total_count ?? 0) }
+}
+
+export async function requestCommitteeTaskDueDate(taskId: string, proposedDate: string, reason: string): Promise<void> {
+  const { error } = await client().rpc('request_committee_task_due_date', {
+    p_task_id: taskId, p_proposed_due_date: proposedDate, p_reason: reason.trim(),
+  })
+  if (error) throw new Error(error.message)
+}
+
+export async function listCommitteeTaskDueDateRequests(tenantId: string, page: number): Promise<CommitteeTaskDueDateReviewPage> {
+  const { data, error } = await client().rpc('list_committee_task_due_date_requests', {
+    p_barangay_id: tenantId, p_page: page, p_page_size: 20,
+  })
+  if (error) throw new Error(error.message)
+  const rows = (data ?? []) as CommitteeTaskDueDateReview[]
+  return { rows, totalCount: Number(rows[0]?.total_count ?? 0) }
+}
+
+export async function decideCommitteeTaskDueDateRequest(requestId: string, decision: 'approved' | 'declined', note: string): Promise<void> {
+  const { error } = await client().rpc('decide_committee_task_due_date_request', {
+    p_request_id: requestId, p_decision: decision, p_decision_note: note.trim(),
+  })
+  if (error) throw new Error(error.message)
 }
 
 export async function listAssignableCommitteeMembers(tenantId: string, committeeId: string, page: number, search: string): Promise<AssignableMemberPage> {
