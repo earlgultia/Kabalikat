@@ -144,11 +144,17 @@ export type KagawadActionItemSummary = {
   in_progress_action_items: number | null
   blocked_action_items: number | null
   overdue_action_items: number | null
+  due_soon_action_items: number | null
+  completed_by_me: number | null
   generated_at: string
 }
 export type KagawadMeetingParticipationSummary = {
   upcoming_meetings: number | null
   check_in_available: number | null
+  rsvp_needed: number | null
+  present_meetings: number | null
+  absent_meetings: number | null
+  excused_meetings: number | null
   generated_at: string
 }
 export type KagawadInvitedMeeting = {
@@ -159,9 +165,13 @@ export type KagawadInvitedMeeting = {
 export type MeetingInvitationResponseSummary = {
   invited_count: number; attending_count: number; unavailable_count: number; no_response_count: number
 }
+export type MeetingInvitationResponseRosterRow = {
+  user_id: string; display_name: string; role_label: string
+  response: 'attending' | 'unavailable' | null; responded_at: string | null; total_count: number
+}
 export type KagawadMeetingInvitationResponseHistory = {
   id: string; meeting_id: string; meeting_title: string; meeting_starts_at: string
-  response: 'attending' | 'unavailable'; responded_at: string; total_count: number
+  response: 'attending' | 'unavailable' | 'withdrawn'; responded_at: string; total_count: number
 }
 export type KagawadMeetingAttendanceHistory = {
   meeting_id: string; title: string; location: string; starts_at: string; ends_at: string | null
@@ -173,6 +183,7 @@ export type KagawadAttendanceCorrectionRequest = {
   reason: string; status: 'pending' | 'approved' | 'rejected'; review_note: string | null
   created_at: string; reviewed_at: string | null; total_count: number
 }
+export type AttendanceCorrectionNotificationTarget = { is_requester: boolean; page_index: number }
 export type MeetingAttendanceCorrectionQueueItem = {
   id: string; meeting_id: string; meeting_title: string; meeting_starts_at: string
   requester_name: string; requested_status: 'present' | 'absent' | 'excused'
@@ -258,18 +269,32 @@ export function listKagawadInvitedMeetings(tenantId: string, page: number) {
   })
 }
 
-export function setKagawadMeetingInvitationResponse(meetingId: string, response: 'attending' | 'unavailable') {
+export function getKagawadInvitedMeetingAgenda(meetingId: string) {
+  return rpc<string>('get_kagawad_invited_meeting_agenda', { p_meeting_id: meetingId })
+}
+
+export function setKagawadMeetingInvitationResponse(meetingId: string, response: 'attending' | 'unavailable' | 'withdrawn') {
   return rpc<void>('set_kagawad_meeting_invitation_response', { p_meeting_id: meetingId, p_response: response })
 }
 
-export function listKagawadMeetingInvitationResponseHistory(tenantId: string, page: number) {
-  return rpc<KagawadMeetingInvitationResponseHistory[]>('list_kagawad_meeting_invitation_response_history', {
+export function listKagawadMeetingInvitationResponseHistory(tenantId: string, page: number, filters: { search: string; response: string; meetingDateAfter: string; meetingDateBefore: string }) {
+  return rpc<KagawadMeetingInvitationResponseHistory[]>('search_kagawad_meeting_rsvp_history', {
     p_barangay_id: tenantId, p_page: page, p_page_size: 10,
+    p_search: filters.search.trim() || null, p_response: filters.response,
+    p_meeting_date_after: filters.meetingDateAfter || null,
+    p_meeting_date_before: filters.meetingDateBefore || null,
   })
 }
 
 export function getMeetingInvitationResponseSummary(meetingId: string) {
   return rpc<MeetingInvitationResponseSummary>('get_meeting_invitation_response_summary', { p_meeting_id: meetingId })
+}
+
+export function listMeetingInvitationResponseRoster(meetingId: string, page: number, response: string, search: string) {
+  return rpc<MeetingInvitationResponseRosterRow[]>('list_meeting_invitation_response_roster', {
+    p_meeting_id: meetingId, p_page: page, p_page_size: 20,
+    p_response: response, p_search: search.trim() || null,
+  })
 }
 
 export function listKagawadMeetingAttendanceHistory(tenantId: string, page: number) {
@@ -288,6 +313,11 @@ export function listKagawadAttendanceCorrectionRequests(tenantId: string, page: 
   return rpc<KagawadAttendanceCorrectionRequest[]>('list_kagawad_attendance_correction_requests', {
     p_barangay_id: tenantId, p_page: page, p_page_size: 10,
   })
+}
+
+export async function getAttendanceCorrectionNotificationTarget(requestId: string): Promise<AttendanceCorrectionNotificationTarget | null> {
+  const rows = await rpc<AttendanceCorrectionNotificationTarget[]>('get_attendance_correction_notification_target', { p_request_id: requestId })
+  return rows[0] ?? null
 }
 
 export function listMeetingAttendanceCorrectionQueue(tenantId: string, page: number) {

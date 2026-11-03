@@ -425,3 +425,41 @@ Migration `0233_kagawad_task_assignment_notifications.sql` alerts an active assi
 Migration `0234_searchable_kagawad_project_contributions.sql` adds a role-checked, paginated search over the signed-in Kagawad's own project updates, with text, update-type, and inclusive Manila-local date filters. The Barangay projects page exposes responsive filters in the contribution history. Apply after `0233`; hosted database behavior has not been verified.
 
 Migration `0235_fix_database_policy_and_workflow_tests.sql` restores authenticated execution of the subscription feature helper required by RLS while restricting its results to the caller's active barangay and known feature keys. It also grants only the safe columns needed to read resident correction history. Apply after `0234`; hosted database behavior has not been verified.
+
+Migration `0236_searchable_kagawad_task_assignment_history.sql` adds a private, paginated search over the signed-in Kagawad's assignment history, including tasks later transferred away or kept in archived committees. The Committees page filters by task or committee text, current task status, and inclusive Manila-local assignment dates. Apply after `0235`; hosted database behavior has not been verified.
+
+Migration `0237_kagawad_completed_work_history.sql` provides a private, paginated history of completion summaries written by the signed-in Kagawad. It remains available after reassignment or committee archival and does not expose other members' task notes. The Committees page displays the history in a responsive panel. Apply after `0236`; hosted database behavior has not been verified.
+
+Migration `0238_kagawad_completed_work_dashboard_count.sql` adds the signed-in Kagawad's own completed-work total to the private action-item dashboard summary. The count includes only completion events recorded by that Kagawad with their own summary and links to the completed-work history. Apply after `0237`; hosted database behavior has not been verified.
+
+Migration `0239_searchable_kagawad_rsvp_history.sql` adds private, paginated search to the signed-in Kagawad's RSVP history, with meeting-title, response, and inclusive Manila-local meeting-date filters. The Meetings page keeps RSVP separate from attendance and leaves the attendance-correction meeting selector independent. Apply after `0238`; hosted database behavior has not been verified.
+
+Migration `0240_kagawad_meeting_attendance_summary.sql` extends the private Kagawad meeting overview with counts of the signed-in member's own present, absent, and excused attendance records. The overview links each count to Meetings and exposes only aggregate totals. Apply after `0239`; hosted database behavior has not been verified.
+
+Migration `0241_committee_task_reassignment.sql` lets committee managers reassign action items to active members of the same committee. The permission-checked RPC preserves the assignment audit history and existing assignee notification trigger; a paginated member picker is available on each manager task card. Apply after `0240`; hosted database behavior has not been verified.
+
+Migration `0242_kagawad_pending_rsvp_dashboard_count.sql` adds a private count of upcoming invitations that still need the signed-in Kagawad's response to the meeting participation summary. The dashboard links the count to Meetings. Apply after `0241`; hosted database behavior has not been verified.
+
+Migration `0243_kagawad_upcoming_task_deadline_count.sql` adds a private count of the signed-in Kagawad's unfinished committee tasks due today or within the next seven days. The dashboard links the count to Committees. Apply after `0242`; hosted database behavior has not been verified.
+
+Migration `0244_kagawad_assignment_history_context.sql` snapshots the assigner and previous assignee on future task assignment events, backfills prior-assignee context where the event history supports it, and extends the private Kagawad assignment-history RPC with those names. Earlier events retain unknown assigner details when no reliable actor was stored. Apply after `0243`; hosted database behavior has not been verified.
+
+Migration `0245_manager_meeting_rsvp_roster.sql` adds a searchable, paginated directory of individual RSVP responses for a meeting. Only members with meeting-management or attendance-management permission can access invitee names and response times; the roster includes response-state filtering. Apply after `0244`; hosted database behavior has not been verified.
+
+Migration `0246_kagawad_project_update_notifications.sql` notifies active project managers in Community updates when an active Kagawad adds a project progress report or milestone. Notifications link to Projects, refresh per project, and are visible only while the recipient has project-management permission and active barangay access. Apply after `0245`; hosted database behavior has not been verified.
+
+Migration `0247_kagawad_project_contribution_permission.sql` separates Kagawad project contributions from project administration. Kagawads can add progress reports and milestones to active or paused projects with `project.update`; creating projects and changing project status remain controlled by `project.manage`. It also resolves project-update notification recipients from each active recipient's role permission and membership override, rather than the update author's permissions. Apply after `0246`; hosted database behavior has not been verified.
+
+Migration `0248_kagawad_invited_meeting_agenda.sql` adds an on-demand agenda lookup for a signed-in active Kagawad who is explicitly invited to that upcoming scheduled meeting. The invitation card loads the agenda only when opened, and the RPC does not expose other meetings or invitees. Apply after `0247`; hosted database behavior has not been verified.
+
+Migration `0249_private_meeting_record_drafts.sql` limits draft meeting minutes and unapproved resolutions to members with `meeting.manage`. Other meeting readers and invitees can continue to read only reviewed minutes and approved resolutions. Meeting record query keys include the signed-in user to avoid reusing another account's cached records. Apply after `0248`; hosted database behavior has not been verified.
+
+Migration `0250_kagawad_meeting_rsvp_withdrawal.sql` lets an invited Kagawad withdraw a response before a scheduled meeting starts. The active RSVP is removed, a `withdrawn` history event is retained, and the searchable RSVP history can filter for withdrawals. The meeting summary and Kagawad dashboard counts refresh after a response change. Apply after `0249`; hosted database behavior has not been verified.
+
+Migration `0251_barangay_project_update_responses.sql` adds a private response thread to barangay project updates. Project managers can respond to another member's update, while the author and project managers can read the thread; the author receives a Community update notification. Apply after `0250` before using this workflow; hosted database behavior has not been verified.
+
+Migration `0252_paginated_barangay_project_update_responses.sql` adds a bounded, permission-checked page RPC for project update replies. Apply after `0251` before using response pagination; hosted database behavior has not been verified.
+
+Migration `0253_project_response_notification_target.sql` adds an author-only context lookup used by manager-reply notifications to resolve the project and current project, update, and response pages. Apply after `0252` to enable direct notification navigation; hosted database behavior has not been verified.
+
+Migration `0254_attendance_correction_notification_target.sql` resolves attendance correction notices to the requester's own paginated history or an authorized reviewer's pending queue. The lookup enforces active membership and requester or attendance-management access. Apply after `0253` before using direct navigation; hosted database behavior has not been verified.

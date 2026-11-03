@@ -16,9 +16,9 @@ export function MeetingRecordsPanel({ tenantId, meetingId, meetingTitle, locatio
   attendance: AttendanceRow[]; attendanceLoading: boolean; members: MemberRow[]; canManage: boolean
 }) {
   const queryClient = useQueryClient()
-  const minutes = useQuery({ queryKey: ['meeting-minutes', meetingId], queryFn: () => getMeetingMinutes(meetingId) })
+  const minutes = useQuery({ queryKey: ['meeting-minutes', meetingId, currentUserId], queryFn: () => getMeetingMinutes(meetingId) })
   const [resolutionPage, setResolutionPage] = useState(0)
-  const resolutions = useQuery({ queryKey: ['meeting-resolutions', meetingId, resolutionPage], queryFn: () => listMeetingResolutionPage(meetingId, resolutionPage) })
+  const resolutions = useQuery({ queryKey: ['meeting-resolutions', meetingId, currentUserId, resolutionPage], queryFn: () => listMeetingResolutionPage(meetingId, resolutionPage) })
   const [minutesText, setMinutesText] = useState('')
   const [resolutionTitle, setResolutionTitle] = useState('')
   const [resolutionText, setResolutionText] = useState('')
@@ -48,8 +48,8 @@ export function MeetingRecordsPanel({ tenantId, meetingId, meetingTitle, locatio
 
   async function refresh() {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['meeting-minutes', meetingId] }),
-      queryClient.invalidateQueries({ queryKey: ['meeting-resolutions', meetingId] }),
+      queryClient.invalidateQueries({ queryKey: ['meeting-minutes', meetingId, currentUserId] }),
+      queryClient.invalidateQueries({ queryKey: ['meeting-resolutions', meetingId, currentUserId] }),
     ])
   }
 
@@ -123,7 +123,7 @@ export function MeetingRecordsPanel({ tenantId, meetingId, meetingTitle, locatio
             {minutes.data?.status === 'draft' && minutes.data.drafted_by === currentUserId && <small className="field-hint">A different authorized meeting manager must review these minutes.</small>}
             {minutes.data?.status === 'reviewed' && <small className="field-hint">Save changes as a draft before asking another manager to review them.</small>}
             {!minutes.data && <small className="field-hint">Save a draft first. Another authorized meeting manager can then review it.</small>}</>
-            : minutes.data ? <p className="meeting-record-content">{minutes.data.content}</p> : <p className="field-hint">Minutes have not been added yet.</p>}
+            : minutes.data ? <p className="meeting-record-content">{minutes.data.content}</p> : <p className="field-hint">Reviewed meeting minutes are not available yet.</p>}
           {minutes.data?.updated_at && <small className="field-hint">Last updated {formatDateTime(minutes.data.updated_at)}</small>}
         </>}
       </section>
@@ -139,7 +139,7 @@ export function MeetingRecordsPanel({ tenantId, meetingId, meetingTitle, locatio
           <small className="field-hint">Added {formatDateTime(item.created_at)}{item.approved_at ? ` · Approved ${formatDateTime(item.approved_at)}` : ''}</small>
           {canManage && item.status === 'draft' && item.proposed_by !== currentUserId && <button className="text-action" disabled={busy} onClick={() => void approve(item.id)}>Approve resolution</button>}
           {canManage && item.status === 'draft' && item.proposed_by === currentUserId && <small className="field-hint">Awaiting approval from another authorized meeting manager.</small>}
-        </li>)}</ul> : <p className="field-hint">No resolutions have been recorded.</p>}
+        </li>)}</ul> : <p className="field-hint">{canManage ? 'No resolutions have been recorded.' : 'No approved resolutions are available yet.'}</p>}
         {resolutions.data && resolutions.data.total > MEETING_RESOLUTION_PAGE_SIZE && <nav className="ops-form-actions" aria-label="Resolution pages"><button type="button" className="button outline" disabled={resolutionPage === 0 || resolutions.isFetching} onClick={() => setResolutionPage((current) => Math.max(0, current - 1))}><ChevronLeft size={15} />Previous</button><span className="field-hint">Page {resolutionPage + 1} of {Math.ceil(resolutions.data.total / MEETING_RESOLUTION_PAGE_SIZE)} · {resolutions.data.total.toLocaleString()} resolutions</span><button type="button" className="button outline" disabled={(resolutionPage + 1) * MEETING_RESOLUTION_PAGE_SIZE >= resolutions.data.total || resolutions.isFetching} onClick={() => setResolutionPage((current) => current + 1)}>Next<ChevronRight size={15} /></button></nav>}
       </section>
     </div>

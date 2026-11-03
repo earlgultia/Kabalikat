@@ -13,9 +13,12 @@ export type KagawadAssignedActionItem = CommitteeTaskRow & { committee_name: str
 export type KagawadAssignedActionItemPage = { rows: KagawadAssignedActionItem[]; totalCount: number }
 export type KagawadTaskAssignmentEvent = {
   id: string; task_id: string; committee_name: string; task_title: string
-  task_status: CommitteeTaskRow['status']; due_date: string | null; assigned_at: string; total_count: number
+  task_status: CommitteeTaskRow['status']; due_date: string | null; assigned_at: string
+  assigned_by_name: string | null; previous_assignee_name: string | null; total_count: number
 }
 export type KagawadTaskAssignmentHistoryPage = { rows: KagawadTaskAssignmentEvent[]; totalCount: number }
+export type KagawadCompletedWork = { id: string; task_id: string; task_title: string; committee_name: string; summary: string; completed_at: string; total_count: number }
+export type KagawadCompletedWorkPage = { rows: KagawadCompletedWork[]; totalCount: number }
 export type KagawadActionItemNote = { id: string; note: string; author_name: string; created_at: string }
 export type CommitteeTaskNotificationContext = {
   id: string; committee_id: string; committee_name: string; title: string; description: string
@@ -115,13 +118,24 @@ export async function getKagawadAgendaTasks(tenantId: string): Promise<KagawadAs
     .slice(0, 4)
 }
 
-export async function listKagawadTaskAssignmentHistory(tenantId: string, page: number): Promise<KagawadTaskAssignmentHistoryPage> {
-  const { data, error } = await client().rpc('list_kagawad_task_assignment_history', {
+export async function listKagawadTaskAssignmentHistory(tenantId: string, page: number, filters: { search: string; status: string; assignedAfter: string; assignedBefore: string }): Promise<KagawadTaskAssignmentHistoryPage> {
+  const { data, error } = await client().rpc('search_kagawad_task_assignment_history', {
     p_barangay_id: tenantId, p_page: page, p_page_size: 10,
+    p_search: filters.search.trim() || null, p_status: filters.status,
+    p_assigned_after: filters.assignedAfter || null, p_assigned_before: filters.assignedBefore || null,
   })
   if (error) throw new Error(error.message)
   const rows = (data ?? []) as KagawadTaskAssignmentEvent[]
   return { rows, totalCount: Number(rows[0]?.total_count ?? 0) }
+}
+
+export async function listKagawadCompletedWork(tenantId: string, page: number): Promise<KagawadCompletedWorkPage> {
+  const { data, error } = await client().rpc('list_kagawad_completed_work_history', {
+    p_barangay_id: tenantId, p_page: page, p_page_size: 10,
+  })
+  if (error) throw new Error(error.message)
+  const rows = (data ?? []) as KagawadCompletedWork[]
+  return { rows: rows.map((row) => ({ ...row, total_count: Number(row.total_count) })), totalCount: Number(rows[0]?.total_count ?? 0) }
 }
 
 export async function listKagawadActionItemNotes(taskId: string): Promise<KagawadActionItemNote[]> {
@@ -211,6 +225,16 @@ export async function listAssignableCommitteeMembers(tenantId: string, committee
   return { rows, totalCount: Number(rows[0]?.total_count ?? 0) }
 }
 
+export async function listActiveCommitteeMembers(tenantId: string, committeeId: string, page: number, search: string): Promise<AssignableMemberPage> {
+  const { data, error } = await client().rpc('list_committee_active_member_page', {
+    p_barangay_id: tenantId, p_committee_id: committeeId, p_page: page,
+    p_page_size: COMMITTEE_MEMBER_PAGE_SIZE, p_search: search.trim() || null,
+  })
+  if (error) throw new Error(error.message)
+  const rows = (data ?? []) as (AssignableMemberRow & { total_count: number })[]
+  return { rows, totalCount: Number(rows[0]?.total_count ?? 0) }
+}
+
 function rpc<T>(name: string, args: Record<string, unknown>) {
   return client().rpc(name, args).then(({ data, error }) => {
     if (error) throw new Error(error.message)
@@ -233,4 +257,8 @@ export function createCommitteeTask(input: { committeeId: string; title: string;
 
 export function updateCommitteeTaskStatus(taskId: string, status: CommitteeTaskRow['status']) {
   return rpc<void>('update_committee_task_status', { p_task_id: taskId, p_status: status })
+}
+
+export function reassignCommitteeTask(taskId: string, userId: string) {
+  return rpc<void>('reassign_committee_task', { p_task_id: taskId, p_assigned_to: userId })
 }

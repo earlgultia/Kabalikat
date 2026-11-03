@@ -1,7 +1,10 @@
 import { supabase } from '../../lib/supabase'
 
 export type BarangayProject = { id: string; title: string; description: string; planned_start: string | null; planned_end: string | null; status: 'planned' | 'active' | 'paused' | 'completed' | 'cancelled'; created_at: string }
-export type BarangayProjectUpdate = { id: string; project_id: string; update_type: 'milestone' | 'progress'; title: string; details: string; created_at: string }
+export type BarangayProjectUpdate = { id: string; project_id: string; update_type: 'milestone' | 'progress'; title: string; details: string; created_at: string; is_own_update: boolean }
+export type BarangayProjectUpdateResponse = { id: string; author_name: string; content: string; created_at: string }
+export type BarangayProjectUpdateResponsePage = { rows: BarangayProjectUpdateResponse[]; totalCount: number }
+export type ProjectResponseNotificationTarget = { project_id: string; project_page: number; update_page: number; response_page: number }
 export type BarangayProjectPage = { rows: BarangayProject[]; totalCount: number }
 export type BarangayProjectUpdatePage = { rows: BarangayProjectUpdate[]; totalCount: number }
 export type KagawadProjectContribution = {
@@ -42,6 +45,22 @@ export async function listBarangayProjectUpdates(projectId: string, page: number
   if (error) throw new Error(error.message)
   const rows = (data ?? []) as Array<BarangayProjectUpdate & { total_count: number }>
   return { rows, totalCount: Number(rows[0]?.total_count ?? 0) }
+}
+
+export async function listBarangayProjectUpdateResponses(updateId: string, page: number): Promise<BarangayProjectUpdateResponsePage> {
+  const rows = await rpc<Array<BarangayProjectUpdateResponse & { total_count: number }>>('list_barangay_project_update_response_page', {
+    p_update_id: updateId, p_page: page, p_page_size: 10,
+  })
+  return { rows, totalCount: Number(rows[0]?.total_count ?? 0) }
+}
+
+export function addBarangayProjectUpdateResponse(updateId: string, content: string): Promise<string> {
+  return rpc<string>('add_barangay_project_update_response', { p_update_id: updateId, p_content: content })
+}
+
+export async function getProjectResponseNotificationTarget(updateId: string): Promise<ProjectResponseNotificationTarget | null> {
+  const rows = await rpc<ProjectResponseNotificationTarget[]>('get_my_project_response_notification_target', { p_update_id: updateId })
+  return rows[0] ?? null
 }
 
 export async function listKagawadProjectContributions(tenantId: string, page: number, filters: { search: string; updateType: string; createdAfter: string; createdBefore: string }) {

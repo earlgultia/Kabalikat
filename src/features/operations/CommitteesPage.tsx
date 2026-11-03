@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
 import { CheckCircle2, ChevronLeft, ChevronRight, History, MessageSquareText, UsersRound } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
-import { addCommitteeTaskProgressNote, addKagawadActionItemNote, assignCommitteeMember, completeKagawadTask, COMMITTEE_CONTENT_PAGE_SIZE, COMMITTEE_MEMBER_PAGE_SIZE, COMMITTEE_PAGE_SIZE, createCommittee, createCommitteeTask, decideCommitteeTaskDueDateRequest, getCommitteeTaskNotificationContext, listAssignableCommitteeMembers, listCommitteeMembers, listCommittees, listCommitteeTasks, listCommitteeTaskDueDateRequests, listKagawadActionItemNotes, listKagawadAssignedActionItems, listKagawadTaskAssignmentHistory, listKagawadTaskDueDateRequestHistory, listKagawadTaskStatusHistory, requestCommitteeTaskDueDate, reportKagawadTaskBlocker, updateCommitteeTaskStatus, type CommitteeTaskDueDateReview, type CommitteeTaskRow } from './committee-data'
+import { addCommitteeTaskProgressNote, addKagawadActionItemNote, assignCommitteeMember, completeKagawadTask, COMMITTEE_CONTENT_PAGE_SIZE, COMMITTEE_MEMBER_PAGE_SIZE, COMMITTEE_PAGE_SIZE, createCommittee, createCommitteeTask, decideCommitteeTaskDueDateRequest, getCommitteeTaskNotificationContext, listActiveCommitteeMembers, listAssignableCommitteeMembers, listCommitteeMembers, listCommittees, listCommitteeTasks, listCommitteeTaskDueDateRequests, listKagawadActionItemNotes, listKagawadAssignedActionItems, listKagawadCompletedWork, listKagawadTaskAssignmentHistory, listKagawadTaskDueDateRequestHistory, listKagawadTaskStatusHistory, reassignCommitteeTask, requestCommitteeTaskDueDate, reportKagawadTaskBlocker, updateCommitteeTaskStatus, type CommitteeTaskDueDateReview, type CommitteeTaskRow } from './committee-data'
 import { hasPermission } from './data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 
@@ -210,8 +210,51 @@ function CommitteeMemberPicker({ tenantId, committeeId, busy, onAssign }: {
   </details>
 }
 
+function CommitteeTaskAssigneeEditor({ tenantId, committeeId, task, busy, onReassign }: {
+  tenantId: string; committeeId: string; task: CommitteeTaskRow; busy: boolean
+  onReassign: (taskId: string, userId: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [page, setPage] = useState(0)
+  const [searchInput, setSearchInput] = useState('')
+  const [search, setSearch] = useState('')
+  const [assigneeId, setAssigneeId] = useState(task.assigned_to ?? '')
+  const candidates = useQuery({
+    queryKey: ['committee-active-member-picker', tenantId, committeeId, page, search],
+    queryFn: () => listActiveCommitteeMembers(tenantId, committeeId, page, search), enabled: open,
+  })
+  useEffect(() => { setAssigneeId(task.assigned_to ?? '') }, [task.assigned_to])
+  const pages = Math.max(1, Math.ceil((candidates.data?.totalCount ?? 0) / COMMITTEE_MEMBER_PAGE_SIZE))
+  const currentPage = Math.min(page, pages - 1)
+  useEffect(() => { if (page !== currentPage) setPage(currentPage) }, [currentPage, page])
+  const currentAssignee = task.assigned_to && !candidates.data?.rows.some((member) => member.user_id === task.assigned_to)
+    ? <option value={task.assigned_to}>{task.assignee_name || 'Current assignee'} (current)</option>
+    : null
+
+  return <details className="committee-task-reassign" onToggle={(event) => setOpen(event.currentTarget.open)}>
+    <summary>Change assignee</summary>
+    {open && <>
+      <form className="committee-member-search" onSubmit={(event) => { event.preventDefault(); setPage(0); setSearch(searchInput.trim()) }}>
+        <label>Find an active committee member<input aria-label={`Search assignees for ${task.title}`} maxLength={100} placeholder="Name or role" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} /></label>
+        <button className="button outline" type="submit">Search</button>
+      </form>
+      {candidates.isPending && <p className="field-hint" role="status">Loading active members…</p>}
+      {candidates.error && <ErrorNotice message="Active committee members could not be loaded." onRetry={() => void candidates.refetch()} retrying={candidates.isFetching} />}
+      {candidates.data && <>
+        {candidates.data.totalCount ? <>
+          <label className="committee-task-assignee-label">New assignee<select aria-label={`New assignee for ${task.title}`} value={assigneeId} disabled={busy || candidates.isFetching} onChange={(event) => setAssigneeId(event.target.value)}>
+            <option value="" disabled>Select an active member</option>{currentAssignee}{candidates.data.rows.map((member) => <option key={member.user_id} value={member.user_id}>{member.display_name} · {member.role_label}</option>)}
+          </select></label>
+          <button type="button" className="button outline" disabled={busy || !assigneeId || assigneeId === task.assigned_to} onClick={() => onReassign(task.id, assigneeId)}>{busy ? 'Saving…' : 'Save assignee'}</button>
+          <div className="committee-picker-pagination"><span>Page {currentPage + 1} of {pages} · {candidates.data.totalCount} active members</span><div><button type="button" className="button outline" disabled={currentPage === 0 || candidates.isFetching} onClick={() => setPage(currentPage - 1)}>Previous</button><button type="button" className="button outline" disabled={currentPage + 1 >= pages || candidates.isFetching} onClick={() => setPage(currentPage + 1)}>Next</button></div></div>
+        </> : <p className="field-hint">No active members are assigned to this committee.</p>}
+      </>}
+    </>}
+  </details>
+}
+
 function CommitteeWorkspaceCard({
-  tenantId, committee, canManage, currentUserId, busy, onAssign, onAddTask, onChangeTask,
+  tenantId, committee, canManage, currentUserId, busy, onAssign, onAddTask, onChangeTask, onReassignTask,
 }: {
   tenantId: string
   committee: { id: string; name: string; description: string }
@@ -221,6 +264,7 @@ function CommitteeWorkspaceCard({
   onAssign: (event: FormEvent<HTMLFormElement>) => void
   onAddTask: (event: FormEvent<HTMLFormElement>) => void
   onChangeTask: (task: CommitteeTaskRow, status: CommitteeTaskRow['status']) => void
+  onReassignTask: (taskId: string, userId: string) => void
 }) {
   const [membersOpen, setMembersOpen] = useState(false)
   const [tasksOpen, setTasksOpen] = useState(false)
@@ -260,7 +304,7 @@ function CommitteeWorkspaceCard({
       {tasksOpen && tasks.isPending && <p className="field-hint" role="status">Loading action items…</p>}
       {tasksOpen && tasks.error && <p className="ops-error" role="alert">Unable to load committee action items.</p>}
       {tasksOpen && tasks.data && <>
-        {committeeTasks.length ? <ul>{committeeTasks.map((task) => <li key={task.id}><div><strong>{task.title}</strong>{task.description && <p>{task.description}</p>}<small>{task.assigned_to ? `Assigned to ${task.assignee_name || (task.assigned_to === currentUserId ? 'You' : 'Assigned member')}` : 'Unassigned'}{task.due_date ? ` · Due ${new Date(`${task.due_date}T00:00:00`).toLocaleDateString()}` : ''}</small>{canManage && task.assigned_to && <><button type="button" className="text-action kagawad-task-note-toggle" aria-expanded={progressNotesTaskId === task.id} onClick={() => setProgressNotesTaskId((current) => current === task.id ? '' : task.id)}><MessageSquareText size={14} />{progressNotesTaskId === task.id ? 'Hide progress notes' : 'View progress notes'}</button>{progressNotesTaskId === task.id && <CommitteeTaskNotesViewer taskId={task.id} />}</>}</div><div className="committee-task-status"><StatusPill status={task.status} />{(canManage || task.assigned_to === currentUserId) && <select aria-label={`Update status for ${task.title}`} value={task.status} disabled={busy} onChange={(event) => onChangeTask(task, event.target.value as CommitteeTaskRow['status'])}><option value="open">Open</option><option value="in_progress">In progress</option><option value="blocked">Blocked</option><option value="completed">Completed</option></select>}</div></li>)}</ul> : <p>No action items yet.</p>}
+        {committeeTasks.length ? <ul>{committeeTasks.map((task) => <li key={task.id}><div><strong>{task.title}</strong>{task.description && <p>{task.description}</p>}<small>{task.assigned_to ? `Assigned to ${task.assignee_name || (task.assigned_to === currentUserId ? 'You' : 'Assigned member')}` : 'Unassigned'}{task.due_date ? ` · Due ${new Date(`${task.due_date}T00:00:00`).toLocaleDateString()}` : ''}</small>{canManage && task.status !== 'completed' && <CommitteeTaskAssigneeEditor tenantId={tenantId} committeeId={committee.id} task={task} busy={busy} onReassign={onReassignTask} />}{canManage && task.assigned_to && <><button type="button" className="text-action kagawad-task-note-toggle" aria-expanded={progressNotesTaskId === task.id} onClick={() => setProgressNotesTaskId((current) => current === task.id ? '' : task.id)}><MessageSquareText size={14} />{progressNotesTaskId === task.id ? 'Hide progress notes' : 'View progress notes'}</button>{progressNotesTaskId === task.id && <CommitteeTaskNotesViewer taskId={task.id} />}</>}</div><div className="committee-task-status"><StatusPill status={task.status} />{(canManage || task.assigned_to === currentUserId) && <select aria-label={`Update status for ${task.title}`} value={task.status} disabled={busy} onChange={(event) => onChangeTask(task, event.target.value as CommitteeTaskRow['status'])}><option value="open">Open</option><option value="in_progress">In progress</option><option value="blocked">Blocked</option><option value="completed">Completed</option></select>}</div></li>)}</ul> : <p>No action items yet.</p>}
         {taskPages > 1 && <div className="committee-picker-pagination"><span>Page {currentTaskPage + 1} of {taskPages} · {taskTotal} action items</span><div><button type="button" className="button outline" disabled={currentTaskPage === 0 || tasks.isFetching} onClick={() => setTaskPage(currentTaskPage - 1)}>Previous</button><button type="button" className="button outline" disabled={currentTaskPage + 1 >= taskPages || tasks.isFetching} onClick={() => setTaskPage(currentTaskPage + 1)}>Next</button></div></div>}
       </>}
       <form className="committee-task-form" onSubmit={onAddTask}><label>Action item<input name="title" placeholder="Prepare a community proposal" maxLength={180} required /></label><label>Details<textarea name="description" maxLength={2000} /></label><div className="committee-task-form-row">{canManage && <label>Assign to<select name="assignedTo" defaultValue=""><option value="">Unassigned</option>{committeeMembers.map((member) => <option key={member.user_id} value={member.user_id}>{member.profile?.display_name || 'Assigned member'}</option>)}</select></label>}{!canManage && <input type="hidden" name="assignedTo" value={currentUserId} />}<label>Due date<input type="date" name="dueDate" /></label><button className="button primary" disabled={busy}>Add action item</button></div></form>
@@ -275,6 +319,9 @@ export function CommitteesPage({ focusId, onFocusHandled }: { focusId?: string; 
   const [page, setPage] = useState(0)
   const [myTaskPage, setMyTaskPage] = useState(0)
   const [taskAssignmentHistoryPage, setTaskAssignmentHistoryPage] = useState(0)
+  const [completedWorkPage, setCompletedWorkPage] = useState(0)
+  const [taskHistoryDraft, setTaskHistoryDraft] = useState({ search: '', status: 'all', assignedAfter: '', assignedBefore: '' })
+  const [taskHistoryFilters, setTaskHistoryFilters] = useState({ search: '', status: 'all', assignedAfter: '', assignedBefore: '' })
   const [myTaskStatus, setMyTaskStatus] = useState<'all' | CommitteeTaskRow['status']>('all')
   const [myTaskDueFilter, setMyTaskDueFilter] = useState<'all' | 'due_soon' | 'overdue'>('all')
   const [myTaskSearchInput, setMyTaskSearchInput] = useState('')
@@ -285,7 +332,7 @@ export function CommitteesPage({ focusId, onFocusHandled }: { focusId?: string; 
   const [taskActionReason, setTaskActionReason] = useState('')
   const [focusedTaskId, setFocusedTaskId] = useState('')
   const isKagawad = membership?.role?.key === 'kagawad'
-  useEffect(() => { setPage(0); setMyTaskPage(0); setTaskAssignmentHistoryPage(0); setMyTaskStatus('all'); setMyTaskDueFilter('all'); setMyTaskSearch(''); setMyTaskSearchInput(''); setTaskNotesFor(''); setTaskNoteDraft('') }, [tenantId])
+  useEffect(() => { setPage(0); setMyTaskPage(0); setTaskAssignmentHistoryPage(0); setCompletedWorkPage(0); setTaskHistoryDraft({ search: '', status: 'all', assignedAfter: '', assignedBefore: '' }); setTaskHistoryFilters({ search: '', status: 'all', assignedAfter: '', assignedBefore: '' }); setMyTaskStatus('all'); setMyTaskDueFilter('all'); setMyTaskSearch(''); setMyTaskSearchInput(''); setTaskNotesFor(''); setTaskNoteDraft('') }, [tenantId])
   useEffect(() => {
     if (!focusId) return
     setFocusedTaskId(focusId)
@@ -294,7 +341,8 @@ export function CommitteesPage({ focusId, onFocusHandled }: { focusId?: string; 
   const canManage = useQuery({ queryKey: ['permission', tenantId, 'committee.manage'], queryFn: () => hasPermission(tenantId, 'committee.manage'), enabled: Boolean(tenantId) })
   const committees = useQuery({ queryKey: ['committees', tenantId, page], queryFn: () => listCommittees(tenantId, page), enabled: Boolean(tenantId) })
   const myTasks = useQuery({ queryKey: ['kagawad-my-action-items', tenantId, myTaskPage, myTaskStatus, myTaskDueFilter, myTaskSearch], queryFn: () => listKagawadAssignedActionItems(tenantId, myTaskPage, myTaskStatus, myTaskSearch, myTaskDueFilter), enabled: Boolean(tenantId && isKagawad) })
-  const taskAssignmentHistory = useQuery({ queryKey: ['kagawad-task-assignment-history', tenantId, taskAssignmentHistoryPage], queryFn: () => listKagawadTaskAssignmentHistory(tenantId, taskAssignmentHistoryPage), enabled: Boolean(tenantId && isKagawad) })
+  const taskAssignmentHistory = useQuery({ queryKey: ['kagawad-task-assignment-history', tenantId, taskAssignmentHistoryPage, taskHistoryFilters], queryFn: () => listKagawadTaskAssignmentHistory(tenantId, taskAssignmentHistoryPage, taskHistoryFilters), enabled: Boolean(tenantId && isKagawad) })
+  const completedWork = useQuery({ queryKey: ['kagawad-completed-work', tenantId, completedWorkPage], queryFn: () => listKagawadCompletedWork(tenantId, completedWorkPage), enabled: Boolean(tenantId && isKagawad) })
   const taskNotes = useQuery({ queryKey: ['kagawad-action-item-notes', tenantId, taskNotesFor], queryFn: () => listKagawadActionItemNotes(taskNotesFor), enabled: Boolean(tenantId && taskNotesFor && isKagawad) })
   const myTaskPages = Math.ceil((myTasks.data?.totalCount ?? 0) / 10)
   const totalPages = Math.ceil((committees.data?.totalCount ?? 0) / COMMITTEE_PAGE_SIZE)
@@ -311,6 +359,7 @@ export function CommitteesPage({ focusId, onFocusHandled }: { focusId?: string; 
       queryClient.invalidateQueries({ queryKey: ['committee-member-picker', tenantId] }),
       queryClient.invalidateQueries({ queryKey: ['kagawad-my-action-items', tenantId] }),
       queryClient.invalidateQueries({ queryKey: ['kagawad-task-assignment-history', tenantId] }),
+      queryClient.invalidateQueries({ queryKey: ['kagawad-completed-work', tenantId] }),
       queryClient.invalidateQueries({ queryKey: ['kagawad-action-item-notes', tenantId, taskNotesFor] }),
     ])
   }
@@ -351,6 +400,16 @@ export function CommitteesPage({ focusId, onFocusHandled }: { focusId?: string; 
     setBusy(true); setError(''); setMessage('')
     try { await updateCommitteeTaskStatus(task.id, status); await refresh(); setMessage('Action item status updated.') }
     catch (err) { setError(err instanceof Error ? err.message : 'Unable to update the action item.') }
+    finally { setBusy(false) }
+  }
+
+  async function reassignTask(taskId: string, userId: string) {
+    setBusy(true); setError(''); setMessage('')
+    try {
+      await reassignCommitteeTask(taskId, userId)
+      await refresh()
+      setMessage('Action item reassigned and assignment history updated.')
+    } catch (err) { setError(err instanceof Error ? err.message : 'Unable to reassign this action item.') }
     finally { setBusy(false) }
   }
 
@@ -399,15 +458,30 @@ export function CommitteesPage({ focusId, onFocusHandled }: { focusId?: string; 
     {focusedTaskId && <FocusedCommitteeTask taskId={focusedTaskId} onClose={() => setFocusedTaskId('')} />}
     {canManage.data && tenantId && <CommitteeDueDateReviewQueue tenantId={tenantId} />}
     {Boolean(tenantId) && !canManage.isPending && !canManage.error && !canManage.data && <div className="ops-panel archive-access"><UsersRound size={20} /><div><strong>Committee access is assignment-based</strong><p>You will see committees after an authorized administrator assigns you to one.</p></div></div>}
+    {isKagawad && <section className="ops-panel kagawad-completed-work" aria-labelledby="kagawad-completed-work-title">
+      <div className="ops-panel-heading"><div><h2 id="kagawad-completed-work-title">My completed work</h2><p>Completion summaries you submitted, including tasks later transferred or archived.</p></div><CheckCircle2 size={19} /></div>
+      {completedWork.isPending ? <LoadingNotice compact /> : completedWork.error ? <ErrorNotice message="Your completed-work history could not be loaded." onRetry={() => void completedWork.refetch()} retrying={completedWork.isFetching} /> : completedWork.data?.rows.length ? <>
+        <ol className="kagawad-completed-work-list">{completedWork.data.rows.map((entry) => <li key={entry.id}><div><strong>{entry.task_title}</strong><small>{entry.committee_name} · Completed {new Date(entry.completed_at).toLocaleString()}</small></div><p>{entry.summary}</p></li>)}</ol>
+        {completedWork.data.totalCount > 10 && <nav className="committee-picker-pagination" aria-label="Completed-work history pages"><span>Page {completedWorkPage + 1} of {Math.ceil(completedWork.data.totalCount / 10)} · {completedWork.data.totalCount} completions</span><div><button type="button" className="button outline" disabled={completedWorkPage === 0 || completedWork.isFetching} onClick={() => setCompletedWorkPage((current) => current - 1)}>Previous</button><button type="button" className="button outline" disabled={(completedWorkPage + 1) * 10 >= completedWork.data.totalCount || completedWork.isFetching} onClick={() => setCompletedWorkPage((current) => current + 1)}>Next</button></div></nav>}
+      </> : <p className="field-hint">Your task completion summaries will appear here.</p>}
+    </section>}
     {isKagawad && <section className="ops-panel kagawad-invited-meetings" aria-labelledby="kagawad-task-assignment-history-title">
       <div className="ops-panel-heading"><div><h2 id="kagawad-task-assignment-history-title">Task assignment history</h2><p>Assignments recorded for you, including completed work and tasks later transferred away.</p></div><History size={19} /></div>
+      <form className="kagawad-assignment-history-filters" onSubmit={(event) => { event.preventDefault(); if (taskHistoryDraft.assignedAfter && taskHistoryDraft.assignedBefore && taskHistoryDraft.assignedAfter > taskHistoryDraft.assignedBefore) return; setTaskAssignmentHistoryPage(0); setTaskHistoryFilters({ ...taskHistoryDraft, search: taskHistoryDraft.search.trim() }) }}>
+        <label>Search task or committee<input type="search" maxLength={100} placeholder="Task or committee name" value={taskHistoryDraft.search} onChange={(event) => setTaskHistoryDraft((current) => ({ ...current, search: event.target.value }))} /></label>
+        <label>Status<select value={taskHistoryDraft.status} onChange={(event) => setTaskHistoryDraft((current) => ({ ...current, status: event.target.value }))}><option value="all">All statuses</option><option value="open">Open</option><option value="in_progress">In progress</option><option value="blocked">Blocked</option><option value="completed">Completed</option></select></label>
+        <label>Assigned on or after<input type="date" max={taskHistoryDraft.assignedBefore || undefined} value={taskHistoryDraft.assignedAfter} onChange={(event) => setTaskHistoryDraft((current) => ({ ...current, assignedAfter: event.target.value }))} /></label>
+        <label>Assigned on or before<input type="date" min={taskHistoryDraft.assignedAfter || undefined} value={taskHistoryDraft.assignedBefore} onChange={(event) => setTaskHistoryDraft((current) => ({ ...current, assignedBefore: event.target.value }))} /></label>
+        <div className="kagawad-assignment-history-actions"><button className="button primary" type="submit">Apply filters</button><button className="button outline" type="button" onClick={() => { const empty = { search: '', status: 'all', assignedAfter: '', assignedBefore: '' }; setTaskHistoryDraft(empty); setTaskHistoryFilters(empty); setTaskAssignmentHistoryPage(0) }}>Clear</button></div>
+      </form>
+      {taskHistoryDraft.assignedAfter && taskHistoryDraft.assignedBefore && taskHistoryDraft.assignedAfter > taskHistoryDraft.assignedBefore && <p className="account-security-error" role="alert">The start date must be on or before the end date.</p>}
       {taskAssignmentHistory.isPending ? <LoadingNotice compact /> : taskAssignmentHistory.error ? <ErrorNotice message="Your task assignment history could not be loaded." onRetry={() => void taskAssignmentHistory.refetch()} retrying={taskAssignmentHistory.isFetching} /> : taskAssignmentHistory.data?.rows.length ? <>
         <ul className="kagawad-invited-meeting-list">{taskAssignmentHistory.data.rows.map((entry) => <li key={entry.id}>
-          <div><strong>{entry.task_title}</strong><small>{entry.committee_name}{entry.due_date ? ` · Due ${new Date(`${entry.due_date}T00:00:00`).toLocaleDateString()}` : ' · No due date'}</small><small>Assigned {new Date(entry.assigned_at).toLocaleString()}</small></div>
+          <div><strong>{entry.task_title}</strong><small>{entry.committee_name}{entry.due_date ? ` · Due ${new Date(`${entry.due_date}T00:00:00`).toLocaleDateString()}` : ' · No due date'}</small><small>Assigned {new Date(entry.assigned_at).toLocaleString()}{entry.assigned_by_name ? ` by ${entry.assigned_by_name}` : ''}</small>{entry.previous_assignee_name ? <small>Transferred from {entry.previous_assignee_name}</small> : !entry.assigned_by_name && <small>Assigner details were not recorded for this earlier entry.</small>}</div>
           <StatusPill status={entry.task_status} />
         </li>)}</ul>
         {taskAssignmentHistory.data.totalCount > 10 && <div className="committee-picker-pagination"><span>Page {taskAssignmentHistoryPage + 1} of {Math.ceil(taskAssignmentHistory.data.totalCount / 10)} · {taskAssignmentHistory.data.totalCount} assignments</span><div><button type="button" className="button outline" disabled={taskAssignmentHistoryPage === 0 || taskAssignmentHistory.isFetching} onClick={() => setTaskAssignmentHistoryPage((current) => current - 1)}>Previous</button><button type="button" className="button outline" disabled={(taskAssignmentHistoryPage + 1) * 10 >= taskAssignmentHistory.data.totalCount || taskAssignmentHistory.isFetching} onClick={() => setTaskAssignmentHistoryPage((current) => current + 1)}>Next</button></div></div>}
-      </> : <p className="field-hint">No task assignments have been recorded yet.</p>}
+      </> : <p className="field-hint">{taskHistoryFilters.search || taskHistoryFilters.status !== 'all' || taskHistoryFilters.assignedAfter || taskHistoryFilters.assignedBefore ? 'No task assignments match these filters.' : 'No task assignments have been recorded yet.'}</p>}
     </section>}
     {isKagawad && <section className="ops-panel kagawad-my-work" aria-labelledby="kagawad-my-work-title">
       <div className="ops-panel-heading"><div><h2 id="kagawad-my-work-title">My assigned action items</h2><p>All active committee tasks assigned to you in one list.</p></div><UsersRound size={19} /></div>
@@ -438,7 +512,7 @@ export function CommitteesPage({ focusId, onFocusHandled }: { focusId?: string; 
     {showCreate && canManage.data && <form className="ops-panel ops-form" onSubmit={(event) => void submitCommittee(event)}><div className="ops-panel-heading"><div><h2>Create a committee</h2><p>Only authorized committee managers can configure workspaces.</p></div><UsersRound size={18} /></div><div className="ops-form-grid"><label>Committee name<input name="name" maxLength={120} required /></label><label className="span-two">Purpose / description<textarea name="description" maxLength={1000} /></label></div><div className="ops-form-actions"><button className="button primary" disabled={busy}>Create committee</button></div></form>}
     {committees.isPending && tenantId && <LoadingNotice />}{committees.error && <ErrorNotice message={committees.error.message} />}
     {committees.data?.totalCount === 0 && <div className="ops-empty"><UsersRound size={22} /><strong>No committee workspaces assigned</strong><p>Ask an authorized Captain or Secretary to create or assign a committee.</p></div>}
-    <div className="committee-workspace-list">{committees.data?.rows.map((committee) => <CommitteeWorkspaceCard key={committee.id} tenantId={tenantId} committee={committee} canManage={Boolean(canManage.data)} currentUserId={user?.id ?? ''} busy={busy} onAssign={(event) => void assignMember(committee.id, event)} onAddTask={(event) => void addTask(committee.id, event)} onChangeTask={(task, status) => void changeStatus(task, status)} />)}</div>
+    <div className="committee-workspace-list">{committees.data?.rows.map((committee) => <CommitteeWorkspaceCard key={committee.id} tenantId={tenantId} committee={committee} canManage={Boolean(canManage.data)} currentUserId={user?.id ?? ''} busy={busy} onAssign={(event) => void assignMember(committee.id, event)} onAddTask={(event) => void addTask(committee.id, event)} onChangeTask={(task, status) => void changeStatus(task, status)} onReassignTask={(taskId, userId) => void reassignTask(taskId, userId)} />)}</div>
     {totalPages > 1 && <nav className="ops-panel ops-form-actions" aria-label="Committee pages">
       <span className="muted">Page {page + 1} of {totalPages} - {committees.data?.totalCount ?? 0} committees</span>
       <div className="finance-review-actions">

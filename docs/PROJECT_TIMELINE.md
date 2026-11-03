@@ -364,3 +364,41 @@ Kagawad assignment alerts: Migration `0233_kagawad_task_assignment_notifications
 Kagawad contribution search: Migration `0234_searchable_kagawad_project_contributions.sql` adds a private, paginated search for the signed-in Kagawad's own project updates. The Projects page filters by text, update type, and inclusive dates with responsive desktop and mobile controls. Apply after `0233` before using the filters.
 
 Database CI repairs: Migration `0235_fix_database_policy_and_workflow_tests.sql` lets RLS execute the subscription feature check without exposing other barangays' subscription data and grants narrow read access to correction audit history. Database fixtures now include required project document types and meeting minute authors, and assertions respect column-level grants. Apply after `0234`.
+
+Kagawad assignment-history filters: Migration `0236_searchable_kagawad_task_assignment_history.sql` adds server-side search by task or committee, current task status, and inclusive Manila-local assignment dates. The responsive Committees history panel uses the role-checked RPC and retains pagination. Apply after `0235` before using these filters.
+
+Kagawad completed-work history: Migration `0237_kagawad_completed_work_history.sql` keeps the signed-in member's own completion summaries available after task reassignment or committee archival. A private paginated Committees panel shows the task, committee, summary, and completion time. Apply after `0236` before using this history.
+
+Kagawad dashboard completion count: Migration `0238_kagawad_completed_work_dashboard_count.sql` adds a private count of completion summaries recorded by the signed-in Kagawad. The overview shortcut leads to the completed-work history in Committees. Apply after `0237` before using this count.
+
+Kagawad RSVP history search: Migration `0239_searchable_kagawad_rsvp_history.sql` adds server-side search by meeting title, RSVP response, and inclusive meeting dates. The responsive filter panel operates on the signed-in Kagawad's own RSVP history and does not affect attendance or correction records. Apply after `0238` before using these filters.
+
+Kagawad attendance overview: Migration `0240_kagawad_meeting_attendance_summary.sql` adds private present, absent, and excused totals for meetings the signed-in Kagawad was invited to. Dashboard shortcuts open the Meetings workspace; totals do not expose other attendees' records. Apply after `0239` before using these totals.
+
+Kagawad task reassignment: Migration `0241_committee_task_reassignment.sql` adds manager-only reassignment of action items to active members of the same committee. Assignment changes are recorded by the existing history trigger and notify the new assignee; the manager UI provides a searchable, paginated member picker. Apply after `0240` before using reassignment.
+
+Kagawad RSVP reminder: Migration `0242_kagawad_pending_rsvp_dashboard_count.sql` adds a private upcoming-invitation count for which the signed-in Kagawad has not responded. The dashboard shortcut opens Meetings. Apply after `0241` before using the reminder.
+
+Kagawad upcoming deadlines: Migration `0243_kagawad_upcoming_task_deadline_count.sql` adds a private dashboard count for assigned unfinished tasks due today or within seven days. The dashboard shortcut opens Committees. Apply after `0242` before using the count.
+
+Kagawad assignment context: Migration `0244_kagawad_assignment_history_context.sql` records the assigning official and previous assignee on future task transfers, and shows that context in the private Kagawad assignment history. Historical rows only show details that can be reliably recovered. Apply after `0243` before using this context.
+
+Meeting RSVP review: Migration `0245_manager_meeting_rsvp_roster.sql` adds a searchable, paginated individual RSVP roster for meeting and attendance managers. Kagawad responses remain private from other members; the manager roster shows invitee names, roles, response state, and response time. Apply after `0244` before using this view.
+
+Kagawad project update alerts: Migration `0246_kagawad_project_update_notifications.sql` sends project managers a Community update when a Kagawad records project progress or a milestone. Access requires active project-management permission; the alert opens Projects. Apply after `0245` before using these alerts.
+
+Kagawad project contributions: Migration `0247_kagawad_project_contribution_permission.sql` gives Kagawads a dedicated `project.update` permission to record progress and milestones on active or paused projects, without permission to create projects or change their status. The Projects page exposes the contribution form while keeping management controls limited to `project.manage`. Project-update alerts now resolve eligible recipients using each manager's own role permission and membership override. Apply after `0246` before using this workflow.
+
+Kagawad meeting agendas and calendar: Migration `0248_kagawad_invited_meeting_agenda.sql` adds an on-demand agenda lookup scoped to the signed-in Kagawad's own upcoming scheduled invitations. The Meetings invitation card shows the agenda in a responsive disclosure and downloads an `.ics` calendar event with the agenda, without revealing other meetings or attendees. Apply after `0247` before using this view.
+
+Meeting record privacy: Migration `0249_private_meeting_record_drafts.sql` restricts draft minutes and unapproved resolutions to meeting managers. Kagawads and other meeting readers continue to see reviewed minutes and approved resolutions only; account-specific query keys avoid sharing cached records between signed-in users. Apply after `0248`.
+
+Kagawad RSVP withdrawal: Migration `0250_kagawad_meeting_rsvp_withdrawal.sql` lets an invited Kagawad withdraw an RSVP before a scheduled meeting starts. The current response is cleared, the withdrawal remains in the searchable personal history, and meeting/dashboard totals refresh. Apply after `0249`.
+
+Barangay project update responses: Migration `0251_barangay_project_update_responses.sql` adds an append-only private reply thread for project updates. Project managers reply to another member's update; the author can read the response and receives an in-app Community update. Apply after `0250` before using this workflow.
+
+Project response pagination: Migration `0252_paginated_barangay_project_update_responses.sql` pages long reply threads in groups of ten while retaining the response author's access checks. Apply after `0251` before using pagination.
+
+Project reply notification navigation: Migration `0253_project_response_notification_target.sql` gives the update author a permission-checked lookup for opening the related project, update, and latest reply page directly from a notification. Apply after `0252` before using direct navigation.
+
+Attendance correction notification navigation: Migration `0254_attendance_correction_notification_target.sql` sends Kagawad requesters to their own correction history and attendance managers to the pending-review queue, opening the correct page and request. Apply after `0253` before using direct navigation.
