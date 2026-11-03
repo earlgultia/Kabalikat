@@ -19,7 +19,7 @@ select set_config('request.jwt.claim.sub', '60000000-0000-4000-8000-000000000006
 select public.revoke_membership_invitation('ffffffff-1000-4000-8000-000000000006');
 
 select extensions.is((select status from public.invitations where id = 'ffffffff-1000-4000-8000-000000000006'), 'revoked'::text, 'authorized captain can revoke a pending invitation');
-select extensions.is((select action from public.invitation_events where invitation_id = 'ffffffff-1000-4000-8000-000000000006' order by created_at desc limit 1), 'revoked'::text, 'revocation is recorded in the protected invitation event log');
+select extensions.is((select count(*) from public.invitation_events where invitation_id = 'ffffffff-1000-4000-8000-000000000006' and action = 'revoked'), 1::bigint, 'revocation is recorded in the protected invitation event log');
 
 select * from extensions.finish();
 rollback;
