@@ -1367,3 +1367,25 @@
   .workspace-shell .member-permission-list { grid-template-columns: minmax(0, 1fr); }
   .workspace-shell .member-access-history li { flex-direction: column; }
 }
+
+@media (max-width: 600px) {
+  .platform-shell .support-ticket,
+  .platform-shell .support-conversation { min-width: 0; }
+  .platform-shell .support-conversation summary { align-items: center; font-size: 14px; gap: 9px; line-height: 1.4; min-height: 48px; }
+  .platform-shell .support-conversation > ol { gap: 10px; margin: 10px 0 14px; max-height: min(52vh, 440px); overflow-y: auto; overscroll-behavior: contain; padding: 1px 3px 1px 0; }
+  .platform-shell .support-conversation > ol > li { border: 1px solid #e1e8e3; border-radius: 11px; padding: 12px; }
+  .platform-shell .support-conversation > ol > li.support-internal-note { border-color: #ead9ae; border-left: 3px solid #d4ad49; }
+  .platform-shell .support-conversation > ol > li > div { align-items: flex-start; display: grid; gap: 4px; grid-template-columns: minmax(0,1fr); }
+  .platform-shell .support-conversation > ol > li > div > strong { font-size: 12px; line-height: 1.4; }
+  .platform-shell .support-conversation > ol > li > div > span { color: #697a72; font-size: 10px; line-height: 1.4; overflow-wrap: anywhere; }
+  .platform-shell .support-conversation > ol > li p { font-size: 13px; line-height: 1.6; margin-top: 9px; }
+  .platform-shell .support-conversation > .button { justify-content: center; min-height: 44px; width: 100%; }
+  .platform-shell .support-reply-form { align-items: stretch; display: grid; gap: 11px; grid-template-columns: minmax(0,1fr); }
+  .platform-shell .support-reply-form > label:first-child,
+  .platform-shell .support-reply-form > .support-internal-toggle { grid-column: 1; min-width: 0; width: 100%; }
+  .platform-shell .support-reply-form > label:first-child { font-size: 12px; }
+  .platform-shell .support-reply-form textarea { box-sizing: border-box; font-size: 16px; line-height: 1.5; min-height: 112px; padding: 11px 12px; width: 100%; }
+  .platform-shell .support-reply-form > .support-internal-toggle { align-items: flex-start; line-height: 1.45; }
+  .platform-shell .support-reply-form > .support-internal-toggle input { flex: none; margin-top: 2px; }
+  .platform-shell .support-reply-form > button { grid-column: 1; justify-content: center; min-height: 46px; width: 100%; }
+}
