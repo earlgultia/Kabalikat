@@ -55,7 +55,7 @@ select extensions.throws_ok(
   format('select public.cancel_resident_profile_change(%L::uuid)', (select id::text from test_correction_owner_request)),
   'P0001', 'not authorized', 'a different resident cannot withdraw someone else’s request'
 );
-select extensions.is((select status from public.resident_profile_change_requests where id = (select id from test_correction_owner_request)), 'pending'::text, 'a denied withdrawal leaves the owner request pending');
+select extensions.is((select status from public.resident_profile_change_requests where id = (select id from test_correction_owner_request)), null::text, 'a different resident still cannot view another residents pending request after a denied withdrawal');
 select extensions.lives_ok(
   format('select public.cancel_resident_profile_change(%L::uuid)', (select id::text from test_correction_other_request)),
   'a resident can withdraw their own pending correction'
@@ -68,7 +68,7 @@ select extensions.lives_ok(
 );
 
 select set_config('request.jwt.claim.sub', 'f3000000-0000-4000-8000-000000000003', true);
-select extensions.is((select count(*) from public.resident_profile_change_requests), 2::bigint, 'authorized staff can review requests in their barangay');
+select extensions.is((select count(*) from public.resident_profile_change_requests), 3::bigint, 'authorized staff can review all requests in their barangay, including cancelled history');
 select extensions.lives_ok(
   format('select public.review_resident_profile_change(%L::uuid, %L, null)', (select id::text from test_correction_owner_request), 'approved'),
   'authorized staff can approve another resident correction'

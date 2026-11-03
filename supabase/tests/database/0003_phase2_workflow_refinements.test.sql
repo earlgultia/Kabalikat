@@ -7,6 +7,8 @@ values ('50000000-0000-4000-8000-000000000005', 'refine-a@example.invalid', '{}'
 
 insert into public.barangays (id, name, municipality, province, code)
 values ('eeeeeeee-0000-4000-8000-000000000005', 'Refinements', 'Sample City', 'Sample Province', 'REF-A');
+insert into public.document_types (barangay_id, code, name, description)
+values ('eeeeeeee-0000-4000-8000-000000000005', 'BARANGAY_CERTIFICATE', 'Barangay Certificate', 'Certificate of residency or community standing');
 insert into public.barangay_memberships (barangay_id, user_id, role_id, status)
 select 'eeeeeeee-0000-4000-8000-000000000005', '50000000-0000-4000-8000-000000000005', id, 'active'
 from public.role_definitions where key = 'captain';

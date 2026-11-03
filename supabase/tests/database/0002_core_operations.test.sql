@@ -11,6 +11,10 @@ insert into public.barangays (id, name, municipality, province, code)
 values
   ('cccccccc-0000-4000-8000-000000000003', 'Operations A', 'Sample City', 'Sample Province', 'OPS-A'),
   ('dddddddd-0000-4000-8000-000000000004', 'Operations B', 'Sample City', 'Sample Province', 'OPS-B');
+insert into public.document_types (barangay_id, code, name, description)
+values
+  ('cccccccc-0000-4000-8000-000000000003', 'BARANGAY_CERTIFICATE', 'Barangay Certificate', 'Certificate of residency or community standing'),
+  ('dddddddd-0000-4000-8000-000000000004', 'BARANGAY_CERTIFICATE', 'Barangay Certificate', 'Certificate of residency or community standing');
 
 insert into public.barangay_memberships (barangay_id, user_id, role_id, status)
 select 'cccccccc-0000-4000-8000-000000000003', '30000000-0000-4000-8000-000000000003', id, 'active'
