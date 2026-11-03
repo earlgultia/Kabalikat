@@ -101,6 +101,20 @@ export async function listKagawadAssignedActionItems(tenantId: string, page: num
   return { rows, totalCount: Number(rows[0]?.total_count ?? 0) }
 }
 
+export async function getKagawadAgendaTasks(tenantId: string): Promise<KagawadAssignedActionItem[]> {
+  const pages = await Promise.all((['open', 'in_progress', 'blocked'] as const).map((status) =>
+    listKagawadAssignedActionItems(tenantId, 0, status, '', 'all'),
+  ))
+  return pages.flatMap((page) => page.rows)
+    .sort((left, right) => {
+      if (!left.due_date && !right.due_date) return left.created_at.localeCompare(right.created_at)
+      if (!left.due_date) return 1
+      if (!right.due_date) return -1
+      return left.due_date.localeCompare(right.due_date)
+    })
+    .slice(0, 4)
+}
+
 export async function listKagawadTaskAssignmentHistory(tenantId: string, page: number): Promise<KagawadTaskAssignmentHistoryPage> {
   const { data, error } = await client().rpc('list_kagawad_task_assignment_history', {
     p_barangay_id: tenantId, p_page: page, p_page_size: 10,

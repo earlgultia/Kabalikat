@@ -1516,3 +1516,121 @@
   .focused-committee-task .ops-panel-heading { align-items: flex-start; }
   .focused-committee-task .ops-panel-heading > .button { flex: 0 0 auto; }
 }
+
+/* Keep the platform support queue compact and prevent grid items from stretching. */
+.platform-shell .platform-content .support-queue-summary {
+  align-items: stretch;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 145px), 1fr));
+}
+.platform-shell .platform-content .support-ticket-list {
+  align-content: start;
+  grid-auto-rows: max-content;
+  min-width: 0;
+}
+.platform-shell .platform-content .support-ticket {
+  align-content: start;
+  align-items: start;
+  grid-template-rows: none;
+  height: auto;
+  min-height: 0;
+}
+.platform-shell .platform-content .support-ticket > * { align-self: start; max-width: 100%; min-width: 0; }
+.platform-shell .platform-content .support-ticket > header { align-items: flex-start; flex-wrap: wrap; }
+.platform-shell .platform-content .support-ticket > header > div { flex: 1 1 240px; min-width: 0; }
+.platform-shell .platform-content .support-ticket > header > small { flex: 0 1 300px; line-height: 1.5; max-width: 100%; overflow-wrap: anywhere; text-align: right; }
+.platform-shell .platform-content .support-ticket-controls {
+  align-items: end;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) minmax(170px, 230px) auto auto;
+}
+.platform-shell .platform-content .support-ticket-controls .support-attention-hint { grid-column: 1 / -1; }
+.platform-shell .platform-content .support-ticket-controls .support-search-field { grid-column: 1; min-width: 0; width: 100%; }
+.platform-shell .platform-content .support-ticket-controls .support-status-field { grid-column: 2; min-width: 0; }
+.platform-shell .platform-content .support-ticket-controls .support-search-submit,
+.platform-shell .platform-content .support-ticket-controls .support-search-clear { grid-column: auto; min-width: 0; }
+.platform-shell .platform-content .support-ticket-controls select { min-width: 0; width: 100%; }
+@media (max-width: 900px) {
+  .platform-shell .platform-content .support-ticket > header > small { text-align: left; }
+  .platform-shell .platform-content .support-ticket-controls { grid-template-columns: minmax(0, 1fr) minmax(150px, 220px); }
+  .platform-shell .platform-content .support-ticket-controls .support-search-field { grid-column: 1 / -1; }
+  .platform-shell .platform-content .support-ticket-controls .support-status-field { grid-column: 1; }
+  .platform-shell .platform-content .support-ticket-controls .support-search-submit { grid-column: 2; }
+  .platform-shell .platform-content .support-ticket-controls .support-search-clear { grid-column: 1 / -1; justify-self: start; }
+}
+@media (max-width: 650px) {
+  .platform-shell .platform-content .support-queue-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .platform-shell .platform-content .support-queue-summary > button { min-height: 68px; min-width: 0; padding: 11px; }
+  .platform-shell .platform-content .support-queue-summary > button span { line-height: 1.35; overflow-wrap: anywhere; }
+  .platform-shell .platform-content .support-ticket { gap: 12px; padding: 14px; }
+  .platform-shell .platform-content .support-ticket > header { gap: 8px; }
+  .platform-shell .platform-content .support-ticket > header > div,
+  .platform-shell .platform-content .support-ticket > header > small { flex: 1 1 100%; text-align: left; }
+  .platform-shell .platform-content .support-ticket-controls { align-items: stretch; grid-template-columns: minmax(0, 1fr); }
+  .platform-shell .platform-content .support-ticket-controls > *,
+  .platform-shell .platform-content .support-ticket-controls .support-search-field,
+  .platform-shell .platform-content .support-ticket-controls .support-status-field,
+  .platform-shell .platform-content .support-ticket-controls .support-search-submit,
+  .platform-shell .platform-content .support-ticket-controls .support-search-clear,
+  .platform-shell .platform-content .support-ticket-controls .support-attention-hint { grid-column: 1; min-width: 0; width: 100%; }
+  .platform-shell .platform-content .support-ticket-controls .support-search-submit { justify-content: center; min-height: 44px; }
+  .platform-shell .platform-content .support-ticket-controls .support-search-clear { justify-self: stretch; justify-content: center; min-height: 40px; }
+  .platform-shell .platform-content .support-ticket .incident-meta { gap: 6px 12px; }
+}
+
+/* Announcement filters: one search field and date controls with precise hit areas. */
+.workspace-shell .announcement-filters {
+  align-items: end;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(220px, 1.4fr) repeat(3, minmax(130px, 1fr)) auto;
+  padding: 0;
+}
+.workspace-shell .announcement-filters > .archive-search {
+  flex: initial;
+  min-width: 0;
+  width: 100%;
+}
+.workspace-shell .announcement-filters > label:not(.archive-search),
+.workspace-shell .announcement-filters .announcement-date-filter {
+  color: #354f4c;
+  display: grid;
+  font-size: 11px;
+  font-weight: 700;
+  gap: 5px;
+  min-width: 0;
+}
+.workspace-shell .announcement-filters .announcement-date-filter label { color: inherit; font: inherit; }
+.workspace-shell .announcement-filters > label:not(.archive-search) select,
+.workspace-shell .announcement-filters .announcement-date-filter input {
+  background: #fffefa;
+  border: 1px solid #bfcec8;
+  border-radius: 8px;
+  color: #24353b;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 400;
+  min-height: 44px;
+  min-width: 0;
+  padding: 8px 10px;
+  width: 100%;
+}
+.workspace-shell .announcement-filters .announcement-date-filter input { cursor: text; }
+.workspace-shell .announcement-filters .announcement-date-filter input:focus-visible,
+.workspace-shell .announcement-filters > label:not(.archive-search) select:focus-visible { outline: 3px solid #28766c40; border-color: #28766c; }
+@media (max-width: 900px) {
+  .workspace-shell .announcement-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .workspace-shell .announcement-filters > .archive-search { grid-column: 1 / -1; }
+  .workspace-shell .announcement-filters > .button { grid-column: 1 / -1; justify-self: start; }
+}
+@media (max-width: 650px) {
+  .workspace-shell .announcement-filters { grid-template-columns: minmax(0, 1fr); }
+  .workspace-shell .announcement-filters > *,
+  .workspace-shell .announcement-filters > .archive-search,
+  .workspace-shell .announcement-filters > label:not(.archive-search),
+  .workspace-shell .announcement-filters .announcement-date-filter { grid-column: 1; min-width: 0; width: 100%; }
+  .workspace-shell .announcement-filters > .button { justify-content: center; width: 100%; }
+}

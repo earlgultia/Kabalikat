@@ -143,8 +143,8 @@ export function AnnouncementsPage({ focusId, onFocusHandled }: { focusId?: strin
     {tenantId && <div className="incident-filters announcement-filters">
       <label className="archive-search"><Search size={16} /><input type="search" aria-label="Search announcements" maxLength={100} placeholder="Search announcement title or message" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} /></label>
       <label>Status<select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value as typeof statusFilter); setPage(0) }}><option value="all">All statuses</option><option value="published">Published</option><option value="draft">Drafts</option><option value="archived">Archived</option></select></label>
-      <label>Created on or after<input type="date" value={createdFrom} max={createdThrough || undefined} onChange={(event) => { setCreatedFrom(event.target.value); setPage(0) }} /></label>
-      <label>Created on or before<input type="date" value={createdThrough} min={createdFrom || undefined} onChange={(event) => { setCreatedThrough(event.target.value); setPage(0) }} /></label>
+      <div className="announcement-date-filter"><label htmlFor="announcement-created-after">Created on or after</label><input id="announcement-created-after" type="date" value={createdFrom} max={createdThrough || undefined} onChange={(event) => { setCreatedFrom(event.target.value); setPage(0) }} /></div>
+      <div className="announcement-date-filter"><label htmlFor="announcement-created-before">Created on or before</label><input id="announcement-created-before" type="date" value={createdThrough} min={createdFrom || undefined} onChange={(event) => { setCreatedThrough(event.target.value); setPage(0) }} /></div>
       {(createdFrom || createdThrough) && <button type="button" className="button outline" onClick={() => { setCreatedFrom(''); setCreatedThrough(''); setPage(0) }}>Clear dates</button>}
     </div>}
     {dateRangeInvalid && <p className="account-security-error" role="alert">The end date must be the same day or later than the start date.</p>}
