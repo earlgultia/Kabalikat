@@ -102,7 +102,7 @@ export function ProjectProgressHistory({ tenantId, projectId, scope, canRespond 
       <strong>{update.title}</strong>
       <span>{update.update_type} · {formatDateTime(update.created_at)}</span>
       {update.details && <p>{update.details}</p>}
-      {scope === 'barangay' && (canRespond || ('is_own_update' in update && update.is_own_update)) && <BarangayProjectUpdateResponseThread updateId={update.id} isOwnUpdate={'is_own_update' in update && update.is_own_update} canRespond={canRespond} initialPage={focusResponsePage ?? 0} autoOpen={openResponseThread && update.id === focusUpdateId} onFocusHandled={onFocusHandled} />}
+      {scope === 'barangay' && (canRespond || Boolean('is_own_update' in update && update.is_own_update)) && <BarangayProjectUpdateResponseThread updateId={update.id} isOwnUpdate={Boolean('is_own_update' in update && update.is_own_update)} canRespond={canRespond} initialPage={focusResponsePage ?? 0} autoOpen={openResponseThread && update.id === focusUpdateId} onFocusHandled={onFocusHandled} />}
     </li>)}</ol> : null}
     {totalPages > 1 && <div className="ops-form-actions"><span className="field-hint">Page {page + 1} of {totalPages} · {history.data?.totalCount} updates</span><div className="finance-review-actions">
       <button className="button outline" disabled={page === 0 || history.isFetching} onClick={() => setPage((current) => current - 1)}><ChevronLeft size={15} />Previous</button>

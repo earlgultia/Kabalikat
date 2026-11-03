@@ -19,11 +19,10 @@ function client() {
   return supabase
 }
 
-function rpc<T>(name: string, args: Record<string, unknown>) {
-  return client().rpc(name, args).then(({ data, error }) => {
-    if (error) throw new Error(error.message)
-    return data as T
-  })
+async function rpc<T>(name: string, args: Record<string, unknown>): Promise<T> {
+  const { data, error } = await client().rpc(name, args)
+  if (error) throw new Error(error.message)
+  return data as T
 }
 
 export async function listBarangayProjects(tenantId: string, page: number): Promise<BarangayProjectPage> {
