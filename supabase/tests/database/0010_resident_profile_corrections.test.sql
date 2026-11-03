@@ -41,7 +41,7 @@ create temporary table test_correction_owner_request as
 select extensions.is((select status from public.resident_profile_change_requests where id = (select id from test_correction_owner_request)), 'pending'::text, 'a linked resident can submit a profile correction');
 select extensions.is((select first_name from public.residents where id = 'ffffffff-1000-4000-8000-000000000001'), 'Rina'::text, 'submitting a correction does not directly change the official resident record');
 select extensions.is((select count(*) from public.resident_profile_change_requests), 1::bigint, 'a requester can read their own correction request');
-select extensions.is((select count(*) from public.resident_profile_change_events where request_id = (select id from test_correction_owner_request) and action = 'submitted'), 1::bigint, 'submission writes a private audit event');
+select extensions.is((select count(id) from public.resident_profile_change_events where request_id = (select id from test_correction_owner_request) and action = 'submitted'), 1::bigint, 'submission writes a private audit event');
 
 select set_config('request.jwt.claim.sub', 'f2000000-0000-4000-8000-000000000002', true);
 create temporary table test_correction_other_request as
@@ -50,7 +50,7 @@ create temporary table test_correction_other_request as
   ) as id;
 select extensions.is((select count(*) from public.resident_profile_change_requests), 1::bigint, 'a second resident sees only their own request');
 select extensions.is((select count(*) from public.resident_profile_change_requests where id = (select id from test_correction_owner_request)), 0::bigint, 'a resident cannot read another resident request');
-select extensions.is((select count(*) from public.resident_profile_change_events where request_id = (select id from test_correction_owner_request)), 0::bigint, 'a resident cannot read another resident audit history');
+select extensions.is((select count(id) from public.resident_profile_change_events where request_id = (select id from test_correction_owner_request)), 0::bigint, 'a resident cannot read another resident audit history');
 select extensions.throws_ok(
   format('select public.cancel_resident_profile_change(%L::uuid)', (select id::text from test_correction_owner_request)),
   'P0001', 'not authorized', 'a different resident cannot withdraw someone else’s request'
@@ -61,7 +61,7 @@ select extensions.lives_ok(
   'a resident can withdraw their own pending correction'
 );
 select extensions.is((select status from public.resident_profile_change_requests where id = (select id from test_correction_other_request)), 'cancelled'::text, 'withdrawal marks the request cancelled');
-select extensions.is((select count(*) from public.resident_profile_change_events where request_id = (select id from test_correction_other_request) and action = 'cancelled'), 1::bigint, 'withdrawal is recorded in the audit history');
+select extensions.is((select count(id) from public.resident_profile_change_events where request_id = (select id from test_correction_other_request) and action = 'cancelled'), 1::bigint, 'withdrawal is recorded in the audit history');
 select extensions.lives_ok(
   'select public.submit_resident_profile_change(''ffffffff-1000-4000-8000-000000000002'', null, ''Neighbor Again'', null, null)',
   'a cancelled request no longer blocks a replacement correction'
@@ -75,7 +75,7 @@ select extensions.lives_ok(
 );
 select extensions.is((select first_name from public.residents where id = 'ffffffff-1000-4000-8000-000000000001'), 'Rina Mae'::text, 'approval applies the proposed value to the official resident record');
 select extensions.is((select status from public.resident_profile_change_requests where id = (select id from test_correction_owner_request)), 'approved'::text, 'approval records a terminal request status');
-select extensions.is((select count(*) from public.resident_profile_change_events where request_id = (select id from test_correction_owner_request) and action = 'approved'), 1::bigint, 'approval adds a protected audit event');
+select extensions.is((select count(id) from public.resident_profile_change_events where request_id = (select id from test_correction_owner_request) and action = 'approved'), 1::bigint, 'approval adds a protected audit event');
 select extensions.is((select count(*) from public.community_notifications), 0::bigint, 'staff cannot read a request owner notification');
 
 reset role;
@@ -85,7 +85,7 @@ select set_config('request.jwt.claim.sub', 'f2000000-0000-4000-8000-000000000002
 select extensions.is((select count(*) from public.community_notifications), 0::bigint, 'another resident cannot read the correction decision notification');
 select set_config('request.jwt.claim.sub', 'f1000000-0000-4000-8000-000000000001', true);
 select extensions.is((select count(*) from public.community_notifications), 1::bigint, 'only the request owner can read their decision notification');
-select extensions.is((select count(*) from public.resident_profile_change_events where request_id = (select id from test_correction_owner_request)), 2::bigint, 'the request owner can read their complete submission and decision history');
+select extensions.is((select count(id) from public.resident_profile_change_events where request_id = (select id from test_correction_owner_request)), 2::bigint, 'the request owner can read their complete submission and decision history');
 
 select set_config('request.jwt.claim.sub', 'f4000000-0000-4000-8000-000000000004', true);
 select extensions.is((select count(*) from public.resident_profile_change_requests), 0::bigint, 'staff from another barangay cannot read correction requests');

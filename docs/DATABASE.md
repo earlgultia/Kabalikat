@@ -423,3 +423,5 @@ Migration `0232_kagawad_task_assignment_history.sql` records new assignments and
 Migration `0233_kagawad_task_assignment_notifications.sql` alerts an active assignee when a committee action item is assigned to them. The notice opens the task conversation, and read access is limited to the current assignee. Apply after `0232`; hosted database behavior has not been verified.
 
 Migration `0234_searchable_kagawad_project_contributions.sql` adds a role-checked, paginated search over the signed-in Kagawad's own project updates, with text, update-type, and inclusive Manila-local date filters. The Barangay projects page exposes responsive filters in the contribution history. Apply after `0233`; hosted database behavior has not been verified.
+
+Migration `0235_fix_database_policy_and_workflow_tests.sql` restores authenticated execution of the subscription feature helper required by RLS while restricting its results to the caller's active barangay and known feature keys. It also grants only the safe columns needed to read resident correction history. Apply after `0234`; hosted database behavior has not been verified.

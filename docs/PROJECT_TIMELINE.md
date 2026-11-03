@@ -362,3 +362,5 @@ Kagawad task assignment history: Migration `0232_kagawad_task_assignment_history
 Kagawad assignment alerts: Migration `0233_kagawad_task_assignment_notifications.sql` sends an in-app notice to the active assignee when a committee task is assigned. The notice links to the task conversation and is readable only by its current assignee. Apply after `0232` before using assignment alerts.
 
 Kagawad contribution search: Migration `0234_searchable_kagawad_project_contributions.sql` adds a private, paginated search for the signed-in Kagawad's own project updates. The Projects page filters by text, update type, and inclusive dates with responsive desktop and mobile controls. Apply after `0233` before using the filters.
+
+Database CI repairs: Migration `0235_fix_database_policy_and_workflow_tests.sql` lets RLS execute the subscription feature check without exposing other barangays' subscription data and grants narrow read access to correction audit history. Database fixtures now include required project document types and meeting minute authors, and assertions respect column-level grants. Apply after `0234`.

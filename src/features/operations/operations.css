@@ -1604,8 +1604,30 @@
   padding: 0;
 }
 .workspace-shell .announcement-filters > .archive-search {
+  align-items: center;
+  display: flex;
   flex: initial;
   min-width: 0;
+  min-height: 44px;
+  overflow: hidden;
+  padding: 0 12px;
+  width: 100%;
+}
+.workspace-shell .announcement-filters > .archive-search > input[type="search"] {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  color: #24353b;
+  flex: 1 1 auto;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 400;
+  min-height: 42px;
+  min-width: 0;
+  outline: 0;
+  padding: 0;
   width: 100%;
 }
 .workspace-shell .announcement-filters > label:not(.archive-search),
@@ -1647,4 +1669,61 @@
   .workspace-shell .announcement-filters > label:not(.archive-search),
   .workspace-shell .announcement-filters .announcement-date-filter { grid-column: 1; min-width: 0; width: 100%; }
   .workspace-shell .announcement-filters > .button { justify-content: center; width: 100%; }
+}
+
+/* Keep support filters in predictable grid cells at every viewport width. */
+.platform-shell .platform-content .support-ticket-controls {
+  align-items: end;
+  column-gap: 10px;
+  margin-bottom: 14px;
+  row-gap: 10px;
+}
+.platform-shell .platform-content .support-ticket-controls > .support-attention-hint { grid-column: 1 / -1; }
+.platform-shell .platform-content .support-ticket-controls > .support-search-field {
+  align-items: center;
+  background: #fffefa;
+  border: 1px solid #bfcec8;
+  border-radius: 8px;
+  color: #647773;
+  display: flex;
+  gap: 8px;
+  grid-column: 1;
+  min-height: 44px;
+  min-width: 0;
+  padding: 0 10px;
+  width: 100%;
+}
+.platform-shell .platform-content .support-ticket-controls > .support-search-field > svg { flex: none; }
+.platform-shell .platform-content .support-ticket-controls > .support-search-field > input {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  flex: 1 1 auto;
+  min-height: 40px;
+  min-width: 0;
+  outline: 0;
+  padding: 0;
+  width: 100%;
+}
+.platform-shell .platform-content .support-ticket-controls > .support-status-field { grid-column: 2; min-width: 0; }
+.platform-shell .platform-content .support-ticket-controls > .support-status-field > select { min-height: 44px; width: 100%; }
+.platform-shell .platform-content .support-ticket-controls > .support-search-submit { grid-column: 3; min-height: 44px; }
+.platform-shell .platform-content .support-ticket-controls > .support-search-clear { grid-column: 4; min-height: 44px; }
+.platform-shell .platform-content .support-ticket-list { margin-top: 0; }
+@media (max-width: 900px) {
+  .platform-shell .platform-content .support-ticket-controls { grid-template-columns: minmax(0, 1fr) minmax(0, 220px); }
+  .platform-shell .platform-content .support-ticket-controls > .support-search-field { grid-column: 1 / -1; }
+  .platform-shell .platform-content .support-ticket-controls > .support-status-field { grid-column: 1; }
+  .platform-shell .platform-content .support-ticket-controls > .support-search-submit { grid-column: 2; }
+  .platform-shell .platform-content .support-ticket-controls > .support-search-clear { grid-column: 1 / -1; justify-self: start; }
+}
+@media (max-width: 650px) {
+  .platform-shell .platform-content .support-ticket-controls { align-items: stretch; grid-template-columns: minmax(0, 1fr); }
+  .platform-shell .platform-content .support-ticket-controls > .support-search-field,
+  .platform-shell .platform-content .support-ticket-controls > .support-status-field,
+  .platform-shell .platform-content .support-ticket-controls > .support-search-submit,
+  .platform-shell .platform-content .support-ticket-controls > .support-search-clear { grid-column: 1; min-width: 0; width: 100%; }
+  .platform-shell .platform-content .support-ticket-controls > .support-search-clear { justify-self: stretch; }
 }
