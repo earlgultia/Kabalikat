@@ -139,6 +139,13 @@ export type TreasurerFollowUpSummary = {
   transaction_changes_awaiting_review: number | null
   generated_at: string
 }
+export type KagawadActionItemSummary = {
+  open_action_items: number | null
+  in_progress_action_items: number | null
+  blocked_action_items: number | null
+  overdue_action_items: number | null
+  generated_at: string
+}
 export type FinancialAdjustmentRow = {
   id: string; transaction_id: string; amount_change: number; reason: string; status: 'pending' | 'approved' | 'rejected'
   requested_by: string; reviewed_by: string | null; review_note: string | null; created_at: string
@@ -203,6 +210,10 @@ export function getSecretaryReviewQueueSummary(tenantId: string) {
 
 export function getTreasurerFollowUpSummary(tenantId: string) {
   return rpc<TreasurerFollowUpSummary>('get_treasurer_follow_up_summary', { p_barangay_id: tenantId })
+}
+
+export function getKagawadActionItemSummary(tenantId: string) {
+  return rpc<KagawadActionItemSummary>('get_kagawad_action_item_summary', { p_barangay_id: tenantId })
 }
 
 export function listResidents(tenantId: string) {
