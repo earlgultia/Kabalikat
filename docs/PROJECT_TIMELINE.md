@@ -358,3 +358,5 @@ Kagawad meeting RSVP: Migration `0230_kagawad_meeting_availability_responses.sql
 Kagawad RSVP history: Migration `0231_kagawad_meeting_rsvp_history.sql` stores each distinct RSVP change and adds a private, paginated history for the responding Kagawad. The Meetings page labels these as availability responses rather than attendance. Apply after `0230` before using this history.
 
 Kagawad task assignment history: Migration `0232_kagawad_task_assignment_history.sql` records action-item assignment events and backfills current assignments. The Committees page presents a private paginated history with task status, due date, and assignment timestamp, including transferred assignments and archived committees. Apply after `0231` before using this history.
+
+Kagawad assignment alerts: Migration `0233_kagawad_task_assignment_notifications.sql` sends an in-app notice to the active assignee when a committee task is assigned. The notice links to the task conversation and is readable only by its current assignee. Apply after `0232` before using assignment alerts.

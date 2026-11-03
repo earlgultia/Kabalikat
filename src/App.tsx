@@ -385,6 +385,8 @@ function Workspace() {
       .map((item) => ({ id: item.resource_id, title: 'A committee manager responded to your task update', kind: 'Task response', resourceType: 'committee_task_update' as const, timestamp: item.created_at, section: 'committees' as const })),
     ...notificationRows.filter((item) => item.resource_type === 'committee_task_progress')
       .map((item) => ({ id: item.resource_id, title: 'A Kagawad added progress to an assigned task', kind: 'Task progress', resourceType: 'committee_task_progress' as const, timestamp: item.created_at, section: 'committees' as const })),
+    ...notificationRows.filter((item) => item.resource_type === 'committee_task_assignment')
+      .map((item) => ({ id: item.resource_id, title: 'A committee action item has been assigned to you', kind: 'Task assignment', resourceType: 'committee_task_assignment' as const, timestamp: item.created_at, section: 'committees' as const })),
     ...notificationRows.filter((item) => item.resource_type === 'committee_due_date_request')
       .map((item) => ({ id: item.resource_id, title: 'A Kagawad requested a task due-date change', kind: 'Due-date request', resourceType: 'committee_due_date_request' as const, timestamp: item.created_at, section: 'committees' as const })),
     ...notificationRows.filter((item) => item.resource_type === 'attendance_correction_request')
@@ -469,7 +471,7 @@ function Workspace() {
   const unreadCount = unreadNotificationCount.data
   async function openCommunityUpdate(item: (typeof currentUpdates)[number]) {
     setNotificationActionError('')
-    setFocusedCommunityUpdate(item.resourceType === 'committee_task_update' || item.resourceType === 'committee_task_progress'
+    setFocusedCommunityUpdate(item.resourceType === 'committee_task_update' || item.resourceType === 'committee_task_progress' || item.resourceType === 'committee_task_assignment'
       ? { section: 'committees', id: item.id }
       : item.resourceType === 'incident_assignment' || item.resourceType === 'incident_status_change'
       ? { section: 'incidents', id: item.id }
