@@ -26,11 +26,13 @@ export function ProjectsPage() {
   const queryClient = useQueryClient()
   const [page, setPage] = useState(0)
   const [contributionPage, setContributionPage] = useState(0)
+  const [contributionFilters, setContributionFilters] = useState({ search: '', updateType: 'all', createdAfter: '', createdBefore: '' })
+  const [contributionDraft, setContributionDraft] = useState({ search: '', updateType: 'all', createdAfter: '', createdBefore: '' })
   const isKagawad = membership?.role?.key === 'kagawad'
-  useEffect(() => { setPage(0); setContributionPage(0) }, [tenantId])
+  useEffect(() => { setPage(0); setContributionPage(0); setContributionFilters({ search: '', updateType: 'all', createdAfter: '', createdBefore: '' }); setContributionDraft({ search: '', updateType: 'all', createdAfter: '', createdBefore: '' }) }, [tenantId])
   const canManage = useQuery({ queryKey: ['permission', tenantId, 'project.manage'], queryFn: () => hasPermission(tenantId, 'project.manage'), enabled: Boolean(tenantId) })
   const projects = useQuery({ queryKey: ['barangay-projects', tenantId, page], queryFn: () => listBarangayProjects(tenantId, page), enabled: Boolean(tenantId) })
-  const contributions = useQuery({ queryKey: ['kagawad-project-contributions', tenantId, contributionPage], queryFn: () => listKagawadProjectContributions(tenantId, contributionPage), enabled: Boolean(tenantId && isKagawad) })
+  const contributions = useQuery({ queryKey: ['kagawad-project-contributions', tenantId, contributionPage, contributionFilters], queryFn: () => listKagawadProjectContributions(tenantId, contributionPage, contributionFilters), enabled: Boolean(tenantId && isKagawad) })
   const contributionPages = Math.ceil((contributions.data?.totalCount ?? 0) / 10)
   const totalPages = Math.ceil((projects.data?.totalCount ?? 0) / BARANGAY_PROJECT_PAGE_SIZE)
   const [showForm, setShowForm] = useState(false)
@@ -95,7 +97,14 @@ export function ProjectsPage() {
       <div className="ops-panel-heading"><div><h2 id="kagawad-project-contributions-title">Your project contributions</h2><p>Progress reports and milestones you have recorded.</p></div><FolderKanban size={19} /></div>
       {contributions.isPending && <LoadingNotice compact />}
       {contributions.error && <ErrorNotice message="Your project contribution history could not be loaded." />}
-      {contributions.data?.totalCount === 0 && <p className="field-hint">You have not recorded any project updates yet.</p>}
+      {contributions.data?.totalCount === 0 && <p className="field-hint">{contributionFilters.search || contributionFilters.updateType !== 'all' || contributionFilters.createdAfter || contributionFilters.createdBefore ? 'No contributions match these filters.' : 'You have not recorded any project updates yet.'}</p>}
+      <form className="kagawad-contribution-filters" onSubmit={(event) => { event.preventDefault(); if (contributionDraft.createdAfter && contributionDraft.createdBefore && contributionDraft.createdAfter > contributionDraft.createdBefore) { setError('The start date must be on or before the end date.'); return } setError(''); setContributionPage(0); setContributionFilters({ ...contributionDraft, search: contributionDraft.search.trim() }) }}>
+        <label className="kagawad-contribution-search">Search your updates<input type="search" maxLength={100} placeholder="Project, title, or details" value={contributionDraft.search} onChange={(event) => setContributionDraft((current) => ({ ...current, search: event.target.value }))} /></label>
+        <label>Update type<select value={contributionDraft.updateType} onChange={(event) => setContributionDraft((current) => ({ ...current, updateType: event.target.value }))}><option value="all">All types</option><option value="progress">Progress reports</option><option value="milestone">Milestones</option></select></label>
+        <label>Created on or after<input type="date" value={contributionDraft.createdAfter} onChange={(event) => setContributionDraft((current) => ({ ...current, createdAfter: event.target.value }))} /></label>
+        <label>Created on or before<input type="date" value={contributionDraft.createdBefore} onChange={(event) => setContributionDraft((current) => ({ ...current, createdBefore: event.target.value }))} /></label>
+        <div className="kagawad-contribution-filter-actions"><button className="button primary" type="submit">Apply filters</button><button className="button outline" type="button" onClick={() => { const empty = { search: '', updateType: 'all', createdAfter: '', createdBefore: '' }; setContributionDraft(empty); setContributionFilters(empty); setContributionPage(0); setError('') }}>Clear</button></div>
+      </form>
       {Boolean(contributions.data?.rows.length) && <ol className="kagawad-contribution-list">{contributions.data?.rows.map((entry) => <li key={entry.update_id}>
         <div><strong>{entry.title}</strong><span className="status-pill">{entry.update_type === 'milestone' ? 'Milestone' : 'Progress report'}</span></div>
         <p className="kagawad-contribution-project">{entry.project_title} · {entry.project_status.replaceAll('_', ' ')}</p>

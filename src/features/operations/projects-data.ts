@@ -44,13 +44,17 @@ export async function listBarangayProjectUpdates(projectId: string, page: number
   return { rows, totalCount: Number(rows[0]?.total_count ?? 0) }
 }
 
-export async function listKagawadProjectContributions(tenantId: string, page: number) {
-  const { data, error } = await client().rpc('list_kagawad_project_contribution_page', {
+export async function listKagawadProjectContributions(tenantId: string, page: number, filters: { search: string; updateType: string; createdAfter: string; createdBefore: string }) {
+  const { data, error } = await client().rpc('search_kagawad_project_contribution_page', {
     p_barangay_id: tenantId, p_page: page, p_page_size: 10,
+    p_search: filters.search || null,
+    p_update_type: filters.updateType,
+    p_created_after: filters.createdAfter || null,
+    p_created_before: filters.createdBefore || null,
   })
   if (error) throw new Error(error.message)
   const rows = (data ?? []) as KagawadProjectContribution[]
-  return { rows, totalCount: Number(rows[0]?.total_count ?? 0) }
+  return { rows: rows.map((row) => ({ ...row, total_count: Number(row.total_count) })), totalCount: Number(rows[0]?.total_count ?? 0) }
 }
 
 export function createBarangayProject(input: { tenantId: string; title: string; description: string; start: string; end: string }) {

@@ -1403,6 +1403,17 @@
 
 .kagawad-project-contributions { display: grid; gap: 12px; min-width: 0; }
 .kagawad-project-contributions > .ops-panel-heading { margin-bottom: 0; }
+.kagawad-contribution-filters { align-items: end; background: #f8faf7; border: 1px solid #e2e9e4; border-radius: 10px; display: grid; gap: 10px; grid-template-columns: minmax(180px, 2fr) repeat(3, minmax(130px, 1fr)) auto; min-width: 0; padding: 12px; }
+.kagawad-contribution-filters label { color: #435957; display: grid; font-size: 11px; font-weight: 700; gap: 5px; min-width: 0; }
+.kagawad-contribution-filters input,
+.kagawad-contribution-filters select { min-height: 40px; min-width: 0; width: 100%; }
+.kagawad-contribution-filter-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 7px; }
+.kagawad-contribution-filter-actions .button { min-height: 40px; white-space: nowrap; }
+@media (min-width: 651px) and (max-width: 960px) {
+  .kagawad-contribution-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kagawad-contribution-search,
+  .kagawad-contribution-filter-actions { grid-column: 1 / -1; }
+}
 .kagawad-contribution-list { display: grid; gap: 9px; list-style: none; margin: 0; padding: 0; }
 .kagawad-contribution-list > li { background: #f8faf7; border: 1px solid #e2e9e4; border-radius: 10px; display: grid; gap: 7px; min-width: 0; padding: 12px 14px; }
 .kagawad-contribution-list > li > div { align-items: flex-start; display: flex; flex-wrap: wrap; gap: 7px 10px; justify-content: space-between; min-width: 0; }
@@ -1495,6 +1506,9 @@
 .committee-due-request-card form > div { display: flex; flex-wrap: wrap; gap: 8px; }
 @media (max-width: 650px) {
   .kagawad-project-contributions { gap: 10px; padding: 14px; }
+  .kagawad-contribution-filters { grid-template-columns: minmax(0, 1fr); }
+  .kagawad-contribution-filter-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kagawad-contribution-filter-actions .button { justify-content: center; min-width: 0; }
   .kagawad-contribution-list > li { padding: 11px; }
   .kagawad-contribution-list > li > div { flex-direction: column; }
   .kagawad-contribution-list .status-pill { align-self: flex-start; }
