@@ -34,7 +34,7 @@
 .document-type-audit li strong { color: #354f4c; font-size: 11px; }
 .document-type-audit li small { color: #697a72; font-size: 10px; }
 .document-type-audit-values { display: grid; gap: 10px; grid-template-columns: repeat(2,minmax(0,1fr)); margin-top: 8px; }
-.document-type-audit-values pre { background: #fffefa; border-radius: 6px; color: #53696a; font-size: 10px; max-height: 220px; overflow: auto; padding: 8px; white-space: pre-wrap; }
+.document-type-audit-values pre { background: #fffefa; border-radius: 6px; color: #53696a; font-size: 10px; max-height: 220px; max-width: 100%; min-width: 0; overflow: auto; overflow-wrap: anywhere; padding: 8px; white-space: pre-wrap; }
 .resident-request-guidance { background: #f0f5f1; border-left: 3px solid #4d8063; border-radius: 5px; color: #354f4c; font-size: 12px; line-height: 1.55; margin: 0; padding: 9px 11px; }
 .ops-form { margin-bottom: 22px; }
 .ops-panel-heading { display: flex; justify-content: space-between; align-items: flex-start; color: #799585; margin-bottom: 17px; }
@@ -351,7 +351,7 @@
 .sk-project-updates > p { color: #596a6d; font-size: 12px; margin: 0; }
 .sk-project-updates > ul { display: grid; gap: 10px; list-style: none; margin: 0; padding: 0; }
 .sk-project-updates > ul > li { align-items: flex-start; border-top: 1px solid #edf1ed; display: flex; gap: 10px; padding-top: 10px; }
-.sk-project-updates > ul > li > div { display: grid; gap: 4px; }
+.sk-project-updates > ul > li > div { display: grid; flex: 1 1 auto; gap: 4px; min-width: 0; }
 .sk-project-updates > ul strong { color: #354f4c; font-size: 13px; }
 .sk-project-updates > ul p { color: #53696a; font-size: 12px; line-height: 1.5; margin: 0; white-space: pre-wrap; }
 .sk-project-updates > ul small { color: #697a72; font-size: 10px; }
@@ -1215,6 +1215,7 @@
 .workspace-shell .member-access-card > header h2 { color: #2b4545; font-size: 16px; line-height: 1.35; margin: 0; }
 .workspace-shell .member-access-card > header p { color: #5d6d70; font-size: 12px; margin: 5px 0 0; }
 .workspace-shell .member-access-controls { align-items: end; display: grid; gap: 12px; grid-template-columns: minmax(180px, 1fr) minmax(150px, .7fr) auto; }
+.workspace-shell .member-access-controls > * { min-width: 0; }
 .workspace-shell .member-access-controls label { color: #354f4c; display: grid; font-size: 12px; font-weight: 700; gap: 6px; }
 .workspace-shell .member-access-controls select { background: #fffefa; border: 1px solid #bfcec8; border-radius: 8px; color: #24353b; font: inherit; font-weight: 400; min-height: 42px; padding: 8px 10px; width: 100%; }
 .workspace-shell .member-access-protected { background: #f7f8f4; border-radius: 8px; color: #64766e; font-size: 12px; margin: 0; padding: 10px 12px; }
@@ -1244,6 +1245,8 @@
   .workspace-shell .member-access-pagination > .button { justify-content: center; width: 100%; }
   .workspace-shell .member-access-revoked > .button,
   .workspace-shell .member-revoke-details > .button { justify-content: center; width: 100%; }
+  .workspace-shell .member-revoke-details > summary,
+  .workspace-shell .member-permission-details > summary { align-items: center; display: flex; min-height: 44px; }
 }
 .workspace-shell .barangay-settings-form { display: grid; gap: 17px; }
 .workspace-shell .barangay-settings-subheading { border-top: 1px solid #e5ebe7; margin: 5px 0 0; padding-top: 17px; }
@@ -1378,6 +1381,7 @@
   .workspace-shell .tenant-plan-options { grid-template-columns: minmax(0, 1fr); }
   .workspace-shell .tenant-plan-request .ops-form-actions > button { width: 100%; }
   .workspace-shell .tenant-subscription-pending { gap: 9px; padding: 14px; }
+  .workspace-shell .tenant-subscription-pending > div { flex: 1 1 180px; min-width: 0; }
   .platform-plan-request-filters { align-items: stretch; flex-direction: column; }
   .platform-plan-request-filters label { width: 100%; }
   .platform-plan-request-review .finance-review-actions { align-items: stretch; flex-direction: column-reverse; }
@@ -1863,6 +1867,11 @@
 }
 
 @media (max-width: 650px) {
+  .captain-workspace .operation-page .archive-document-top { flex-wrap: wrap; }
+  .captain-workspace .operation-page .archive-text-editor > summary { align-items: center; display: flex; min-height: 44px; }
+  .captain-workspace .operation-page .archive-text-actions > .button { flex: 1 1 150px; min-height: 44px; justify-content: center; }
+  .captain-workspace .operation-page .document-type-audit-values { grid-template-columns: minmax(0, 1fr); }
+  .captain-workspace .operation-page :where(.document-type-audit > summary, .document-type-audit li details > summary, .document-request-history > summary) { min-height: 44px; padding-block: 10px; }
   .captain-workspace .operation-page { font-size: 14px; }
   .captain-workspace .operation-page .operation-heading { align-items: stretch; margin-bottom: 18px; }
   .captain-workspace .operation-page .operation-heading > button,
@@ -1915,6 +1924,8 @@
 }
 
 @media (max-width: 650px) {
+  .captain-workspace .operation-page :where(.meeting-rsvp-roster > summary, .committee-task-reassign > summary) { align-items: center; display: flex; min-height: 44px; }
+  .captain-workspace .operation-page .committee-task-status select { min-height: 44px; }
   .captain-workspace .operation-page :where(.incident-history, .sk-event-audit, .project-update-response-thread) > summary {
     min-height: 44px;
     padding-block: 10px;
