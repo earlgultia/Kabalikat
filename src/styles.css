@@ -805,6 +805,23 @@ body { color: var(--ink); background: var(--canvas); font-size: 16px; line-heigh
 @media (max-width: 650px) {
   .captain-workspace .content-wrap { padding-bottom: calc(92px + env(safe-area-inset-bottom)); }
 }
+
+/* Keep the Captain's mobile dock clear of iPhone landscape cutouts and
+   tablet safe areas now that the viewport extends edge to edge. */
+@media (max-width: 900px) {
+  .captain-workspace .topbar {
+    padding-left: max(clamp(14px, 3vw, 22px), env(safe-area-inset-left));
+    padding-right: max(clamp(14px, 3vw, 22px), env(safe-area-inset-right));
+  }
+  .captain-workspace .content-wrap {
+    padding-left: max(clamp(14px, 3vw, 22px), env(safe-area-inset-left));
+    padding-right: max(clamp(14px, 3vw, 22px), env(safe-area-inset-right));
+  }
+  .captain-workspace .mobile-shortcut-bar {
+    padding-left: max(8px, env(safe-area-inset-left));
+    padding-right: max(8px, env(safe-area-inset-right));
+  }
+}
 .public-verification-result dl { border-top: 1px solid #d7e4dc; display: grid; gap: 9px; margin: 0; padding-top: 11px; }
 .public-verification-result dl > div { display: flex; flex-wrap: wrap; gap: 4px 12px; justify-content: space-between; }
 .public-verification-result dt { color: #63796f; font-size: 12px; }
@@ -935,8 +952,17 @@ body { color: var(--ink); background: var(--canvas); font-size: 16px; line-heigh
 }
 
 @media (max-width: 650px) {
+  .captain-workspace .meeting-reason-backdrop {
+    align-items: start;
+    max-height: 100vh;
+    max-height: 100dvh;
+    overflow-y: auto;
+    padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) calc(12px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  }
+  .captain-workspace .meeting-reason-dialog { margin-block: auto; min-width: 0; width: 100%; }
   .captain-workspace .topbar { padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right)); }
   .captain-workspace .content-wrap { padding-left: max(14px, env(safe-area-inset-left)); padding-right: max(14px, env(safe-area-inset-right)); }
+  .captain-workspace :where(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]), select, textarea) { font-size: 16px; min-width: 0; max-width: 100%; }
   .captain-workspace .mobile-shortcut-bar { min-height: calc(68px + env(safe-area-inset-bottom)); padding-bottom: max(5px, env(safe-area-inset-bottom)); }
   .captain-workspace .mobile-shortcut { min-width: 0; }
   .captain-workspace .mobile-shortcut span { line-height: 1.2; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -944,5 +970,11 @@ body { color: var(--ink); background: var(--canvas); font-size: 16px; line-heigh
   .captain-workspace .tool-finder,
   .captain-workspace .community-updates-dialog,
   .captain-workspace .account-security-dialog { max-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 24px); max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 24px); min-width: 0; }
+  .captain-workspace .community-updates-dialog { display: flex; flex-direction: column; overflow: hidden; }
+  .captain-workspace .community-updates-dialog > header { display: grid; flex: 0 0 auto; grid-template-columns: 40px minmax(0, 1fr) auto; }
+  .captain-workspace .community-updates-dialog > header > div:nth-child(2) { min-width: 0; }
+  .captain-workspace .community-updates-dialog > header > .mark-updates-read { grid-column: 2; justify-self: start; }
+  .captain-workspace .community-updates-dialog > header > .icon-button { grid-column: 3; grid-row: 1; }
+  .captain-workspace .community-updates-list { flex: 1 1 auto; max-height: none; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
   .captain-workspace :where(.action-confirm-dialog, .logout-confirm-dialog, .meeting-reason-dialog) { max-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 24px); max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 24px); overflow-y: auto; overscroll-behavior: contain; }
 }

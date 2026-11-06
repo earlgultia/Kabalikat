@@ -1812,6 +1812,7 @@
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
 }
 .captain-workspace .operation-page :where(.archive-search, .community-calendar-search, .committee-member-search, .meeting-member-search, .kagawad-contribution-search) {
   max-width: 100%;
@@ -1828,6 +1829,20 @@
 .captain-workspace .operation-page :where(.ops-panel, .ops-request-card, .incident-card, .support-ticket, .referral-card, .sk-project-card, .finance-budget, .meeting-card, .resident-card) {
   overflow-wrap: anywhere;
 }
+.captain-workspace .operation-page .finance-budget-list {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 245px), 1fr));
+}
+.captain-workspace .operation-page .announcement-top {
+  align-items: flex-start;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.captain-workspace .operation-page .announcement-top > div {
+  flex: 1 1 180px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.captain-workspace .operation-page .announcement-top > .text-action { margin-left: auto; }
 
 @media (max-width: 900px) {
   .captain-workspace .operation-page :where(.incident-filters, .health-outreach-filters, .community-calendar-filters, .advisory-filters, .emergency-resource-filters, .ops-filter-row, .archive-toolbar, .member-access-filters) {
@@ -1881,7 +1896,11 @@
   .captain-workspace .operation-page :where(.ops-form-grid, .meeting-record-grid, .incident-summary, .finance-report, .member-permission-list, .health-outreach-summary, .referral-detail-grid) {
     grid-template-columns: minmax(0, 1fr);
   }
-  .captain-workspace .operation-page :where(.ops-form-grid, .meeting-record-grid, .incident-summary, .finance-report, .member-permission-list, .health-outreach-summary, .referral-detail-grid) > * { grid-column: 1 / -1; }
+  .captain-workspace .operation-page :where(.ops-form-grid, .meeting-record-grid, .incident-summary, .finance-report, .member-permission-list, .health-outreach-summary, .referral-detail-grid) > * {
+    grid-column: 1 / -1;
+    max-width: 100%;
+    min-width: 0;
+  }
   .captain-workspace .operation-page .ops-panel { border-radius: 12px; padding: 14px; }
   .captain-workspace .operation-page :where(.ops-request-card, .incident-card, .support-ticket, .referral-card, .sk-project-card, .finance-budget, .meeting-card) { padding: 14px; }
   .captain-workspace .operation-page .ops-table { min-width: 640px; }
@@ -1893,4 +1912,44 @@
 @media (max-width: 380px) {
   .captain-workspace .operation-page :where(.ops-panel, .ops-request-card, .incident-card, .support-ticket, .referral-card, .sk-project-card, .finance-budget, .meeting-card) { padding: 12px; }
   .captain-workspace .operation-page .status-pill { max-width: 100%; white-space: normal; }
+}
+
+@media (max-width: 650px) {
+  .captain-workspace .operation-page :where(.incident-history, .sk-event-audit, .project-update-response-thread) > summary {
+    min-height: 44px;
+    padding-block: 10px;
+  }
+  .captain-workspace .operation-page .resident-document-timeline li {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .captain-workspace .operation-page .resident-document-timeline li time {
+    overflow-wrap: anywhere;
+  }
+  .captain-workspace .support-conversation,
+  .captain-workspace .support-ticket > .incident-history { padding-top: 13px; }
+  .captain-workspace .support-conversation summary,
+  .captain-workspace .support-ticket > .incident-history summary { min-height: 42px; }
+  .captain-workspace .support-conversation > ol {
+    gap: 10px;
+    margin: 10px 0 14px;
+    max-height: min(52vh, 440px);
+    max-height: min(52dvh, 440px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 1px 3px 1px 0;
+    -webkit-overflow-scrolling: touch;
+  }
+  .captain-workspace .support-conversation > ol > li { border: 1px solid #e1e8e3; border-radius: 11px; padding: 12px; }
+  .captain-workspace .support-conversation > ol > li.support-internal-note { border-color: #ead9ae; border-left: 3px solid #d4ad49; }
+  .captain-workspace .support-conversation > ol > li > div {
+    align-items: flex-start;
+    display: grid;
+    gap: 4px;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .captain-workspace .support-conversation > ol > li > div > strong { font-size: 12px; line-height: 1.4; }
+  .captain-workspace .support-conversation > ol > li > div > span { color: #697a72; font-size: 10px; line-height: 1.4; overflow-wrap: anywhere; }
+  .captain-workspace .support-conversation > ol > li p { font-size: 13px; line-height: 1.6; margin-top: 9px; }
 }
