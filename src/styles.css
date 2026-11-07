@@ -983,3 +983,15 @@ body { color: var(--ink); background: var(--canvas); font-size: 16px; line-heigh
   .captain-workspace :where(.action-confirm-actions, .logout-confirm-actions) { grid-template-columns: minmax(0, 1fr); }
   .captain-workspace :where(.action-confirm-actions, .logout-confirm-actions) > button { line-height: 1.35; min-width: 0; overflow-wrap: anywhere; white-space: normal; }
 }
+
+/* Keep mobile workspace headers below iOS status bars and landscape cutouts. */
+@media (max-width: 900px) {
+  .workspace-shell .topbar,
+  .platform-shell .platform-topbar {
+    height: calc(58px + env(safe-area-inset-top, 0px));
+    min-height: calc(58px + env(safe-area-inset-top, 0px));
+    padding-left: max(14px, env(safe-area-inset-left, 0px));
+    padding-right: max(14px, env(safe-area-inset-right, 0px));
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+}
