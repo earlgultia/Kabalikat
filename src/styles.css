@@ -320,7 +320,7 @@ body { color: var(--ink); background: var(--canvas); font-size: 16px; line-heigh
 .community-update-item:hover, .community-update-item:focus-visible { outline: none; border-radius: 8px; background: var(--brand-tint); }
 .community-update-type { grid-column: 1 / -1; color: var(--brand-700); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
 .community-update-new { margin-left: 8px; padding: 2px 5px; border-radius: 999px; background: #f5e4dc; color: #8d402d; font-size: 8px; letter-spacing: .05em; }
-.community-update-item strong { overflow: hidden; color: var(--ink); font-size: 13px; text-overflow: ellipsis; }
+.community-update-item strong { color: var(--ink); font-size: 13px; min-width: 0; overflow-wrap: anywhere; }
 .community-update-reason { grid-column: 1 / -1; color: var(--muted); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
 .community-update-item time { color: var(--muted); font-size: 10px; }
 .updates-empty { padding: 23px 18px; text-align: center; }
@@ -970,11 +970,16 @@ body { color: var(--ink); background: var(--canvas); font-size: 16px; line-heigh
   .captain-workspace .tool-finder,
   .captain-workspace .community-updates-dialog,
   .captain-workspace .account-security-dialog { max-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 24px); max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 24px); min-width: 0; }
-  .captain-workspace .community-updates-dialog { display: flex; flex-direction: column; overflow: hidden; }
+  .captain-workspace .community-updates-dialog { display: flex; flex-direction: column; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
   .captain-workspace .community-updates-dialog > header { display: grid; flex: 0 0 auto; grid-template-columns: 40px minmax(0, 1fr) auto; }
   .captain-workspace .community-updates-dialog > header > div:nth-child(2) { min-width: 0; }
   .captain-workspace .community-updates-dialog > header > .mark-updates-read { grid-column: 2; justify-self: start; }
   .captain-workspace .community-updates-dialog > header > .icon-button { grid-column: 3; grid-row: 1; }
   .captain-workspace .community-updates-list { flex: 1 1 auto; max-height: none; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
   .captain-workspace :where(.action-confirm-dialog, .logout-confirm-dialog, .meeting-reason-dialog) { max-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 24px); max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 24px); overflow-y: auto; overscroll-behavior: contain; }
+}
+
+@media (max-width: 420px) {
+  .captain-workspace :where(.action-confirm-actions, .logout-confirm-actions) { grid-template-columns: minmax(0, 1fr); }
+  .captain-workspace :where(.action-confirm-actions, .logout-confirm-actions) > button { line-height: 1.35; min-width: 0; overflow-wrap: anywhere; white-space: normal; }
 }

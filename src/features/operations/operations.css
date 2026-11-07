@@ -970,8 +970,16 @@
 @media (max-width: 960px) { .health-outreach-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 600px) { .health-outreach-filters, .health-outreach-filters > label:not(.archive-search), .health-outreach-filters > .archive-search, .community-calendar-filters > label { width: 100%; min-width: 0; } .community-calendar-filters > label { flex-basis: 100%; } .health-outreach-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .health-outreach-summary article:last-child { grid-column: 1 / -1; } }
 @media (max-width: 520px) { .sk-event-reach-grid { grid-template-columns: 1fr; } }
-.community-calendar-download { min-height: 40px; white-space: nowrap; }
-.community-calendar-search { align-items: center; display: flex !important; gap: 8px !important; }
+.community-calendar-download { min-height: 40px; justify-content: center; white-space: normal; }
+@media (max-width: 650px) {
+  .captain-workspace .operation-page .community-calendar-download {
+    min-height: 44px;
+    text-align: center;
+  }
+}
+.community-calendar-search { align-items: center; background: #fffefa; border: 1px solid #bfcec8; border-radius: 8px; color: #42635d; display: flex !important; gap: 8px !important; min-height: 44px; padding: 0 12px; }
+.community-calendar-search:focus-within { border-color: #28766c; outline: 3px solid #28766c40; }
+.community-calendar-search > input { background: transparent; border: 0; border-radius: 0; box-shadow: none; flex: 1 1 auto; min-height: 42px; min-width: 0; outline: 0; padding: 0; }
 .community-calendar-search svg { color: #697a72; flex: none; }
 .community-calendar-list { display: grid; gap: 12px; }
 .community-calendar-card { display: grid; gap: 9px; }
@@ -1124,6 +1132,7 @@
 .workspace-shell .meeting-card-top,
 .workspace-shell .meeting-records-heading { flex-wrap: wrap; }
 .workspace-shell .ops-request-card:has(.resident-document-timeline) { grid-template-columns: minmax(0, 1fr) auto; }
+.workspace-shell .meeting-title { flex: 1 1 200px; min-width: 0; }
 
 @media (max-width: 900px) {
   .workspace-shell .operation-heading { margin-bottom: 20px; }
@@ -1147,6 +1156,8 @@
 
 @media (max-width: 650px) {
   .workspace-shell .operation-heading { gap: 9px; }
+  .workspace-shell .meeting-record-title,
+  .workspace-shell .meeting-resolution-top { flex-wrap: wrap; }
   .workspace-shell .operation-heading > :last-child:not(button) { width: 100%; }
   .workspace-shell .ops-panel { padding: 15px; }
   .workspace-shell .ops-form-grid { grid-template-columns: minmax(0, 1fr); }
@@ -1156,7 +1167,7 @@
   .workspace-shell .incident-card > header,
   .workspace-shell .sk-project-header { align-items: flex-start; flex-direction: column; }
   .workspace-shell .ops-request-card:has(.resident-document-timeline) { grid-template-columns: minmax(0, 1fr); }
-  .workspace-shell .request-status { justify-content: flex-start; }
+  .workspace-shell .request-status { flex: 0 1 auto; justify-content: flex-start; width: 100%; }
   .workspace-shell .finance-report { grid-template-columns: minmax(0, 1fr); }
   .workspace-shell .finance-report > * { grid-column: 1 / -1; }
   .workspace-shell .archive-toolbar { flex-direction: column; }
@@ -1191,7 +1202,7 @@
 .workspace-shell .member-access-guidance { align-items: flex-start; background: #f0f7f3; color: #28685e; display: flex; gap: 11px; line-height: 1.55; }
 .workspace-shell .member-access-guidance > svg { flex: 0 0 auto; margin-top: 2px; }
 .workspace-shell .member-access-guidance p { color: #425b54; margin: 0; }
-.workspace-shell .member-access-summary { display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 16px 0; }
+.workspace-shell .member-access-summary { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); margin: 16px 0; }
 .workspace-shell .member-access-summary > div { background: #fffefa; border: 1px solid #d9e2de; border-radius: 12px; display: grid; gap: 4px; padding: 15px 17px; }
 .workspace-shell .member-access-summary strong { color: #28685e; font-size: 23px; line-height: 1.15; }
 .workspace-shell .member-access-summary span { color: #5d6d70; font-size: 12px; }
@@ -1826,6 +1837,30 @@
   min-width: 0;
   width: 100%;
 }
+.captain-workspace .operation-page .archive-search input[type="search"] {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.captain-workspace .operation-page .archive-search input[type="search"]::-webkit-search-cancel-button {
+  -webkit-appearance: searchfield-cancel-button;
+  cursor: pointer;
+}
+.captain-workspace .operation-page .finance-receipt-link {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+.captain-workspace .operation-page .finance-receipt-link > svg,
+.captain-workspace .operation-page .finance-receipt-link > small { flex: 0 0 auto; }
 .captain-workspace .operation-page :where(.incident-filters, .health-outreach-filters, .community-calendar-filters, .advisory-filters, .emergency-resource-filters, .ops-filter-row, .archive-toolbar, .member-access-filters, .kagawad-contribution-filters, .kagawad-assignment-history-filters, .kagawad-rsvp-history-filters) > * {
   min-width: 0;
   max-width: 100%;
@@ -1867,7 +1902,28 @@
 }
 
 @media (max-width: 650px) {
-  .captain-workspace .operation-page .archive-document-top { flex-wrap: wrap; }
+  .captain-workspace .operation-page .resident-correction-history li { align-items: flex-start; flex-direction: column; }
+  .captain-workspace .operation-page .resident-correction-history li > span { width: 100%; }
+  .captain-workspace .operation-page .resident-correction-history .row-actions { align-items: center; justify-content: flex-start; width: 100%; }
+  .captain-workspace .operation-page .resident-correction-history .row-actions > button { flex: 1 1 140px; min-height: 44px; }
+  .captain-workspace .operation-page .support-conversation > summary { align-items: center; display: flex; gap: 9px; line-height: 1.4; min-height: 44px; }
+  .captain-workspace .operation-page .support-conversation > ol > li > div { align-items: flex-start; flex-wrap: wrap; gap: 5px 14px; line-height: 1.45; }
+  .captain-workspace .operation-page .support-conversation > ol > li > div > strong { flex: 1 1 120px; min-width: 0; overflow-wrap: anywhere; }
+  .captain-workspace .operation-page .support-conversation > ol > li > div > span { flex: 0 1 auto; overflow-wrap: anywhere; }
+  .captain-workspace .operation-page .document-type-list > article { flex-direction: column; }
+  .captain-workspace .operation-page .document-type-list > article > .text-action { align-self: flex-start; min-height: 44px; }
+  .captain-workspace .operation-page .incident-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .captain-workspace .operation-page .community-feedback-history > summary { align-items: center; display: flex; min-height: 44px; }
+  .captain-workspace .operation-page .referral-reply-form > div { flex-wrap: wrap; }
+  .captain-workspace .operation-page .referral-reply-form > div > .button { flex: 1 1 110px; justify-content: center; min-height: 44px; }
+  .captain-workspace .operation-page .archive-document-top {
+    align-items: start;
+    display: grid;
+    grid-template-columns: 42px minmax(0, 1fr);
+  }
+  .captain-workspace .operation-page .archive-document-top > .archive-file-icon { grid-column: 1; grid-row: 1 / span 2; }
+  .captain-workspace .operation-page .archive-document-top > .archive-file-details { grid-column: 2; }
+  .captain-workspace .operation-page .archive-document-top > .status-pill { grid-column: 2; justify-self: start; max-width: 100%; white-space: normal; }
   .captain-workspace .operation-page .archive-text-editor > summary { align-items: center; display: flex; min-height: 44px; }
   .captain-workspace .operation-page .archive-text-actions > .button { flex: 1 1 150px; min-height: 44px; justify-content: center; }
   .captain-workspace .operation-page .document-type-audit-values { grid-template-columns: minmax(0, 1fr); }
@@ -1915,10 +1971,13 @@
   .captain-workspace .operation-page .ops-table { min-width: 640px; }
   .captain-workspace .operation-page :where(.ops-table-wrap, .subscription-table-wrap, .table-wrap) { max-width: 100%; }
   .captain-workspace .operation-page :where(.ops-empty, .ops-loading, .field-hint) { line-height: 1.55; }
-  .captain-workspace .operation-page :where(.member-access-summary, .health-outreach-summary) { grid-template-columns: minmax(0, 1fr); }
+  .captain-workspace .operation-page .member-access-summary { grid-template-columns: minmax(0, 1fr); }
+  .captain-workspace .operation-page .health-outreach-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 380px) {
+  .captain-workspace .operation-page .incident-summary { grid-template-columns: minmax(0, 1fr); }
+  .captain-workspace .operation-page .health-outreach-summary { grid-template-columns: minmax(0, 1fr); }
   .captain-workspace .operation-page :where(.ops-panel, .ops-request-card, .incident-card, .support-ticket, .referral-card, .sk-project-card, .finance-budget, .meeting-card) { padding: 12px; }
   .captain-workspace .operation-page .status-pill { max-width: 100%; white-space: normal; }
 }
@@ -1963,4 +2022,20 @@
   .captain-workspace .support-conversation > ol > li > div > strong { font-size: 12px; line-height: 1.4; }
   .captain-workspace .support-conversation > ol > li > div > span { color: #697a72; font-size: 10px; line-height: 1.4; overflow-wrap: anywhere; }
   .captain-workspace .support-conversation > ol > li p { font-size: 13px; line-height: 1.6; margin-top: 9px; }
+}
+
+@media (max-width: 1100px) {
+  .captain-workspace .operation-page .finance-report { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .captain-workspace .operation-page .finance-report > :where(div, small) { grid-column: 1 / -1; }
+}
+
+@media (max-width: 650px) {
+  .captain-workspace .operation-page .finance-report { grid-template-columns: minmax(0, 1fr); }
+  .captain-workspace .operation-page .finance-report > * { grid-column: 1 / -1; }
+  .captain-workspace .operation-page .finance-report .button { justify-content: center; justify-self: stretch; width: 100%; }
+  .captain-workspace .operation-page .community-feedback-filter { align-items: stretch; flex-direction: column; }
+  .captain-workspace .operation-page .community-feedback-filter select { min-height: 44px; width: 100%; }
+  .captain-workspace .operation-page .sk-accomplishment-header { align-items: flex-start; flex-direction: row; }
+  .captain-workspace .operation-page .sk-accomplishment-header > div { flex: 1 1 200px; min-width: 0; }
+  .captain-workspace .operation-page .sk-accomplishment-header > svg { flex: 0 0 auto; }
 }
