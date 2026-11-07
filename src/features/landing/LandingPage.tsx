@@ -21,11 +21,12 @@ export function LandingPage() {
     <main id="landing-main" tabIndex={-1}>
       <section className="landing-hero" id="home">
         <div className="landing-hero-copy">
+          <span className="landing-ai-badge"><Sparkles size={16} aria-hidden="true" /> Powered by AI</span>
           <span className="landing-eyebrow"><Building2 size={15} /> A connected workspace for barangays</span>
           <h1>Stronger barangays start with <em>working together.</em></h1>
           <p>KABALIKAT brings community updates, resident services, records, and day-to-day operations into one organized digital workspace.</p>
           <div className="landing-actions"><Link className="landing-primary" to="/sign-in">Open your workspace <ArrowRight size={17} /></Link><a className="landing-secondary" href="#features">Explore the platform</a></div>
-          <div className="landing-trust"><span><CheckCircle2 size={16} /> Barangay-specific workspaces</span><span><CheckCircle2 size={16} /> Access based on assigned roles</span><span><Sparkles size={16} /> Powered by AI</span></div>
+          <div className="landing-trust"><span><CheckCircle2 size={16} /> Barangay-specific workspaces</span><span><CheckCircle2 size={16} /> Access based on assigned roles</span></div>
         </div>
         <div className="landing-preview" aria-label="Illustration of KABALIKAT workspace modules">
           <div className="preview-top"><span className="preview-logo"><HeartHandshake size={17} /></span><div><strong>Barangay workspace</strong><small>Community and operations</small></div><span className="preview-status">Workspace</span></div>
