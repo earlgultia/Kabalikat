@@ -22,7 +22,7 @@ export type KagawadCompletedWorkPage = { rows: KagawadCompletedWork[]; totalCoun
 export type KagawadActionItemNote = { id: string; note: string; author_name: string; created_at: string }
 export type CommitteeTaskNotificationContext = {
   id: string; committee_id: string; committee_name: string; title: string; description: string
-  status: CommitteeTaskRow['status']; due_date: string | null; can_add_note: boolean; can_respond: boolean
+  status: CommitteeTaskRow['status']; due_date: string | null; can_add_note: boolean; can_respond: boolean; can_view_due_date_history: boolean
 }
 export type KagawadTaskStatusEvent = { id: string; actor_name: string; details: string; created_at: string; total_count: number }
 export type KagawadTaskStatusHistoryPage = { rows: KagawadTaskStatusEvent[]; totalCount: number }
@@ -31,15 +31,26 @@ export type KagawadTaskDueDateRequest = {
   status: 'pending' | 'approved' | 'declined' | 'withdrawn'; decision_note: string; created_at: string; reviewed_at: string | null; total_count: number
 }
 export type KagawadTaskDueDateRequestPage = { rows: KagawadTaskDueDateRequest[]; totalCount: number }
+export type KagawadDueDateRequestHistoryEntry = {
+  id: string; task_id: string; task_title: string; committee_name: string
+  current_due_date: string | null; proposed_due_date: string; reason: string
+  status: 'pending' | 'approved' | 'declined' | 'withdrawn'; decision_note: string
+  reviewer_name: string | null; created_at: string; reviewed_at: string | null; total_count: number
+}
+export type KagawadDueDateRequestHistoryPage = { rows: KagawadDueDateRequestHistoryEntry[]; totalCount: number }
 export type CommitteeTaskDueDateReview = {
   id: string; task_id: string; task_title: string; committee_name: string
+  task_status: CommitteeTaskRow['status']
   current_due_date: string | null; proposed_due_date: string; reason: string
   requester_name: string; created_at: string; total_count: number
 }
 export type CommitteeTaskDueDateReviewPage = { rows: CommitteeTaskDueDateReview[]; totalCount: number }
-export type CommitteeTaskDueDateReviewHistory = CommitteeTaskDueDateReview & {
+export type CommitteeTaskDueDateReviewHistory = {
+  id: string; task_id: string; task_title: string; committee_name: string
+  current_due_date: string | null; proposed_due_date: string; reason: string
+  requester_name: string; created_at: string; total_count: number
   status: 'approved' | 'declined' | 'withdrawn'; decision_note: string; reviewer_name: string
-  reviewed_at: string; total_count: number
+  reviewed_at: string
 }
 export type CommitteeTaskDueDateReviewHistoryPage = { rows: CommitteeTaskDueDateReviewHistory[]; totalCount: number }
 export type AssignableMemberRow = { user_id: string; display_name: string; role_label: string }
@@ -200,6 +211,22 @@ export async function listKagawadTaskDueDateRequestHistory(taskId: string, page:
   return { rows, totalCount: Number(rows[0]?.total_count ?? 0) }
 }
 
+export async function searchKagawadDueDateRequestHistory(tenantId: string, page: number, filters: {
+  status: string; search: string; createdAfter: string; createdBefore: string; reviewedAfter: string; reviewedBefore: string
+}): Promise<KagawadDueDateRequestHistoryPage> {
+  const { data, error } = await client().rpc('search_kagawad_due_date_request_history', {
+    p_barangay_id: tenantId, p_page: page, p_page_size: 10, p_status: filters.status,
+    p_search: filters.search.trim() || null,
+    p_created_after: filters.createdAfter || null,
+    p_created_before: filters.createdBefore || null,
+    p_reviewed_after: filters.reviewedAfter || null,
+    p_reviewed_before: filters.reviewedBefore || null,
+  })
+  if (error) throw new Error(error.message)
+  const rows = (data ?? []) as KagawadDueDateRequestHistoryEntry[]
+  return { rows: rows.map((row) => ({ ...row, total_count: Number(row.total_count) })), totalCount: Number(rows[0]?.total_count ?? 0) }
+}
+
 export async function requestCommitteeTaskDueDate(taskId: string, proposedDate: string, reason: string): Promise<void> {
   const { error } = await client().rpc('request_committee_task_due_date', {
     p_task_id: taskId, p_proposed_due_date: proposedDate, p_reason: reason.trim(),
@@ -218,10 +245,27 @@ export async function listCommitteeTaskDueDateRequests(tenantId: string, page: n
     p_search: filters.search.trim() || null,
     p_created_after: filters.createdAfter || null,
     p_created_before: filters.createdBefore || null,
+    p_task_id: null,
   })
   if (error) throw new Error(error.message)
   const rows = (data ?? []) as CommitteeTaskDueDateReview[]
   return { rows, totalCount: Number(rows[0]?.total_count ?? 0) }
+}
+
+export async function listCommitteeTaskDueDateRequestsForTask(tenantId: string, taskId: string): Promise<CommitteeTaskDueDateReviewPage> {
+  const { data, error } = await client().rpc('list_committee_task_due_date_requests', {
+    p_barangay_id: tenantId, p_page: 0, p_page_size: 50,
+    p_search: null, p_created_after: null, p_created_before: null, p_task_id: taskId,
+  })
+  if (error) throw new Error(error.message)
+  const rows = (data ?? []) as CommitteeTaskDueDateReview[]
+  return { rows, totalCount: Number(rows[0]?.total_count ?? 0) }
+}
+
+export async function getCommitteeDueDateRequestTaskId(requestId: string): Promise<string | null> {
+  const { data, error } = await client().rpc('get_committee_due_date_request_task_id', { p_request_id: requestId })
+  if (error) throw new Error(error.message)
+  return typeof data === 'string' ? data : null
 }
 
 export async function listCommitteeTaskDueDateRequestHistory(tenantId: string, page: number, filters: { status: string; search: string; createdAfter: string; createdBefore: string; reviewedAfter: string; reviewedBefore: string }): Promise<CommitteeTaskDueDateReviewHistoryPage> {

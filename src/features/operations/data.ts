@@ -157,6 +157,11 @@ export type KagawadMeetingParticipationSummary = {
   excused_meetings: number | null
   generated_at: string
 }
+export type KagawadDueDateRequestSummary = {
+  pending_requests: number | null
+  reviewed_last_30_days: number | null
+  generated_at: string
+}
 export type KagawadInvitedMeeting = {
   id: string; title: string; location: string; starts_at: string; ends_at: string | null
   attendance_status: string | null; check_in_open: boolean
@@ -261,6 +266,10 @@ export function getKagawadActionItemSummary(tenantId: string) {
 
 export function getKagawadMeetingParticipationSummary(tenantId: string) {
   return rpc<KagawadMeetingParticipationSummary>('get_kagawad_meeting_participation_summary', { p_barangay_id: tenantId })
+}
+
+export function getKagawadDueDateRequestSummary(tenantId: string) {
+  return rpc<KagawadDueDateRequestSummary>('get_kagawad_due_date_request_summary', { p_barangay_id: tenantId })
 }
 
 export function listKagawadInvitedMeetings(tenantId: string, page: number, filters: { search: string; response: string; meetingDateAfter: string; meetingDateBefore: string } = { search: '', response: 'all', meetingDateAfter: '', meetingDateBefore: '' }) {

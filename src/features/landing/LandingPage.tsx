@@ -21,8 +21,10 @@ export function LandingPage() {
     <main id="landing-main" tabIndex={-1}>
       <section className="landing-hero" id="home">
         <div className="landing-hero-copy">
-          <span className="landing-ai-badge"><Sparkles size={16} aria-hidden="true" /> Powered by AI</span>
-          <span className="landing-eyebrow"><Building2 size={15} /> A connected workspace for barangays</span>
+          <div className="landing-hero-kicker">
+            <span className="landing-ai-badge"><Sparkles size={16} aria-hidden="true" /> Powered by AI</span>
+            <span className="landing-eyebrow"><Building2 size={15} /> A connected workspace for barangays</span>
+          </div>
           <h1>Stronger barangays start with <em>working together.</em></h1>
           <p>KABALIKAT brings community updates, resident services, records, and day-to-day operations into one organized digital workspace.</p>
           <div className="landing-actions"><Link className="landing-primary" to="/sign-in">Open your workspace <ArrowRight size={17} /></Link><a className="landing-secondary" href="#features">Explore the platform</a></div>

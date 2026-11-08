@@ -24,6 +24,15 @@
   }
 }
 
+.landing-hero-kicker {
+  align-items: center;
+  column-gap: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  row-gap: 8px;
+  min-width: 0;
+}
+.landing-hero-kicker .landing-eyebrow { min-width: 0; }
 .landing-ai-badge {
   align-items: center;
   background: #185c4c;
@@ -36,7 +45,7 @@
   font-weight: 750;
   gap: 8px;
   letter-spacing: .01em;
-  margin-bottom: 16px;
+  margin: 0;
   padding: 9px 14px;
   width: fit-content;
 }

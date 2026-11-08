@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
 import { CheckCircle2, ChevronLeft, ChevronRight, History, MessageSquareText, UsersRound } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
-import { addCommitteeTaskProgressNote, addKagawadActionItemNote, assignCommitteeMember, completeKagawadTask, COMMITTEE_CONTENT_PAGE_SIZE, COMMITTEE_MEMBER_PAGE_SIZE, COMMITTEE_PAGE_SIZE, createCommittee, createCommitteeTask, decideCommitteeTaskDueDateRequest, getCommitteeTaskNotificationContext, listActiveCommitteeMembers, listAssignableCommitteeMembers, listCommitteeMembers, listCommittees, listCommitteeTasks, listCommitteeTaskDueDateRequestHistory, listCommitteeTaskDueDateRequests, listKagawadActionItemNotes, listKagawadAssignedActionItems, listKagawadCompletedWork, listKagawadTaskAssignmentHistory, listKagawadTaskDueDateRequestHistory, listKagawadTaskStatusHistory, reassignCommitteeTask, requestCommitteeTaskDueDate, reportKagawadTaskBlocker, updateCommitteeTaskStatus, withdrawCommitteeTaskDueDateRequest, type CommitteeTaskDueDateReview, type CommitteeTaskRow } from './committee-data'
+import { addCommitteeTaskProgressNote, addKagawadActionItemNote, assignCommitteeMember, completeKagawadTask, COMMITTEE_CONTENT_PAGE_SIZE, COMMITTEE_MEMBER_PAGE_SIZE, COMMITTEE_PAGE_SIZE, createCommittee, createCommitteeTask, decideCommitteeTaskDueDateRequest, getCommitteeTaskNotificationContext, listActiveCommitteeMembers, listAssignableCommitteeMembers, listCommitteeMembers, listCommittees, listCommitteeTasks, listCommitteeTaskDueDateRequestHistory, listCommitteeTaskDueDateRequests, listCommitteeTaskDueDateRequestsForTask, listKagawadActionItemNotes, listKagawadAssignedActionItems, listKagawadCompletedWork, listKagawadTaskAssignmentHistory, listKagawadTaskDueDateRequestHistory, listKagawadTaskStatusHistory, reassignCommitteeTask, requestCommitteeTaskDueDate, reportKagawadTaskBlocker, searchKagawadDueDateRequestHistory, updateCommitteeTaskStatus, withdrawCommitteeTaskDueDateRequest, type CommitteeTaskDueDateReview, type CommitteeTaskRow } from './committee-data'
 import { hasPermission } from './data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 
@@ -112,11 +112,15 @@ function KagawadDueDateRequestPanel({ taskId, currentDueDate, disabled }: { task
 function CommitteeDueDateRequestCard({ request, busy, onDecide }: { request: CommitteeTaskDueDateReview; busy: boolean; onDecide: (requestId: string, decision: 'approved' | 'declined', note: string) => void }) {
   const [note, setNote] = useState('')
   const [error, setError] = useState('')
+  const completed = request.task_status === 'completed'
   return <article className="committee-due-request-card">
     <div><span className="status-pill status-pending">Awaiting review</span><h3>{request.task_title}</h3><p>{request.committee_name} · Requested by {request.requester_name}</p></div>
+    <p>Task status: <strong>{request.task_status.replaceAll('_', ' ')}</strong></p>
+    <small>Submitted {new Date(request.created_at).toLocaleString()}</small>
+    {completed && <p className="field-hint">This task is completed. Its due date cannot be changed; decline the request with a reason.</p>}
     <div className="committee-due-request-dates"><span>Current: {request.current_due_date ? new Date(`${request.current_due_date}T00:00:00`).toLocaleDateString() : 'No due date'}</span><ChevronRight size={16} /><strong>Proposed: {new Date(`${request.proposed_due_date}T00:00:00`).toLocaleDateString()}</strong></div>
     <p className="committee-due-request-reason">{request.reason}</p>
-    <form onSubmit={(event) => { event.preventDefault(); setError(''); onDecide(request.id, 'approved', note) }}><label>Decision note (required when declining)<textarea value={note} maxLength={2000} placeholder="Optional note for approval; explain a decline." onChange={(event) => setNote(event.target.value)} /></label><div><button type="submit" className="button primary" disabled={busy}>Approve date</button><button type="button" className="button outline" disabled={busy} onClick={() => { if (note.trim().length < 3) { setError('Add at least 3 characters explaining why this request is declined.'); return } setError(''); onDecide(request.id, 'declined', note) }}>Decline</button></div></form>
+    <form onSubmit={(event) => { event.preventDefault(); setError(''); onDecide(request.id, 'approved', note) }}><label>Decision note (required when declining)<textarea value={note} maxLength={2000} placeholder="Optional note for approval; explain a decline." onChange={(event) => setNote(event.target.value)} /></label><div><button type="submit" className="button primary" disabled={busy || completed}>Approve date</button><button type="button" className="button outline" disabled={busy} onClick={() => { if (note.trim().length < 3) { setError('Add at least 3 characters explaining why this request is declined.'); return } setError(''); onDecide(request.id, 'declined', note) }}>Decline</button></div></form>
     {error && <ErrorNotice message={error} />}
   </article>
 }
@@ -154,6 +158,7 @@ function CommitteeDueDateReviewQueue({ tenantId }: { tenantId: string }) {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['committee-due-date-review-queue', tenantId] }),
         queryClient.invalidateQueries({ queryKey: ['committee-due-date-review-history', tenantId] }),
+        queryClient.invalidateQueries({ queryKey: ['committee-task-due-date-review-for-task', tenantId] }),
         queryClient.invalidateQueries({ queryKey: ['committee-tasks', tenantId] }),
         queryClient.invalidateQueries({ queryKey: ['committee-task-notes'] }),
       ])
@@ -233,13 +238,46 @@ function CommitteeDueDateRequestHistory({ tenantId }: { tenantId: string }) {
   </details>
 }
 
-function FocusedCommitteeTask({ taskId, onClose }: { taskId: string; onClose: () => void }) {
+function FocusedCommitteeTask({ tenantId, taskId, onClose }: { tenantId: string; taskId: string; onClose: () => void }) {
   const queryClient = useQueryClient()
   const [draft, setDraft] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [decisionMessage, setDecisionMessage] = useState('')
+  const [decisionError, setDecisionError] = useState('')
+  const [dueDatePage, setDueDatePage] = useState(0)
   const context = useQuery({ queryKey: ['committee-task-notification-context', taskId], queryFn: () => getCommitteeTaskNotificationContext(taskId) })
-  const notes = useQuery({ queryKey: ['committee-task-notes', taskId], queryFn: () => listKagawadActionItemNotes(taskId), enabled: Boolean(context.data) })
+  const canViewTaskConversation = Boolean(context.data?.can_add_note || context.data?.can_respond)
+  const notes = useQuery({ queryKey: ['committee-task-notes', taskId], queryFn: () => listKagawadActionItemNotes(taskId), enabled: canViewTaskConversation })
+  const dueDateReviewRequests = useQuery({
+    queryKey: ['committee-task-due-date-review-for-task', tenantId, taskId],
+    queryFn: () => listCommitteeTaskDueDateRequestsForTask(tenantId, taskId),
+    enabled: Boolean(context.data?.can_respond),
+  })
+  const dueDateRequests = useQuery({
+    queryKey: ['kagawad-task-due-date-request-history', taskId, dueDatePage],
+    queryFn: () => listKagawadTaskDueDateRequestHistory(taskId, dueDatePage),
+    enabled: Boolean(context.data?.can_view_due_date_history),
+  })
+  const dueDatePages = Math.max(1, Math.ceil((dueDateRequests.data?.totalCount ?? 0) / 5))
+  const currentDueDatePage = Math.min(dueDatePage, dueDatePages - 1)
+  useEffect(() => { setDueDatePage(0) }, [taskId])
+  useEffect(() => { if (dueDatePage !== currentDueDatePage) setDueDatePage(currentDueDatePage) }, [currentDueDatePage, dueDatePage])
+  async function decideDueDateRequest(requestId: string, decision: 'approved' | 'declined', note: string) {
+    setBusy(true); setDecisionError(''); setDecisionMessage('')
+    try {
+      await decideCommitteeTaskDueDateRequest(requestId, decision, note)
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['committee-task-due-date-review-for-task', tenantId, taskId] }),
+        queryClient.invalidateQueries({ queryKey: ['committee-due-date-review-queue', tenantId] }),
+        queryClient.invalidateQueries({ queryKey: ['committee-due-date-review-history', tenantId] }),
+        queryClient.invalidateQueries({ queryKey: ['committee-tasks', tenantId] }),
+        queryClient.invalidateQueries({ queryKey: ['committee-task-notes', taskId] }),
+      ])
+      setDecisionMessage(decision === 'approved' ? 'Due-date change approved and saved.' : 'Due-date request declined and saved.')
+    } catch (err) { setDecisionError(err instanceof Error ? err.message : 'Unable to review the due-date request.') }
+    finally { setBusy(false) }
+  }
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const parsed = taskNoteSchema.safeParse(draft)
@@ -253,18 +291,38 @@ function FocusedCommitteeTask({ taskId, onClose }: { taskId: string; onClose: ()
     finally { setBusy(false) }
   }
   return <section className="ops-panel focused-committee-task" aria-labelledby="focused-committee-task-title">
-    <div className="ops-panel-heading"><div><span className="eyebrow">Opened from Community updates</span><h2 id="focused-committee-task-title">Task conversation</h2></div><button type="button" className="button outline" onClick={onClose}>Close</button></div>
+    <div className="ops-panel-heading"><div><span className="eyebrow">Opened from Community updates</span><h2 id="focused-committee-task-title">{context.data?.can_view_due_date_history && !canViewTaskConversation ? 'Due-date request decision' : 'Task conversation'}</h2></div><button type="button" className="button outline" onClick={onClose}>Close</button></div>
     {context.isPending && <LoadingNotice compact />}
     {context.error && <ErrorNotice message="This task could not be opened. It may have been reassigned or your access may have changed." onRetry={() => void context.refetch()} retrying={context.isFetching} />}
     {context.data === null && !context.isPending && !context.error && <p className="field-hint">This task is no longer available to your account.</p>}
     {context.data && <>
-      <div className="focused-committee-task-summary"><p>{context.data.committee_name}</p><h3>{context.data.title}</h3>{context.data.description && <p>{context.data.description}</p>}<div><StatusPill status={context.data.status} />{context.data.due_date && <span>Due {new Date(`${context.data.due_date}T00:00:00`).toLocaleDateString()}</span>}</div></div>
-      <div className="kagawad-task-notes focused-committee-task-thread">
+      <div className="focused-committee-task-summary"><p>{context.data.committee_name}</p><h3>{context.data.title}</h3>{context.data.description && canViewTaskConversation && <p>{context.data.description}</p>}<div><StatusPill status={context.data.status} />{context.data.due_date && <span>Due {new Date(`${context.data.due_date}T00:00:00`).toLocaleDateString()}</span>}</div></div>
+      {context.data.can_view_due_date_history && <section className="focused-task-due-date-history" aria-labelledby={`focused-task-due-date-title-${taskId}`}>
+        <h3 id={`focused-task-due-date-title-${taskId}`}>Your due-date requests</h3>
+        {dueDateRequests.isPending ? <LoadingNotice compact /> : dueDateRequests.error ? <ErrorNotice message="Due-date request history could not be loaded." onRetry={() => void dueDateRequests.refetch()} retrying={dueDateRequests.isFetching} /> : dueDateRequests.data?.rows.length ? <>
+          <ol>{dueDateRequests.data.rows.map((entry) => <li key={entry.id} className={`due-date-request-status ${entry.status}`}>
+            <strong>{entry.status === 'pending' ? 'Awaiting manager review' : entry.status === 'approved' ? 'Approved' : entry.status === 'withdrawn' ? 'Withdrawn by you' : 'Declined'}</strong>
+            <span>{entry.current_due_date ? `Requested ${new Date(`${entry.current_due_date}T00:00:00`).toLocaleDateString()} → ${new Date(`${entry.proposed_due_date}T00:00:00`).toLocaleDateString()}` : `Proposed date: ${new Date(`${entry.proposed_due_date}T00:00:00`).toLocaleDateString()}`}</span>
+            <p>{entry.reason}</p>
+            {entry.decision_note && <p className="due-date-decision-note">{entry.status === 'withdrawn' ? 'Note: ' : 'Decision: '}{entry.decision_note}</p>}
+            <small>Submitted {new Date(entry.created_at).toLocaleString()}</small>
+            {entry.reviewed_at && <small>{entry.status === 'withdrawn' ? 'Withdrawn by' : 'Reviewed by'} {entry.reviewer_name ?? 'a committee member'} · {new Date(entry.reviewed_at).toLocaleString()}</small>}
+          </li>)}</ol>
+          {dueDateRequests.data.totalCount > 5 && <div className="committee-picker-pagination"><span>Page {currentDueDatePage + 1} of {dueDatePages} · {dueDateRequests.data.totalCount} requests</span><div><button type="button" className="button outline" disabled={currentDueDatePage === 0 || dueDateRequests.isFetching} onClick={() => setDueDatePage(currentDueDatePage - 1)}>Previous</button><button type="button" className="button outline" disabled={currentDueDatePage + 1 >= dueDatePages || dueDateRequests.isFetching} onClick={() => setDueDatePage(currentDueDatePage + 1)}>Next</button></div></div>}
+        </> : <p className="field-hint">You have not requested a due-date change for this task.</p>}
+      </section>}
+      {context.data.can_respond && <section className="focused-task-due-date-review" aria-labelledby={`focused-task-due-date-review-title-${taskId}`}>
+        <h3 id={`focused-task-due-date-review-title-${taskId}`}>Due-date requests awaiting your review</h3>
+        {decisionMessage && <div className="ops-success" role="status">{decisionMessage}</div>}
+        {decisionError && <ErrorNotice message={decisionError} />}
+        {dueDateReviewRequests.isPending ? <LoadingNotice compact /> : dueDateReviewRequests.error ? <ErrorNotice message="Due-date requests for this task could not be loaded." onRetry={() => void dueDateReviewRequests.refetch()} retrying={dueDateReviewRequests.isFetching} /> : dueDateReviewRequests.data?.rows.length ? dueDateReviewRequests.data.rows.map((request) => <CommitteeDueDateRequestCard key={request.id} request={request} busy={busy} onDecide={(id, decision, note) => void decideDueDateRequest(id, decision, note)} />) : <p className="field-hint">No due-date requests are awaiting review for this task.</p>}
+      </section>}
+      {canViewTaskConversation && <div className="kagawad-task-notes focused-committee-task-thread">
         <h3>Progress and responses</h3>
         {notes.isPending ? <LoadingNotice compact /> : notes.error ? <ErrorNotice message="Task messages could not be loaded." onRetry={() => void notes.refetch()} retrying={notes.isFetching} /> : notes.data?.length ? <ol>{[...notes.data].reverse().map((note) => <li key={note.id}><p>{note.note}</p><small>{note.author_name} · {new Date(note.created_at).toLocaleString()}</small></li>)}</ol> : <p className="field-hint">No messages have been added to this task.</p>}
         {(context.data.can_add_note || context.data.can_respond) && <form onSubmit={(event) => void submit(event)}><label htmlFor={`focused-task-message-${taskId}`}>{context.data.can_respond ? 'Add a manager response' : 'Add a progress or blocker note'}<textarea id={`focused-task-message-${taskId}`} value={draft} maxLength={2000} minLength={3} required placeholder={context.data.can_respond ? 'Share guidance or a follow-up request.' : 'Share what changed or what is blocking this task.'} onChange={(event) => setDraft(event.target.value)} /></label><button className="button primary" disabled={busy || draft.trim().length < 3}>{busy ? 'Sending…' : context.data.can_respond ? 'Add response' : 'Add progress note'}</button></form>}
         {error && <ErrorNotice message={error} />}
-      </div>
+      </div>}
     </>}
   </section>
 }
@@ -409,7 +467,7 @@ function CommitteeWorkspaceCard({
   </article>
 }
 
-export function CommitteesPage({ focusId, onFocusHandled }: { focusId?: string; onFocusHandled?: () => void }) {
+export function CommitteesPage({ focusId, focusDueDateRequestStatus, onFocusHandled }: { focusId?: string; focusDueDateRequestStatus?: 'pending' | 'reviewed'; onFocusHandled?: () => void }) {
   const { membership, user } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
   const queryClient = useQueryClient()
@@ -417,6 +475,10 @@ export function CommitteesPage({ focusId, onFocusHandled }: { focusId?: string; 
   const [myTaskPage, setMyTaskPage] = useState(0)
   const [taskAssignmentHistoryPage, setTaskAssignmentHistoryPage] = useState(0)
   const [completedWorkPage, setCompletedWorkPage] = useState(0)
+  const [dueDateHistoryPage, setDueDateHistoryPage] = useState(0)
+  const [dueDateHistoryFilters, setDueDateHistoryFilters] = useState({ status: 'all', search: '', createdAfter: '', createdBefore: '', reviewedAfter: '', reviewedBefore: '' })
+  const [dueDateHistoryDraft, setDueDateHistoryDraft] = useState({ status: 'all', search: '', createdAfter: '', createdBefore: '', reviewedAfter: '', reviewedBefore: '' })
+  const [dueDateHistoryFilterError, setDueDateHistoryFilterError] = useState('')
   const [completedWorkFilters, setCompletedWorkFilters] = useState({ search: '', completedAfter: '', completedBefore: '' })
   const [completedWorkDraft, setCompletedWorkDraft] = useState({ search: '', completedAfter: '', completedBefore: '' })
   const [taskHistoryDraft, setTaskHistoryDraft] = useState({ search: '', status: 'all', assignedAfter: '', assignedBefore: '' })
@@ -434,18 +496,35 @@ export function CommitteesPage({ focusId, onFocusHandled }: { focusId?: string; 
   const [taskActionReason, setTaskActionReason] = useState('')
   const [focusedTaskId, setFocusedTaskId] = useState('')
   const isKagawad = membership?.role?.key === 'kagawad'
-  useEffect(() => { setPage(0); setMyTaskPage(0); setTaskAssignmentHistoryPage(0); setCompletedWorkPage(0); setCompletedWorkFilters({ search: '', completedAfter: '', completedBefore: '' }); setCompletedWorkDraft({ search: '', completedAfter: '', completedBefore: '' }); setTaskHistoryDraft({ search: '', status: 'all', assignedAfter: '', assignedBefore: '' }); setTaskHistoryFilters({ search: '', status: 'all', assignedAfter: '', assignedBefore: '' }); setMyTaskStatus('all'); setMyTaskDueFilter('all'); setMyTaskSearch(''); setMyTaskSearchInput(''); setTaskNotesFor(''); setTaskNoteDraft('') }, [tenantId])
+  useEffect(() => { setPage(0); setMyTaskPage(0); setTaskAssignmentHistoryPage(0); setCompletedWorkPage(0); setDueDateHistoryPage(0); setDueDateHistoryFilters({ status: 'all', search: '', createdAfter: '', createdBefore: '', reviewedAfter: '', reviewedBefore: '' }); setDueDateHistoryDraft({ status: 'all', search: '', createdAfter: '', createdBefore: '', reviewedAfter: '', reviewedBefore: '' }); setDueDateHistoryFilterError(''); setCompletedWorkFilters({ search: '', completedAfter: '', completedBefore: '' }); setCompletedWorkDraft({ search: '', completedAfter: '', completedBefore: '' }); setTaskHistoryDraft({ search: '', status: 'all', assignedAfter: '', assignedBefore: '' }); setTaskHistoryFilters({ search: '', status: 'all', assignedAfter: '', assignedBefore: '' }); setMyTaskStatus('all'); setMyTaskDueFilter('all'); setMyTaskSearch(''); setMyTaskSearchInput(''); setTaskNotesFor(''); setTaskNoteDraft('') }, [tenantId])
   useEffect(() => {
     if (!focusId) return
     setFocusedTaskId(focusId)
     onFocusHandled?.()
   }, [focusId, onFocusHandled])
+  useEffect(() => {
+    if (!focusDueDateRequestStatus || !isKagawad) return
+    const reviewedAfter = new Date()
+    reviewedAfter.setDate(reviewedAfter.getDate() - 30)
+    const filters = { status: focusDueDateRequestStatus, search: '', createdAfter: '', createdBefore: '', reviewedAfter: focusDueDateRequestStatus === 'reviewed' ? dateInputValue(reviewedAfter.toISOString()) : '', reviewedBefore: '', }
+    setDueDateHistoryFilters(filters)
+    setDueDateHistoryDraft(filters)
+    setDueDateHistoryPage(0)
+    window.requestAnimationFrame(() => document.getElementById('kagawad-due-date-history')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+    onFocusHandled?.()
+  }, [focusDueDateRequestStatus, isKagawad, onFocusHandled])
   const canManage = useQuery({ queryKey: ['permission', tenantId, 'committee.manage'], queryFn: () => hasPermission(tenantId, 'committee.manage'), enabled: Boolean(tenantId) })
   const committees = useQuery({ queryKey: ['committees', tenantId, page], queryFn: () => listCommittees(tenantId, page), enabled: Boolean(tenantId) })
   const myTasks = useQuery({ queryKey: ['kagawad-my-action-items', tenantId, myTaskPage, myTaskStatus, myTaskDueFilter, myTaskSearch], queryFn: () => listKagawadAssignedActionItems(tenantId, myTaskPage, myTaskStatus, myTaskSearch, myTaskDueFilter), enabled: Boolean(tenantId && isKagawad) })
   const taskAssignmentHistory = useQuery({ queryKey: ['kagawad-task-assignment-history', tenantId, taskAssignmentHistoryPage, taskHistoryFilters], queryFn: () => listKagawadTaskAssignmentHistory(tenantId, taskAssignmentHistoryPage, taskHistoryFilters), enabled: Boolean(tenantId && isKagawad) })
   const completedWork = useQuery({ queryKey: ['kagawad-completed-work', tenantId, completedWorkPage, completedWorkFilters], queryFn: () => listKagawadCompletedWork(tenantId, completedWorkPage, completedWorkFilters), enabled: Boolean(tenantId && isKagawad) })
+  const dueDateHistory = useQuery({ queryKey: ['kagawad-due-date-request-history', tenantId, dueDateHistoryPage, dueDateHistoryFilters], queryFn: () => searchKagawadDueDateRequestHistory(tenantId, dueDateHistoryPage, dueDateHistoryFilters), enabled: Boolean(tenantId && isKagawad) })
   const taskNotes = useQuery({ queryKey: ['kagawad-action-item-notes', tenantId, taskNotesFor], queryFn: () => listKagawadActionItemNotes(taskNotesFor), enabled: Boolean(tenantId && taskNotesFor && isKagawad) })
+  useEffect(() => {
+    if (!pendingTaskAction || !isKagawad) return
+    const frame = window.requestAnimationFrame(() => document.getElementById(`kagawad-my-task-${pendingTaskAction.taskId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }))
+    return () => window.cancelAnimationFrame(frame)
+  }, [isKagawad, myTasks.data, pendingTaskAction])
   const visibleTaskNotes = taskNotes.data?.filter((note) => {
     const matchesSearch = `${note.author_name} ${note.note}`.toLocaleLowerCase().includes(taskNotesSearch.trim().toLocaleLowerCase())
     const noteDate = dateInputValue(note.created_at)
@@ -504,6 +583,13 @@ export function CommitteesPage({ focusId, onFocusHandled }: { focusId?: string; 
   }
 
   async function changeStatus(task: CommitteeTaskRow, status: CommitteeTaskRow['status']) {
+    if (status === 'completed' && task.status !== 'completed' && isKagawad && task.assigned_to === user?.id) {
+      setError(''); setMessage('')
+      setMyTaskPage(0); setMyTaskStatus('all'); setMyTaskDueFilter('all')
+      setMyTaskSearch(''); setMyTaskSearchInput('')
+      setPendingTaskAction({ taskId: task.id, status: 'completed' }); setTaskActionReason('')
+      return
+    }
     setBusy(true); setError(''); setMessage('')
     try { await updateCommitteeTaskStatus(task.id, status); await refresh(); setMessage('Action item status updated.') }
     catch (err) { setError(err instanceof Error ? err.message : 'Unable to update the action item.') }
@@ -560,11 +646,46 @@ export function CommitteesPage({ focusId, onFocusHandled }: { focusId?: string; 
     </PageHeading>
     {!tenantId && <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to view assigned committee workspaces." />}
     {Boolean(tenantId) && canManage.isPending && <LoadingNotice compact />}
-    {canManage.error && <ErrorNotice message="Committee management access could not be checked. Existing assignments can still be viewed; management controls are unavailable until access can be verified." />}
+    {canManage.error && <ErrorNotice message="Committee management access could not be checked. Existing assignments can still be viewed; management controls are unavailable until access can be verified." onRetry={() => void canManage.refetch()} retrying={canManage.isFetching} />}
     {message && <div className="ops-success"><CheckCircle2 size={16} />{message}</div>}{error && <ErrorNotice message={error} />}
-    {focusedTaskId && <FocusedCommitteeTask taskId={focusedTaskId} onClose={() => setFocusedTaskId('')} />}
+    {focusedTaskId && <FocusedCommitteeTask tenantId={tenantId} taskId={focusedTaskId} onClose={() => setFocusedTaskId('')} />}
     {canManage.data && tenantId && <><CommitteeDueDateReviewQueue tenantId={tenantId} /><CommitteeDueDateRequestHistory tenantId={tenantId} /></>}
     {Boolean(tenantId) && !canManage.isPending && !canManage.error && !canManage.data && <div className="ops-panel archive-access"><UsersRound size={20} /><div><strong>Committee access is assignment-based</strong><p>You will see committees after an authorized administrator assigns you to one.</p></div></div>}
+    {isKagawad && <section id="kagawad-due-date-history" className="ops-panel kagawad-due-date-history" aria-labelledby="kagawad-due-date-history-title">
+      <div className="ops-panel-heading"><div><h2 id="kagawad-due-date-history-title">My due-date requests</h2><p>Search your submitted requests and see the manager’s decision and reviewer.</p></div><History size={19} /></div>
+      <form className="kagawad-due-date-history-filters" onSubmit={(event) => {
+        event.preventDefault()
+        if (dueDateHistoryDraft.createdAfter && dueDateHistoryDraft.createdBefore && dueDateHistoryDraft.createdAfter > dueDateHistoryDraft.createdBefore) {
+          setDueDateHistoryFilterError('The submission start date must be on or before the end date.')
+          return
+        }
+        if (dueDateHistoryDraft.reviewedAfter && dueDateHistoryDraft.reviewedBefore && dueDateHistoryDraft.reviewedAfter > dueDateHistoryDraft.reviewedBefore) {
+          setDueDateHistoryFilterError('The review start date must be on or before the end date.')
+          return
+        }
+        setDueDateHistoryFilterError('')
+        setDueDateHistoryPage(0)
+        setDueDateHistoryFilters({ ...dueDateHistoryDraft, search: dueDateHistoryDraft.search.trim() })
+      }}>
+        <label>Search requests<input type="search" maxLength={100} placeholder="Task, committee, or reason" value={dueDateHistoryDraft.search} onChange={(event) => setDueDateHistoryDraft((current) => ({ ...current, search: event.target.value }))} /></label>
+        <label>Status<select value={dueDateHistoryDraft.status} onChange={(event) => setDueDateHistoryDraft((current) => ({ ...current, status: event.target.value }))}><option value="all">All statuses</option><option value="pending">Awaiting review</option><option value="reviewed">Reviewed</option><option value="approved">Approved</option><option value="declined">Declined</option><option value="withdrawn">Withdrawn</option></select></label>
+        <label>Submitted on or after<input type="date" max={dueDateHistoryDraft.createdBefore || undefined} value={dueDateHistoryDraft.createdAfter} onChange={(event) => setDueDateHistoryDraft((current) => ({ ...current, createdAfter: event.target.value }))} /></label>
+        <label>Submitted on or before<input type="date" min={dueDateHistoryDraft.createdAfter || undefined} value={dueDateHistoryDraft.createdBefore} onChange={(event) => setDueDateHistoryDraft((current) => ({ ...current, createdBefore: event.target.value }))} /></label>
+        <label>Reviewed on or after<input type="date" max={dueDateHistoryDraft.reviewedBefore || undefined} value={dueDateHistoryDraft.reviewedAfter} onChange={(event) => setDueDateHistoryDraft((current) => ({ ...current, reviewedAfter: event.target.value }))} /></label>
+        <label>Reviewed on or before<input type="date" min={dueDateHistoryDraft.reviewedAfter || undefined} value={dueDateHistoryDraft.reviewedBefore} onChange={(event) => setDueDateHistoryDraft((current) => ({ ...current, reviewedBefore: event.target.value }))} /></label>
+        <div className="kagawad-due-date-history-actions"><button className="button primary" type="submit">Apply filters</button><button className="button outline" type="button" onClick={() => { const empty = { status: 'all', search: '', createdAfter: '', createdBefore: '', reviewedAfter: '', reviewedBefore: '' }; setDueDateHistoryDraft(empty); setDueDateHistoryFilters(empty); setDueDateHistoryFilterError(''); setDueDateHistoryPage(0) }} disabled={dueDateHistoryDraft.status === 'all' && !dueDateHistoryDraft.search && !dueDateHistoryDraft.createdAfter && !dueDateHistoryDraft.createdBefore && !dueDateHistoryDraft.reviewedAfter && !dueDateHistoryDraft.reviewedBefore}>Clear</button></div>
+      </form>
+      {dueDateHistoryFilterError && <p className="field-hint" role="alert">{dueDateHistoryFilterError}</p>}
+      {dueDateHistory.isPending ? <LoadingNotice compact /> : dueDateHistory.error ? <ErrorNotice message="Your due-date request history could not be loaded." onRetry={() => void dueDateHistory.refetch()} retrying={dueDateHistory.isFetching} /> : dueDateHistory.data?.rows.length ? <>
+        <ol className="kagawad-due-date-history-list">{dueDateHistory.data.rows.map((entry) => <li key={entry.id}>
+          <div><span className={`due-date-request-status-badge ${entry.status}`}>{entry.status === 'pending' ? 'Awaiting review' : entry.status === 'withdrawn' ? 'Withdrawn' : entry.status === 'approved' ? 'Approved' : 'Declined'}</span><strong>{entry.task_title}</strong><small>{entry.committee_name} · Submitted {new Date(entry.created_at).toLocaleString()}</small></div>
+          <p>{entry.current_due_date ? `Requested ${new Date(`${entry.current_due_date}T00:00:00`).toLocaleDateString()} → ${new Date(`${entry.proposed_due_date}T00:00:00`).toLocaleDateString()}` : `Proposed date: ${new Date(`${entry.proposed_due_date}T00:00:00`).toLocaleDateString()}`}</p>
+          <p className="committee-due-request-reason">{entry.reason}</p>
+          {entry.status !== 'pending' && <><small>{entry.status === 'withdrawn' ? 'Withdrawn by' : 'Reviewed by'} {entry.reviewer_name || 'a committee member'}{entry.reviewed_at ? ` · ${new Date(entry.reviewed_at).toLocaleString()}` : ''}</small>{entry.decision_note && <p className="due-date-decision-note">{entry.decision_note}</p>}</>}
+        </li>)}</ol>
+        {dueDateHistory.data.totalCount > 10 && <div className="committee-picker-pagination"><span>Page {dueDateHistoryPage + 1} of {Math.ceil(dueDateHistory.data.totalCount / 10)} · {dueDateHistory.data.totalCount} requests</span><div><button type="button" className="button outline" disabled={dueDateHistoryPage === 0 || dueDateHistory.isFetching} onClick={() => setDueDateHistoryPage((current) => current - 1)}>Previous</button><button type="button" className="button outline" disabled={(dueDateHistoryPage + 1) * 10 >= dueDateHistory.data.totalCount || dueDateHistory.isFetching} onClick={() => setDueDateHistoryPage((current) => current + 1)}>Next</button></div></div>}
+      </> : <p className="field-hint">{dueDateHistoryFilters.status !== 'all' || dueDateHistoryFilters.search || dueDateHistoryFilters.createdAfter || dueDateHistoryFilters.createdBefore || dueDateHistoryFilters.reviewedAfter || dueDateHistoryFilters.reviewedBefore ? 'No due-date requests match these filters.' : 'Your due-date requests will appear here.'}</p>}
+    </section>}
     {isKagawad && <section className="ops-panel kagawad-completed-work" aria-labelledby="kagawad-completed-work-title">
       <div className="ops-panel-heading"><div><h2 id="kagawad-completed-work-title">My completed work</h2><p>Completion summaries you submitted, including tasks later transferred or archived.</p></div><CheckCircle2 size={19} /></div>
       <form className="kagawad-completed-work-filters" onSubmit={(event) => { event.preventDefault(); if (completedWorkDraft.completedAfter && completedWorkDraft.completedBefore && completedWorkDraft.completedAfter > completedWorkDraft.completedBefore) { setError('The completion start date must be on or before the end date.'); return } setError(''); setCompletedWorkPage(0); setCompletedWorkFilters({ ...completedWorkDraft, search: completedWorkDraft.search.trim() }) }}>
@@ -597,7 +718,7 @@ export function CommitteesPage({ focusId, onFocusHandled }: { focusId?: string; 
       </> : <p className="field-hint">{taskHistoryFilters.search || taskHistoryFilters.status !== 'all' || taskHistoryFilters.assignedAfter || taskHistoryFilters.assignedBefore ? 'No task assignments match these filters.' : 'No task assignments have been recorded yet.'}</p>}
     </section>}
     {isKagawad && <section className="ops-panel kagawad-my-work" aria-labelledby="kagawad-my-work-title">
-      <div className="ops-panel-heading"><div><h2 id="kagawad-my-work-title">My assigned action items</h2><p>All active committee tasks assigned to you in one list.</p></div><UsersRound size={19} /></div>
+      <div className="ops-panel-heading"><div><h2 id="kagawad-my-work-title">My assigned action items</h2><p>Find your assigned tasks by status, committee, or due date.</p></div><UsersRound size={19} /></div>
       <form className="kagawad-action-item-filters" onSubmit={(event) => { event.preventDefault(); setMyTaskPage(0); setMyTaskSearch(myTaskSearchInput.trim()) }}>
         <label>Search tasks<input value={myTaskSearchInput} maxLength={100} placeholder="Task or committee" onChange={(event) => setMyTaskSearchInput(event.target.value)} /></label>
         <label>Status<select value={myTaskStatus} onChange={(event) => { setMyTaskPage(0); setMyTaskStatus(event.target.value as typeof myTaskStatus) }}><option value="all">All statuses</option><option value="open">Open</option><option value="in_progress">In progress</option><option value="blocked">Blocked</option><option value="completed">Completed</option></select></label>
@@ -605,9 +726,9 @@ export function CommitteesPage({ focusId, onFocusHandled }: { focusId?: string; 
         <button className="button outline">Search</button>
       </form>
       {myTasks.isPending && <LoadingNotice compact />}
-      {myTasks.error && <ErrorNotice message="Your assigned action items could not be loaded." />}
-      {myTasks.data?.totalCount === 0 && <p className="field-hint">No assigned tasks match these filters.</p>}
-      {Boolean(myTasks.data?.rows.length) && <ul className="kagawad-my-task-list">{myTasks.data?.rows.map((task) => <li key={task.id}>
+      {myTasks.error && <ErrorNotice message="Your assigned action items could not be loaded." onRetry={() => void myTasks.refetch()} retrying={myTasks.isFetching} />}
+      {myTasks.data?.totalCount === 0 && <p className="field-hint">{myTaskSearch || myTaskStatus !== 'all' || myTaskDueFilter !== 'all' ? 'No assigned tasks match these filters.' : 'No tasks are assigned to you yet.'}</p>}
+      {Boolean(myTasks.data?.rows.length) && <ul className="kagawad-my-task-list">{myTasks.data?.rows.map((task) => <li id={`kagawad-my-task-${task.id}`} key={task.id}>
         <div><strong>{task.title}</strong><small>{task.committee_name}{task.due_date ? ` · Due ${new Date(`${task.due_date}T00:00:00`).toLocaleDateString()}` : ' · No due date'}</small>{task.description && <p>{task.description}</p>}
           <KagawadTaskStatusHistory taskId={task.id} />
           {task.status !== 'completed' && <KagawadDueDateRequestPanel taskId={task.id} currentDueDate={task.due_date} disabled={pendingTaskAction?.taskId === task.id} />}
@@ -625,7 +746,7 @@ export function CommitteesPage({ focusId, onFocusHandled }: { focusId?: string; 
       {myTaskPages > 1 && <div className="committee-picker-pagination"><span>Page {myTaskPage + 1} of {myTaskPages} · {myTasks.data?.totalCount ?? 0} tasks</span><div><button type="button" className="button outline" disabled={myTaskPage === 0 || myTasks.isFetching} onClick={() => setMyTaskPage((current) => current - 1)}>Previous</button><button type="button" className="button outline" disabled={myTaskPage + 1 >= myTaskPages || myTasks.isFetching} onClick={() => setMyTaskPage((current) => current + 1)}>Next</button></div></div>}
     </section>}
     {showCreate && canManage.data && <form className="ops-panel ops-form" onSubmit={(event) => void submitCommittee(event)}><div className="ops-panel-heading"><div><h2>Create a committee</h2><p>Only authorized committee managers can configure workspaces.</p></div><UsersRound size={18} /></div><div className="ops-form-grid"><label>Committee name<input name="name" maxLength={120} required /></label><label className="span-two">Purpose / description<textarea name="description" maxLength={1000} /></label></div><div className="ops-form-actions"><button className="button primary" disabled={busy}>Create committee</button></div></form>}
-    {committees.isPending && tenantId && <LoadingNotice />}{committees.error && <ErrorNotice message={committees.error.message} />}
+    {committees.isPending && tenantId && <LoadingNotice />}{committees.error && <ErrorNotice message="Committee workspaces could not be loaded." onRetry={() => void committees.refetch()} retrying={committees.isFetching} />}
     {committees.data?.totalCount === 0 && <div className="ops-empty"><UsersRound size={22} /><strong>No committee workspaces assigned</strong><p>Ask an authorized Captain or Secretary to create or assign a committee.</p></div>}
     <div className="committee-workspace-list">{committees.data?.rows.map((committee) => <CommitteeWorkspaceCard key={committee.id} tenantId={tenantId} committee={committee} canManage={Boolean(canManage.data)} currentUserId={user?.id ?? ''} busy={busy} onAssign={(event) => void assignMember(committee.id, event)} onAddTask={(event) => void addTask(committee.id, event)} onChangeTask={(task, status) => void changeStatus(task, status)} onReassignTask={(taskId, userId) => void reassignTask(taskId, userId)} />)}</div>
     {totalPages > 1 && <nav className="ops-panel ops-form-actions" aria-label="Committee pages">

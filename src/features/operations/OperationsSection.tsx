@@ -32,7 +32,7 @@ function page<Props extends object>(component: ComponentType<Props>, props?: Pro
 
 export type OperationSection = 'members' | 'barangay-settings' | 'tenant-subscription' | 'residents' | 'invitations' | 'documents' | 'announcements' | 'meetings' | 'archive' | 'finance' | 'committees' | 'projects' | 'referrals' | 'health-outreach' | 'sk-events' | 'sk-projects' | 'sk-accomplishments' | 'incidents' | 'patrols' | 'advisories' | 'community-calendar' | 'feedback' | 'support'
 
-export function OperationsSection({ section, focusId, focusPage, focusStatus, focusRelatedId, focusRelatedPage, focusNestedPage, focusOpenResponses, focusCorrectionRequestId, focusCorrectionPage, focusCorrectionQueue, onFocusHandled, onOpenInvitations }: { section: OperationSection; focusId?: string; focusPage?: number; focusStatus?: 'draft' | 'changes_requested' | 'published' | 'cancelled' | 'completed'; focusRelatedId?: string; focusRelatedPage?: number; focusNestedPage?: number; focusOpenResponses?: boolean; focusCorrectionRequestId?: string; focusCorrectionPage?: number; focusCorrectionQueue?: boolean; onFocusHandled?: () => void; onOpenInvitations?: () => void }) {
+export function OperationsSection({ section, focusId, focusPage, focusStatus, focusDueDateRequestStatus, focusRelatedId, focusRelatedPage, focusNestedPage, focusOpenResponses, focusCorrectionRequestId, focusCorrectionPage, focusCorrectionQueue, onFocusHandled, onOpenInvitations }: { section: OperationSection; focusId?: string; focusPage?: number; focusStatus?: 'draft' | 'changes_requested' | 'published' | 'cancelled' | 'completed'; focusDueDateRequestStatus?: 'pending' | 'reviewed'; focusRelatedId?: string; focusRelatedPage?: number; focusNestedPage?: number; focusOpenResponses?: boolean; focusCorrectionRequestId?: string; focusCorrectionPage?: number; focusCorrectionQueue?: boolean; onFocusHandled?: () => void; onOpenInvitations?: () => void }) {
   switch (section) {
     case 'members': return page(MembersPage, { onOpenInvitations })
     case 'barangay-settings': return page(BarangaySettingsPage)
@@ -44,7 +44,7 @@ export function OperationsSection({ section, focusId, focusPage, focusStatus, fo
     case 'meetings': return page(MeetingsPage, { focusId, focusPage, focusCorrectionRequestId, focusCorrectionPage, focusCorrectionQueue, onFocusHandled })
     case 'archive': return page(ArchivePage)
     case 'finance': return page(FinancePage)
-    case 'committees': return page(CommitteesPage, { focusId, onFocusHandled })
+    case 'committees': return page(CommitteesPage, { focusId, focusDueDateRequestStatus, onFocusHandled })
     case 'sk-projects': return page(SkProjectsPage)
     case 'sk-accomplishments': return page(SkTransparencyPage)
     case 'projects': return page(ProjectsPage, { focusProjectId: focusId, focusProjectPage: focusPage, focusUpdateId: focusRelatedId, focusUpdatePage: focusRelatedPage, focusResponsePage: focusNestedPage, openResponseThread: focusOpenResponses, onFocusHandled })

@@ -1506,6 +1506,24 @@
 .kagawad-completed-work-list strong { color: #293f40; font-size: 13px; overflow-wrap: anywhere; }
 .kagawad-completed-work-list small { color: #697a72; font-size: 11px; overflow-wrap: anywhere; }
 .kagawad-completed-work-list p { color: #435957; font-size: 12px; line-height: 1.55; margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+.kagawad-due-date-history { display: grid; gap: 12px; min-width: 0; }
+.kagawad-due-date-history > .ops-panel-heading { margin-bottom: 0; }
+.kagawad-due-date-history-filters { align-items: end; background: #f8faf7; border: 1px solid #e2e9e4; border-radius: 10px; display: grid; gap: 10px; grid-template-columns: minmax(180px, 2fr) repeat(3, minmax(125px, 1fr)) auto; min-width: 0; padding: 12px; }
+.kagawad-due-date-history-filters label { color: #435957; display: grid; font-size: 11px; font-weight: 700; gap: 5px; min-width: 0; }
+.kagawad-due-date-history-filters input, .kagawad-due-date-history-filters select { background: #fffefa; border: 1px solid #bfcec8; border-radius: 8px; box-sizing: border-box; color: #24353b; font: inherit; font-weight: 400; min-height: 40px; min-width: 0; padding: 8px 10px; width: 100%; }
+.kagawad-due-date-history-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 7px; }
+.kagawad-due-date-history-list { display: grid; gap: 10px; list-style: none; margin: 0; min-width: 0; padding: 0; }
+.kagawad-due-date-history-list > li { background: #f8faf7; border: 1px solid #e2e9e4; border-radius: 10px; display: grid; gap: 7px; min-width: 0; padding: 12px; }
+.kagawad-due-date-history-list > li > div { align-items: flex-start; display: grid; gap: 4px; min-width: 0; }
+.kagawad-due-date-history-list strong, .kagawad-due-date-history-list small, .kagawad-due-date-history-list p { overflow-wrap: anywhere; }
+.kagawad-due-date-history-list strong { color: #293f40; font-size: 13px; }
+.kagawad-due-date-history-list small { color: #697a72; font-size: 11px; }
+.kagawad-due-date-history-list p { margin: 0; }
+.due-date-request-status-badge { background: #edf1ed; border-radius: 999px; color: #65766d; font-size: 11px; font-weight: 700; justify-self: start; padding: 4px 9px; }
+.due-date-request-status-badge.pending { background: #fff4da; color: #896a2c; }
+.due-date-request-status-badge.approved { background: #e5f2eb; color: #28766c; }
+.due-date-request-status-badge.declined { background: #fbecea; color: #a0443c; }
+.due-date-request-status-badge.withdrawn { background: #edf1ed; color: #65766d; }
 .kagawad-assignment-history-filters { align-items: end; background: #f8faf7; border: 1px solid #e2e9e4; border-radius: 10px; display: grid; gap: 10px; grid-template-columns: minmax(180px,2fr) repeat(3,minmax(125px,1fr)) auto; min-width: 0; padding: 12px; }
 .kagawad-assignment-history-filters label { color: #435957; display: grid; font-size: 11px; font-weight: 700; gap: 5px; min-width: 0; }
 .kagawad-assignment-history-filters input, .kagawad-assignment-history-filters select { background: #fffefa; border: 1px solid #bfcec8; border-radius: 8px; color: #24353b; font: inherit; min-height: 40px; min-width: 0; padding: 8px 10px; width: 100%; }
@@ -1535,6 +1553,17 @@
 .focused-committee-task-summary > p, .focused-committee-task-summary h3 { margin: 0; overflow-wrap: anywhere; }
 .focused-committee-task-summary > p:first-child { color: #65766f; font-size: 12px; font-weight: 700; }
 .focused-committee-task-summary > div { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; }
+.focused-task-due-date-history { background: #f8faf7; border: 1px solid #e2e9e4; border-radius: 10px; display: grid; gap: 10px; min-width: 0; padding: 12px; }
+.focused-task-due-date-history > h3 { font-size: 14px; margin: 0; }
+.focused-task-due-date-history > ol { display: grid; gap: 8px; list-style: none; margin: 0; min-width: 0; padding: 0; }
+.focused-task-due-date-history .due-date-request-status { min-width: 0; overflow-wrap: anywhere; }
+.focused-task-due-date-history .due-date-request-status > span,
+.focused-task-due-date-history .due-date-request-status > small { overflow-wrap: anywhere; }
+.focused-task-due-date-history .due-date-request-status > small { color: #697a72; font-size: 11px; }
+.focused-task-due-date-history .committee-picker-pagination { min-width: 0; }
+.focused-task-due-date-review { background: #f8faf7; border: 1px solid #e2e9e4; border-radius: 10px; display: grid; gap: 10px; min-width: 0; padding: 12px; }
+.focused-task-due-date-review > h3 { font-size: 14px; margin: 0; }
+.focused-task-due-date-review .committee-due-request-card { width: 100%; }
 .focused-committee-task-thread { margin-top: 0; max-width: none; }
 .focused-committee-task-thread > h3 { font-size: 14px; margin: 0; }
 .kagawad-task-notes form { align-items: end; display: grid; gap: 8px; grid-template-columns: minmax(0,1fr) auto; }
@@ -2149,6 +2178,22 @@
   .captain-workspace .operation-page .sk-accomplishment-header { align-items: flex-start; flex-direction: row; }
   .captain-workspace .operation-page .sk-accomplishment-header > div { flex: 1 1 200px; min-width: 0; }
   .captain-workspace .operation-page .sk-accomplishment-header > svg { flex: 0 0 auto; }
+}
+
+@media (max-width: 900px) {
+  .kagawad-due-date-history-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kagawad-due-date-history-filters label:first-child,
+  .kagawad-due-date-history-actions { grid-column: 1 / -1; }
+  .kagawad-due-date-history-actions > button { flex: 1 1 120px; }
+}
+
+@media (max-width: 650px) {
+  .kagawad-due-date-history { gap: 10px; padding: 14px; }
+  .kagawad-due-date-history-filters { grid-template-columns: minmax(0, 1fr); padding: 10px; }
+  .kagawad-due-date-history-filters label:first-child,
+  .kagawad-due-date-history-actions { grid-column: 1; }
+  .kagawad-due-date-history-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kagawad-due-date-history-actions > button { width: 100%; }
 }
 
 /* Safari's native date control can keep an intrinsic width inside a grid item. */
