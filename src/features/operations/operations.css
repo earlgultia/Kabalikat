@@ -2178,3 +2178,20 @@
     width: 100%;
   }
 }
+
+/* iOS WebKit can over-measure date controls when percentage width and
+   horizontal padding are combined. Keep the native picker, but remove that
+   extra intrinsic padding and leave room for the control's border. */
+@supports (-webkit-touch-callout: none) {
+  @media (max-width: 650px) {
+    .captain-workspace .operation-page .announcement-filters .announcement-date-filter input[type="date"] {
+      box-sizing: border-box;
+      inline-size: calc(100% - 2px);
+      max-inline-size: calc(100% - 2px);
+      min-inline-size: 0;
+      padding-inline: 0;
+      width: calc(100% - 2px);
+      max-width: calc(100% - 2px);
+    }
+  }
+}

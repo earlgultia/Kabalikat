@@ -27,7 +27,7 @@ export type CommitteeTaskNotificationContext = {
 export type KagawadTaskStatusEvent = { id: string; actor_name: string; details: string; created_at: string; total_count: number }
 export type KagawadTaskStatusHistoryPage = { rows: KagawadTaskStatusEvent[]; totalCount: number }
 export type KagawadTaskDueDateRequest = {
-  id: string; current_due_date: string | null; proposed_due_date: string; reason: string
+  id: string; current_due_date: string | null; proposed_due_date: string; reason: string; reviewer_name: string | null
   status: 'pending' | 'approved' | 'declined' | 'withdrawn'; decision_note: string; created_at: string; reviewed_at: string | null; total_count: number
 }
 export type KagawadTaskDueDateRequestPage = { rows: KagawadTaskDueDateRequest[]; totalCount: number }
