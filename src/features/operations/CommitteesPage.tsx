@@ -180,8 +180,8 @@ function CommitteeDueDateReviewQueue({ tenantId }: { tenantId: string }) {
 function CommitteeDueDateRequestHistory({ tenantId }: { tenantId: string }) {
   const [open, setOpen] = useState(false)
   const [page, setPage] = useState(0)
-  const [filters, setFilters] = useState({ status: 'all', search: '', createdAfter: '', createdBefore: '' })
-  const [draft, setDraft] = useState({ status: 'all', search: '', createdAfter: '', createdBefore: '' })
+  const [filters, setFilters] = useState({ status: 'all', search: '', createdAfter: '', createdBefore: '', reviewedAfter: '', reviewedBefore: '' })
+  const [draft, setDraft] = useState({ status: 'all', search: '', createdAfter: '', createdBefore: '', reviewedAfter: '', reviewedBefore: '' })
   const [filterError, setFilterError] = useState('')
   const history = useQuery({
     queryKey: ['committee-due-date-review-history', tenantId, page, filters],
@@ -194,13 +194,17 @@ function CommitteeDueDateRequestHistory({ tenantId }: { tenantId: string }) {
   function applyFilters(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (draft.createdAfter && draft.createdBefore && draft.createdAfter > draft.createdBefore) {
-      setFilterError('The start date must be on or before the end date.')
+      setFilterError('The submission start date must be on or before the end date.')
+      return
+    }
+    if (draft.reviewedAfter && draft.reviewedBefore && draft.reviewedAfter > draft.reviewedBefore) {
+      setFilterError('The review start date must be on or before the end date.')
       return
     }
     setFilterError(''); setPage(0); setFilters({ ...draft, search: draft.search.trim() })
   }
   function clearFilters() {
-    const empty = { status: 'all', search: '', createdAfter: '', createdBefore: '' }
+    const empty = { status: 'all', search: '', createdAfter: '', createdBefore: '', reviewedAfter: '', reviewedBefore: '' }
     setFilters(empty); setDraft(empty); setFilterError(''); setPage(0)
   }
   return <details className="ops-panel committee-due-date-history" onToggle={(event) => setOpen(event.currentTarget.open)}>
@@ -210,12 +214,14 @@ function CommitteeDueDateRequestHistory({ tenantId }: { tenantId: string }) {
       <label>Outcome<select value={draft.status} onChange={(event) => setDraft((current) => ({ ...current, status: event.target.value }))}><option value="all">All outcomes</option><option value="approved">Approved</option><option value="declined">Declined</option><option value="withdrawn">Withdrawn</option></select></label>
       <label>Submitted on or after<input type="date" max={draft.createdBefore || undefined} value={draft.createdAfter} onChange={(event) => setDraft((current) => ({ ...current, createdAfter: event.target.value }))} /></label>
       <label>Submitted on or before<input type="date" min={draft.createdAfter || undefined} value={draft.createdBefore} onChange={(event) => setDraft((current) => ({ ...current, createdBefore: event.target.value }))} /></label>
-      <div><button className="button primary" type="submit">Apply</button><button className="button outline" type="button" onClick={clearFilters} disabled={!draft.search && draft.status === 'all' && !draft.createdAfter && !draft.createdBefore}>Clear</button></div>
+      <label>Reviewed on or after<input type="date" max={draft.reviewedBefore || undefined} value={draft.reviewedAfter} onChange={(event) => setDraft((current) => ({ ...current, reviewedAfter: event.target.value }))} /></label>
+      <label>Reviewed on or before<input type="date" min={draft.reviewedAfter || undefined} value={draft.reviewedBefore} onChange={(event) => setDraft((current) => ({ ...current, reviewedBefore: event.target.value }))} /></label>
+      <div><button className="button primary" type="submit">Apply</button><button className="button outline" type="button" onClick={clearFilters} disabled={!draft.search && draft.status === 'all' && !draft.createdAfter && !draft.createdBefore && !draft.reviewedAfter && !draft.reviewedBefore}>Clear</button></div>
     </form>
     {filterError && <p className="field-hint" role="alert">{filterError}</p>}
     {history.isPending && open && <LoadingNotice compact />}
     {history.error && <ErrorNotice message="Reviewed due-date requests could not be loaded." onRetry={() => void history.refetch()} retrying={history.isFetching} />}
-    {history.data?.rows.length === 0 && <p className="field-hint">{filters.search || filters.status !== 'all' || filters.createdAfter || filters.createdBefore ? 'No reviewed requests match these filters.' : 'No due-date requests have been reviewed yet.'}</p>}
+    {history.data?.rows.length === 0 && <p className="field-hint">{filters.search || filters.status !== 'all' || filters.createdAfter || filters.createdBefore || filters.reviewedAfter || filters.reviewedBefore ? 'No reviewed requests match these filters.' : 'No due-date requests have been reviewed yet.'}</p>}
     {history.data?.rows.length ? <ul className="committee-due-date-history-list">{history.data.rows.map((entry) => <li key={entry.id}>
       <div><span className={`committee-due-history-status ${entry.status}`}>{entry.status.replaceAll('_', ' ')}</span><strong>{entry.task_title}</strong><small>{entry.committee_name} · Requested by {entry.requester_name}</small></div>
       <p>{entry.current_due_date ? `Requested ${new Date(`${entry.current_due_date}T00:00:00`).toLocaleDateString()} → ${new Date(`${entry.proposed_due_date}T00:00:00`).toLocaleDateString()}` : `Proposed ${new Date(`${entry.proposed_due_date}T00:00:00`).toLocaleDateString()}`}</p>

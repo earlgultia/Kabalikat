@@ -1574,6 +1574,10 @@
 .committee-due-date-history .committee-due-date-filters { grid-template-columns: minmax(170px, 2fr) minmax(120px, 1fr) repeat(2, minmax(135px, 1fr)) auto; }
 .committee-due-date-filters label { color: #435957; display: grid; font-size: 11px; font-weight: 700; gap: 5px; min-width: 0; }
 .committee-due-date-filters input, .committee-due-date-filters select { background: #fffefa; border: 1px solid #bfcec8; border-radius: 8px; color: #24353b; font: inherit; font-weight: 400; min-height: 38px; min-width: 0; padding: 7px 9px; width: 100%; }
+.committee-due-date-history .committee-due-date-filters { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.committee-due-date-history .committee-due-date-filters label:first-child,
+.committee-due-date-history .committee-due-date-filters > div { grid-column: 1 / -1; }
+.committee-due-date-filters input, .committee-due-date-filters select { box-sizing: border-box; max-width: 100%; }
 .committee-due-date-filters > div { display: flex; flex-wrap: wrap; gap: 6px; }
 .committee-due-date-filters > div > button { min-height: 38px; padding: 7px 10px; }
 .committee-due-date-review-queue > summary h2 { align-items: center; color: #354f4c; display: flex; font-size: 15px; gap: 8px; margin: 0; }
@@ -1602,6 +1606,11 @@
 .committee-due-request-dates strong { color: #28766c; }
 .committee-due-request-reason { background: #f8faf7; border-radius: 8px; color: #435957; font-size: 12px; line-height: 1.5; margin: 0; overflow-wrap: anywhere; padding: 10px; white-space: pre-wrap; }
 .committee-due-request-card form > div { display: flex; flex-wrap: wrap; gap: 8px; }
+@media (max-width: 900px) {
+  .committee-due-date-history .committee-due-date-filters { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .committee-due-date-history .committee-due-date-filters label:first-child,
+  .committee-due-date-history .committee-due-date-filters > div { grid-column: 1 / -1; }
+}
 .kagawad-meeting-history-filters { align-items: end; background: #f8faf7; border: 1px solid #e2e9e4; border-radius: 10px; display: grid; gap: 10px; grid-template-columns: minmax(180px, 2fr) repeat(3, minmax(135px, 1fr)) auto; min-width: 0; padding: 12px; }
 .kagawad-meeting-history-filters label { color: #435957; display: grid; font-size: 11px; font-weight: 700; gap: 5px; min-width: 0; }
 .kagawad-meeting-history-filters input, .kagawad-meeting-history-filters select { background: #fffefa; border: 1px solid #bfcec8; border-radius: 8px; color: #24353b; font: inherit; min-height: 40px; min-width: 0; padding: 8px 10px; width: 100%; }
@@ -2140,4 +2149,32 @@
   .captain-workspace .operation-page .sk-accomplishment-header { align-items: flex-start; flex-direction: row; }
   .captain-workspace .operation-page .sk-accomplishment-header > div { flex: 1 1 200px; min-width: 0; }
   .captain-workspace .operation-page .sk-accomplishment-header > svg { flex: 0 0 auto; }
+}
+
+/* Safari's native date control can keep an intrinsic width inside a grid item. */
+@media (max-width: 650px) {
+  .captain-workspace .operation-page .announcement-filters {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    min-width: 0;
+    width: 100%;
+  }
+  .captain-workspace .operation-page .announcement-filters .announcement-date-filter {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    max-width: 100%;
+    min-width: 0;
+    width: 100%;
+  }
+  .captain-workspace .operation-page .announcement-filters .announcement-date-filter input[type="date"] {
+    box-sizing: border-box;
+    display: block;
+    inline-size: 100%;
+    max-inline-size: 100%;
+    min-inline-size: 0;
+    max-width: 100%;
+    min-width: 0;
+    padding-inline: 8px;
+    width: 100%;
+  }
 }

@@ -224,13 +224,15 @@ export async function listCommitteeTaskDueDateRequests(tenantId: string, page: n
   return { rows, totalCount: Number(rows[0]?.total_count ?? 0) }
 }
 
-export async function listCommitteeTaskDueDateRequestHistory(tenantId: string, page: number, filters: { status: string; search: string; createdAfter: string; createdBefore: string }): Promise<CommitteeTaskDueDateReviewHistoryPage> {
+export async function listCommitteeTaskDueDateRequestHistory(tenantId: string, page: number, filters: { status: string; search: string; createdAfter: string; createdBefore: string; reviewedAfter: string; reviewedBefore: string }): Promise<CommitteeTaskDueDateReviewHistoryPage> {
   const { data, error } = await client().rpc('list_committee_task_due_date_request_history', {
     p_barangay_id: tenantId, p_page: page, p_page_size: 20,
     p_status: filters.status,
     p_search: filters.search.trim() || null,
     p_created_after: filters.createdAfter || null,
     p_created_before: filters.createdBefore || null,
+    p_reviewed_after: filters.reviewedAfter || null,
+    p_reviewed_before: filters.reviewedBefore || null,
   })
   if (error) throw new Error(error.message)
   const rows = (data ?? []) as CommitteeTaskDueDateReviewHistory[]
