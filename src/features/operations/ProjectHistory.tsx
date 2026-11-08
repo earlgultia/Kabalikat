@@ -11,7 +11,7 @@ import { listSkProjectActivity, listSkProjectUpdates, SK_PROJECT_HISTORY_PAGE_SI
 import { ErrorNotice, LoadingNotice } from './shared'
 import { formatDateTime } from './format'
 
-function BarangayProjectUpdateResponseThread({ updateId, isOwnUpdate, canRespond, initialPage = 0, autoOpen = false, onFocusHandled }: { updateId: string; isOwnUpdate: boolean; canRespond: boolean; initialPage?: number; autoOpen?: boolean; onFocusHandled?: () => void }) {
+export function BarangayProjectUpdateResponseThread({ updateId, isOwnUpdate, canRespond, initialPage = 0, autoOpen = false, onFocusHandled }: { updateId: string; isOwnUpdate: boolean; canRespond: boolean; initialPage?: number; autoOpen?: boolean; onFocusHandled?: () => void }) {
   const queryClient = useQueryClient()
   const [open, setOpen] = useState(false)
   const [page, setPage] = useState(0)

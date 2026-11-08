@@ -84,11 +84,17 @@ export function MeetingsPage({ focusId, focusPage, focusCorrectionRequestId, foc
   const queryClient = useQueryClient()
   const [page, setPage] = useState(0)
   const [invitedMeetingPage, setInvitedMeetingPage] = useState(0)
+  const [invitedMeetingDraft, setInvitedMeetingDraft] = useState({ search: '', response: 'all', meetingDateAfter: '', meetingDateBefore: '' })
+  const [invitedMeetingFilters, setInvitedMeetingFilters] = useState({ search: '', response: 'all', meetingDateAfter: '', meetingDateBefore: '' })
   const [meetingHistoryPage, setMeetingHistoryPage] = useState(0)
+  const [meetingHistoryDraft, setMeetingHistoryDraft] = useState({ search: '', attendanceStatus: 'all', meetingDateAfter: '', meetingDateBefore: '' })
+  const [meetingHistoryFilters, setMeetingHistoryFilters] = useState({ search: '', attendanceStatus: 'all', meetingDateAfter: '', meetingDateBefore: '' })
   const [rsvpHistoryPage, setRsvpHistoryPage] = useState(0)
   const [rsvpHistoryDraft, setRsvpHistoryDraft] = useState({ search: '', response: 'all', meetingDateAfter: '', meetingDateBefore: '' })
   const [rsvpHistoryFilters, setRsvpHistoryFilters] = useState({ search: '', response: 'all', meetingDateAfter: '', meetingDateBefore: '' })
   const [correctionRequestPage, setCorrectionRequestPage] = useState(0)
+  const [correctionRequestDraft, setCorrectionRequestDraft] = useState({ search: '', status: 'all', requestedAttendance: 'all', submittedAfter: '', submittedBefore: '' })
+  const [correctionRequestFilters, setCorrectionRequestFilters] = useState({ search: '', status: 'all', requestedAttendance: 'all', submittedAfter: '', submittedBefore: '' })
   const [correctionQueuePage, setCorrectionQueuePage] = useState(0)
   const [correctionMeetingId, setCorrectionMeetingId] = useState('')
   const [correctionStatus, setCorrectionStatus] = useState<'present' | 'absent' | 'excused'>('present')
@@ -114,11 +120,17 @@ export function MeetingsPage({ focusId, focusPage, focusCorrectionRequestId, foc
   useEffect(() => {
     setPage(0)
     setInvitedMeetingPage(0)
+    setInvitedMeetingDraft({ search: '', response: 'all', meetingDateAfter: '', meetingDateBefore: '' })
+    setInvitedMeetingFilters({ search: '', response: 'all', meetingDateAfter: '', meetingDateBefore: '' })
     setMeetingHistoryPage(0)
+    setMeetingHistoryDraft({ search: '', attendanceStatus: 'all', meetingDateAfter: '', meetingDateBefore: '' })
+    setMeetingHistoryFilters({ search: '', attendanceStatus: 'all', meetingDateAfter: '', meetingDateBefore: '' })
     setRsvpHistoryPage(0)
     setRsvpHistoryDraft({ search: '', response: 'all', meetingDateAfter: '', meetingDateBefore: '' })
     setRsvpHistoryFilters({ search: '', response: 'all', meetingDateAfter: '', meetingDateBefore: '' })
     setCorrectionRequestPage(0)
+    setCorrectionRequestDraft({ search: '', status: 'all', requestedAttendance: 'all', submittedAfter: '', submittedBefore: '' })
+    setCorrectionRequestFilters({ search: '', status: 'all', requestedAttendance: 'all', submittedAfter: '', submittedBefore: '' })
     setCorrectionQueuePage(0)
     setCorrectionMeetingId('')
     setMeetingSearchInput('')
@@ -151,10 +163,10 @@ export function MeetingsPage({ focusId, focusPage, focusCorrectionRequestId, foc
   const startsAfter = localDateBoundary(startsOnOrAfter)
   const startsBefore = localDateBoundary(startsOnOrBefore, 1)
   const meetings = useQuery({ queryKey: ['meetings', tenantId, page, meetingSearch, meetingStatus, startsOnOrAfter, startsOnOrBefore], queryFn: () => listMeetingPage(tenantId, page, meetingSearch, meetingStatus, startsAfter, startsBefore), enabled: Boolean(tenantId && !dateRangeInvalid) })
-  const invitedMeetings = useQuery({ queryKey: ['kagawad-invited-meetings', tenantId, invitedMeetingPage], queryFn: () => listKagawadInvitedMeetings(tenantId, invitedMeetingPage), enabled: Boolean(tenantId && isKagawad) })
-  const meetingHistory = useQuery({ queryKey: ['kagawad-meeting-attendance-history', tenantId, meetingHistoryPage], queryFn: () => listKagawadMeetingAttendanceHistory(tenantId, meetingHistoryPage), enabled: Boolean(tenantId && isKagawad) })
+  const invitedMeetings = useQuery({ queryKey: ['kagawad-invited-meetings', tenantId, invitedMeetingPage, invitedMeetingFilters], queryFn: () => listKagawadInvitedMeetings(tenantId, invitedMeetingPage, invitedMeetingFilters), enabled: Boolean(tenantId && isKagawad) })
+  const meetingHistory = useQuery({ queryKey: ['kagawad-meeting-attendance-history', tenantId, meetingHistoryPage, meetingHistoryFilters], queryFn: () => listKagawadMeetingAttendanceHistory(tenantId, meetingHistoryPage, meetingHistoryFilters), enabled: Boolean(tenantId && isKagawad) })
   const rsvpHistory = useQuery({ queryKey: ['kagawad-meeting-rsvp-history', tenantId, rsvpHistoryPage, rsvpHistoryFilters], queryFn: () => listKagawadMeetingInvitationResponseHistory(tenantId, rsvpHistoryPage, rsvpHistoryFilters), enabled: Boolean(tenantId && isKagawad) })
-  const correctionRequests = useQuery({ queryKey: ['kagawad-attendance-correction-requests', tenantId, correctionRequestPage], queryFn: () => listKagawadAttendanceCorrectionRequests(tenantId, correctionRequestPage), enabled: Boolean(tenantId && isKagawad) })
+  const correctionRequests = useQuery({ queryKey: ['kagawad-attendance-correction-requests', tenantId, correctionRequestPage, correctionRequestFilters], queryFn: () => listKagawadAttendanceCorrectionRequests(tenantId, correctionRequestPage, correctionRequestFilters), enabled: Boolean(tenantId && isKagawad) })
   useEffect(() => {
     if (!focusId) return
     if (meetingSearchInput) skipNextMeetingSearchReset.current = true
@@ -177,7 +189,11 @@ export function MeetingsPage({ focusId, focusPage, focusCorrectionRequestId, foc
   useEffect(() => {
     if (!focusCorrectionRequestId) return
     if (focusCorrectionQueue) setCorrectionQueuePage(focusCorrectionPage ?? 0)
-    else setCorrectionRequestPage(focusCorrectionPage ?? 0)
+    else {
+      const empty = { search: '', status: 'all', requestedAttendance: 'all', submittedAfter: '', submittedBefore: '' }
+      setCorrectionRequestDraft(empty); setCorrectionRequestFilters(empty)
+      setCorrectionRequestPage(focusCorrectionPage ?? 0)
+    }
   }, [focusCorrectionRequestId, focusCorrectionPage, focusCorrectionQueue])
   useEffect(() => {
     if (!focusCorrectionRequestId) return
@@ -510,6 +526,14 @@ export function MeetingsPage({ focusId, focusPage, focusCorrectionRequestId, foc
     {message && <div className="ops-success"><CheckCircle2 size={16} />{message}</div>}{error && <ErrorNotice message={error} />}{calendarExportError && <ErrorNotice message={calendarExportError} />}
     {isKagawad && <section className="ops-panel kagawad-invited-meetings" aria-labelledby="kagawad-invited-meetings-title">
       <div className="ops-panel-heading"><div><h2 id="kagawad-invited-meetings-title">My invited meetings</h2><p>Share your plan ahead of time. RSVP does not record attendance; check in when the window opens.</p></div><CalendarDays size={19} /></div>
+      <form className="kagawad-invited-meeting-filters" onSubmit={(event) => { event.preventDefault(); if (invitedMeetingDraft.meetingDateAfter && invitedMeetingDraft.meetingDateBefore && invitedMeetingDraft.meetingDateAfter > invitedMeetingDraft.meetingDateBefore) return; setInvitedMeetingPage(0); setInvitedMeetingFilters({ ...invitedMeetingDraft, search: invitedMeetingDraft.search.trim() }) }}>
+        <label>Search meetings<input type="search" maxLength={100} placeholder="Meeting title or location" value={invitedMeetingDraft.search} onChange={(event) => setInvitedMeetingDraft((current) => ({ ...current, search: event.target.value }))} /></label>
+        <label>My RSVP<select value={invitedMeetingDraft.response} onChange={(event) => setInvitedMeetingDraft((current) => ({ ...current, response: event.target.value }))}><option value="all">All invitations</option><option value="no_response">RSVP needed</option><option value="attending">Plan to attend</option><option value="unavailable">Unavailable</option></select></label>
+        <label>Meeting on or after<input type="date" max={invitedMeetingDraft.meetingDateBefore || undefined} value={invitedMeetingDraft.meetingDateAfter} onChange={(event) => setInvitedMeetingDraft((current) => ({ ...current, meetingDateAfter: event.target.value }))} /></label>
+        <label>Meeting on or before<input type="date" min={invitedMeetingDraft.meetingDateAfter || undefined} value={invitedMeetingDraft.meetingDateBefore} onChange={(event) => setInvitedMeetingDraft((current) => ({ ...current, meetingDateBefore: event.target.value }))} /></label>
+        <div className="kagawad-invited-meeting-filter-actions"><button className="button primary" type="submit">Apply filters</button><button className="button outline" type="button" onClick={() => { const empty = { search: '', response: 'all', meetingDateAfter: '', meetingDateBefore: '' }; setInvitedMeetingDraft(empty); setInvitedMeetingFilters(empty); setInvitedMeetingPage(0) }}>Clear</button></div>
+      </form>
+      {invitedMeetingDraft.meetingDateAfter && invitedMeetingDraft.meetingDateBefore && invitedMeetingDraft.meetingDateAfter > invitedMeetingDraft.meetingDateBefore && <p className="field-hint" role="alert">The start date must be on or before the end date.</p>}
       {invitedMeetings.isPending ? <LoadingNotice compact /> : invitedMeetings.error ? <ErrorNotice message="Your meeting invitations could not be loaded." onRetry={() => void invitedMeetings.refetch()} retrying={invitedMeetings.isFetching} /> : invitedMeetings.data?.length ? <>
         <ul className="kagawad-invited-meeting-list">{invitedMeetings.data.map((meeting) => <li key={meeting.id}>
           <div><strong>{meeting.title}</strong><small>{meeting.location} · {formatDateTime(meeting.starts_at)}</small></div>
@@ -526,7 +550,7 @@ export function MeetingsPage({ focusId, focusPage, focusCorrectionRequestId, foc
             : <span className="field-hint">Check-in opens 30 minutes before start</span>}
         </li>)}</ul>
         {Number(invitedMeetings.data[0]?.total_count ?? 0) > 10 && <nav className="committee-picker-pagination" aria-label="Invited meeting pages"><span>Page {invitedMeetingPage + 1} of {Math.ceil(Number(invitedMeetings.data[0]?.total_count ?? 0) / 10)} · {invitedMeetings.data[0]?.total_count} meetings</span><div><button type="button" className="button outline" disabled={invitedMeetingPage === 0 || invitedMeetings.isFetching} onClick={() => setInvitedMeetingPage((current) => current - 1)}>Previous</button><button type="button" className="button outline" disabled={(invitedMeetingPage + 1) * 10 >= Number(invitedMeetings.data[0]?.total_count ?? 0) || invitedMeetings.isFetching} onClick={() => setInvitedMeetingPage((current) => current + 1)}>Next</button></div></nav>}
-      </> : <p className="field-hint">You have no upcoming invitations that need check-in.</p>}
+      </> : <p className="field-hint">{invitedMeetingFilters.search || invitedMeetingFilters.response !== 'all' || invitedMeetingFilters.meetingDateAfter || invitedMeetingFilters.meetingDateBefore ? 'No upcoming invitations match these filters.' : 'You have no upcoming invitations that need check-in.'}</p>}
     </section>}
     {isKagawad && <section className="ops-panel kagawad-invited-meetings" aria-labelledby="kagawad-meeting-rsvp-history-title">
       <div className="ops-panel-heading"><div><h2 id="kagawad-meeting-rsvp-history-title">My RSVP history</h2><p>Review your previous availability responses. These entries are not attendance records.</p></div><History size={19} /></div>
@@ -548,13 +572,21 @@ export function MeetingsPage({ focusId, focusPage, focusCorrectionRequestId, foc
     </section>}
     {isKagawad && <section className="ops-panel kagawad-invited-meetings" aria-labelledby="kagawad-meeting-history-title">
       <div className="ops-panel-heading"><div><h2 id="kagawad-meeting-history-title">My meeting history</h2><p>Past meetings you were invited to and your recorded attendance.</p></div><History size={19} /></div>
+      <form className="kagawad-meeting-history-filters" onSubmit={(event) => { event.preventDefault(); if (meetingHistoryDraft.meetingDateAfter && meetingHistoryDraft.meetingDateBefore && meetingHistoryDraft.meetingDateAfter > meetingHistoryDraft.meetingDateBefore) return; setMeetingHistoryPage(0); setMeetingHistoryFilters({ ...meetingHistoryDraft, search: meetingHistoryDraft.search.trim() }) }}>
+        <label>Search meetings<input type="search" maxLength={100} placeholder="Meeting title or location" value={meetingHistoryDraft.search} onChange={(event) => setMeetingHistoryDraft((current) => ({ ...current, search: event.target.value }))} /></label>
+        <label>Attendance<select value={meetingHistoryDraft.attendanceStatus} onChange={(event) => setMeetingHistoryDraft((current) => ({ ...current, attendanceStatus: event.target.value }))}><option value="all">All records</option><option value="present">Present</option><option value="absent">Absent</option><option value="excused">Excused</option><option value="unrecorded">Not recorded</option></select></label>
+        <label>Meeting on or after<input type="date" value={meetingHistoryDraft.meetingDateAfter} onChange={(event) => setMeetingHistoryDraft((current) => ({ ...current, meetingDateAfter: event.target.value }))} /></label>
+        <label>Meeting on or before<input type="date" value={meetingHistoryDraft.meetingDateBefore} onChange={(event) => setMeetingHistoryDraft((current) => ({ ...current, meetingDateBefore: event.target.value }))} /></label>
+        <div className="kagawad-meeting-history-filter-actions"><button className="button primary" type="submit">Apply filters</button><button className="button outline" type="button" onClick={() => { const empty = { search: '', attendanceStatus: 'all', meetingDateAfter: '', meetingDateBefore: '' }; setMeetingHistoryDraft(empty); setMeetingHistoryFilters(empty); setMeetingHistoryPage(0) }}>Clear</button></div>
+      </form>
+      {meetingHistoryDraft.meetingDateAfter && meetingHistoryDraft.meetingDateBefore && meetingHistoryDraft.meetingDateAfter > meetingHistoryDraft.meetingDateBefore && <p className="field-hint" role="alert">The start date must be on or before the end date.</p>}
       {meetingHistory.isPending ? <LoadingNotice compact /> : meetingHistory.error ? <ErrorNotice message="Your meeting history could not be loaded." onRetry={() => void meetingHistory.refetch()} retrying={meetingHistory.isFetching} /> : meetingHistory.data?.length ? <>
         <ul className="kagawad-invited-meeting-list">{meetingHistory.data.map((meeting) => <li key={meeting.meeting_id}>
           <div><strong>{meeting.title}</strong><small>{meeting.location} · {formatDateTime(meeting.starts_at)}</small><small>Meeting: {meeting.meeting_status} · Attendance: {meeting.attendance_status ?? 'Not recorded'}{meeting.attendance_recorded_at ? ` · Recorded ${formatDateTime(meeting.attendance_recorded_at)}` : ''}</small></div>
           <StatusPill status={meeting.attendance_status ?? meeting.meeting_status} />
         </li>)}</ul>
         {Number(meetingHistory.data[0]?.total_count ?? 0) > 10 && <nav className="committee-picker-pagination" aria-label="Meeting history pages"><span>Page {meetingHistoryPage + 1} of {Math.ceil(Number(meetingHistory.data[0]?.total_count ?? 0) / 10)} · {meetingHistory.data[0]?.total_count} meetings</span><div><button type="button" className="button outline" disabled={meetingHistoryPage === 0 || meetingHistory.isFetching} onClick={() => setMeetingHistoryPage((current) => current - 1)}>Previous</button><button type="button" className="button outline" disabled={(meetingHistoryPage + 1) * 10 >= Number(meetingHistory.data[0]?.total_count ?? 0) || meetingHistory.isFetching} onClick={() => setMeetingHistoryPage((current) => current + 1)}>Next</button></div></nav>}
-      </> : <p className="field-hint">No past invited meetings are available yet.</p>}
+      </> : <p className="field-hint">{meetingHistoryFilters.search || meetingHistoryFilters.attendanceStatus !== 'all' || meetingHistoryFilters.meetingDateAfter || meetingHistoryFilters.meetingDateBefore ? 'No past meetings match these filters.' : 'No past invited meetings are available yet.'}</p>}
       {meetingHistory.data?.length ? <form className="ops-form kagawad-attendance-correction-form" onSubmit={(event) => void submitAttendanceCorrection(event)}>
         <h3>Request an attendance correction</h3>
         <p className="field-hint">Choose a past meeting and explain what should be corrected. An authorized official will review the request.</p>
@@ -567,13 +599,22 @@ export function MeetingsPage({ focusId, focusPage, focusCorrectionRequestId, foc
       </form> : null}
       <div className="kagawad-attendance-correction-history">
         <h3>Correction requests</h3>
+        <form className="kagawad-correction-history-filters" onSubmit={(event) => { event.preventDefault(); if (correctionRequestDraft.submittedAfter && correctionRequestDraft.submittedBefore && correctionRequestDraft.submittedAfter > correctionRequestDraft.submittedBefore) return; setCorrectionRequestPage(0); setCorrectionRequestFilters({ ...correctionRequestDraft, search: correctionRequestDraft.search.trim() }) }}>
+          <label>Search requests<input type="search" maxLength={100} placeholder="Meeting, reason, or review note" value={correctionRequestDraft.search} onChange={(event) => setCorrectionRequestDraft((current) => ({ ...current, search: event.target.value }))} /></label>
+          <label>Request status<select value={correctionRequestDraft.status} onChange={(event) => setCorrectionRequestDraft((current) => ({ ...current, status: event.target.value }))}><option value="all">All statuses</option><option value="pending">Awaiting review</option><option value="approved">Approved</option><option value="rejected">Declined</option></select></label>
+          <label>Requested attendance<select value={correctionRequestDraft.requestedAttendance} onChange={(event) => setCorrectionRequestDraft((current) => ({ ...current, requestedAttendance: event.target.value }))}><option value="all">All attendance</option><option value="present">Present</option><option value="absent">Absent</option><option value="excused">Excused</option></select></label>
+          <label>Submitted on or after<input type="date" value={correctionRequestDraft.submittedAfter} onChange={(event) => setCorrectionRequestDraft((current) => ({ ...current, submittedAfter: event.target.value }))} /></label>
+          <label>Submitted on or before<input type="date" value={correctionRequestDraft.submittedBefore} onChange={(event) => setCorrectionRequestDraft((current) => ({ ...current, submittedBefore: event.target.value }))} /></label>
+          <div className="kagawad-correction-history-filter-actions"><button className="button primary" type="submit">Apply filters</button><button className="button outline" type="button" onClick={() => { const empty = { search: '', status: 'all', requestedAttendance: 'all', submittedAfter: '', submittedBefore: '' }; setCorrectionRequestDraft(empty); setCorrectionRequestFilters(empty); setCorrectionRequestPage(0) }}>Clear</button></div>
+        </form>
+        {correctionRequestDraft.submittedAfter && correctionRequestDraft.submittedBefore && correctionRequestDraft.submittedAfter > correctionRequestDraft.submittedBefore && <p className="field-hint" role="alert">The start date must be on or before the end date.</p>}
         {correctionRequests.isPending ? <LoadingNotice compact /> : correctionRequests.error ? <ErrorNotice message="Your correction requests could not be loaded." onRetry={() => void correctionRequests.refetch()} retrying={correctionRequests.isFetching} /> : correctionRequests.data?.length ? <>
           <ul className="kagawad-invited-meeting-list">{correctionRequests.data.map((request) => <li id={`attendance-correction-${request.id}`} tabIndex={-1} key={request.id}>
             <div><strong>{request.meeting_title}</strong><small>{request.current_status ? `Recorded ${request.current_status} → requested ${request.requested_status}` : `Requested ${request.requested_status}; no prior record`}</small><small>{request.reason} · Submitted {formatDateTime(request.created_at)}</small>{request.review_note && <small>Review note: {request.review_note}</small>}</div>
             <StatusPill status={request.status} />
           </li>)}</ul>
           {Number(correctionRequests.data[0]?.total_count ?? 0) > 10 && <nav className="committee-picker-pagination" aria-label="Attendance correction request pages"><span>Page {correctionRequestPage + 1} of {Math.ceil(Number(correctionRequests.data[0]?.total_count ?? 0) / 10)} · {correctionRequests.data[0]?.total_count} requests</span><div><button type="button" className="button outline" disabled={correctionRequestPage === 0 || correctionRequests.isFetching} onClick={() => setCorrectionRequestPage((current) => current - 1)}>Previous</button><button type="button" className="button outline" disabled={(correctionRequestPage + 1) * 10 >= Number(correctionRequests.data[0]?.total_count ?? 0) || correctionRequests.isFetching} onClick={() => setCorrectionRequestPage((current) => current + 1)}>Next</button></div></nav>}
-        </> : <p className="field-hint">You have not requested an attendance correction.</p>}
+        </> : <p className="field-hint">{correctionRequestFilters.search || correctionRequestFilters.status !== 'all' || correctionRequestFilters.requestedAttendance !== 'all' || correctionRequestFilters.submittedAfter || correctionRequestFilters.submittedBefore ? 'No attendance correction requests match these filters.' : 'You have not requested an attendance correction.'}</p>}
       </div>
     </section>}
     {canManageAttendance.data && <section className="ops-panel kagawad-invited-meetings" aria-labelledby="attendance-correction-queue-title">

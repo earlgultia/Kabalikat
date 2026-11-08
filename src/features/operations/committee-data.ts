@@ -28,7 +28,7 @@ export type KagawadTaskStatusEvent = { id: string; actor_name: string; details: 
 export type KagawadTaskStatusHistoryPage = { rows: KagawadTaskStatusEvent[]; totalCount: number }
 export type KagawadTaskDueDateRequest = {
   id: string; current_due_date: string | null; proposed_due_date: string; reason: string
-  status: 'pending' | 'approved' | 'declined'; decision_note: string; created_at: string; reviewed_at: string | null; total_count: number
+  status: 'pending' | 'approved' | 'declined' | 'withdrawn'; decision_note: string; created_at: string; reviewed_at: string | null; total_count: number
 }
 export type KagawadTaskDueDateRequestPage = { rows: KagawadTaskDueDateRequest[]; totalCount: number }
 export type CommitteeTaskDueDateReview = {
@@ -129,9 +129,12 @@ export async function listKagawadTaskAssignmentHistory(tenantId: string, page: n
   return { rows, totalCount: Number(rows[0]?.total_count ?? 0) }
 }
 
-export async function listKagawadCompletedWork(tenantId: string, page: number): Promise<KagawadCompletedWorkPage> {
-  const { data, error } = await client().rpc('list_kagawad_completed_work_history', {
+export async function listKagawadCompletedWork(tenantId: string, page: number, filters: { search: string; completedAfter: string; completedBefore: string }): Promise<KagawadCompletedWorkPage> {
+  const { data, error } = await client().rpc('search_kagawad_completed_work_history', {
     p_barangay_id: tenantId, p_page: page, p_page_size: 10,
+    p_search: filters.search.trim() || null,
+    p_completed_after: filters.completedAfter || null,
+    p_completed_before: filters.completedBefore || null,
   })
   if (error) throw new Error(error.message)
   const rows = (data ?? []) as KagawadCompletedWork[]
@@ -196,6 +199,11 @@ export async function requestCommitteeTaskDueDate(taskId: string, proposedDate: 
   const { error } = await client().rpc('request_committee_task_due_date', {
     p_task_id: taskId, p_proposed_due_date: proposedDate, p_reason: reason.trim(),
   })
+  if (error) throw new Error(error.message)
+}
+
+export async function withdrawCommitteeTaskDueDateRequest(requestId: string): Promise<void> {
+  const { error } = await client().rpc('withdraw_committee_task_due_date_request', { p_request_id: requestId })
   if (error) throw new Error(error.message)
 }
 

@@ -263,9 +263,13 @@ export function getKagawadMeetingParticipationSummary(tenantId: string) {
   return rpc<KagawadMeetingParticipationSummary>('get_kagawad_meeting_participation_summary', { p_barangay_id: tenantId })
 }
 
-export function listKagawadInvitedMeetings(tenantId: string, page: number) {
-  return rpc<KagawadInvitedMeeting[]>('list_kagawad_invited_meetings', {
+export function listKagawadInvitedMeetings(tenantId: string, page: number, filters: { search: string; response: string; meetingDateAfter: string; meetingDateBefore: string } = { search: '', response: 'all', meetingDateAfter: '', meetingDateBefore: '' }) {
+  return rpc<KagawadInvitedMeeting[]>('search_kagawad_invited_meetings', {
     p_barangay_id: tenantId, p_page: page, p_page_size: 10,
+    p_search: filters.search.trim() || null,
+    p_response: filters.response,
+    p_meeting_date_after: filters.meetingDateAfter || null,
+    p_meeting_date_before: filters.meetingDateBefore || null,
   })
 }
 
@@ -297,9 +301,13 @@ export function listMeetingInvitationResponseRoster(meetingId: string, page: num
   })
 }
 
-export function listKagawadMeetingAttendanceHistory(tenantId: string, page: number) {
-  return rpc<KagawadMeetingAttendanceHistory[]>('list_kagawad_meeting_attendance_history', {
+export function listKagawadMeetingAttendanceHistory(tenantId: string, page: number, filters: { search: string; attendanceStatus: string; meetingDateAfter: string; meetingDateBefore: string }) {
+  return rpc<KagawadMeetingAttendanceHistory[]>('search_kagawad_meeting_attendance_history', {
     p_barangay_id: tenantId, p_page: page, p_page_size: 10,
+    p_search: filters.search.trim() || null,
+    p_attendance_status: filters.attendanceStatus,
+    p_meeting_date_after: filters.meetingDateAfter || null,
+    p_meeting_date_before: filters.meetingDateBefore || null,
   })
 }
 
@@ -309,9 +317,14 @@ export function requestKagawadAttendanceCorrection(meetingId: string, requestedS
   })
 }
 
-export function listKagawadAttendanceCorrectionRequests(tenantId: string, page: number) {
-  return rpc<KagawadAttendanceCorrectionRequest[]>('list_kagawad_attendance_correction_requests', {
+export function listKagawadAttendanceCorrectionRequests(tenantId: string, page: number, filters: { search: string; status: string; requestedAttendance: string; submittedAfter: string; submittedBefore: string }) {
+  return rpc<KagawadAttendanceCorrectionRequest[]>('search_kagawad_attendance_correction_requests', {
     p_barangay_id: tenantId, p_page: page, p_page_size: 10,
+    p_search: filters.search.trim() || null,
+    p_status: filters.status,
+    p_requested_attendance: filters.requestedAttendance,
+    p_submitted_after: filters.submittedAfter || null,
+    p_submitted_before: filters.submittedBefore || null,
   })
 }
 

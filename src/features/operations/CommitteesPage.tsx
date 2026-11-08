@@ -3,13 +3,17 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
 import { CheckCircle2, ChevronLeft, ChevronRight, History, MessageSquareText, UsersRound } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
-import { addCommitteeTaskProgressNote, addKagawadActionItemNote, assignCommitteeMember, completeKagawadTask, COMMITTEE_CONTENT_PAGE_SIZE, COMMITTEE_MEMBER_PAGE_SIZE, COMMITTEE_PAGE_SIZE, createCommittee, createCommitteeTask, decideCommitteeTaskDueDateRequest, getCommitteeTaskNotificationContext, listActiveCommitteeMembers, listAssignableCommitteeMembers, listCommitteeMembers, listCommittees, listCommitteeTasks, listCommitteeTaskDueDateRequests, listKagawadActionItemNotes, listKagawadAssignedActionItems, listKagawadCompletedWork, listKagawadTaskAssignmentHistory, listKagawadTaskDueDateRequestHistory, listKagawadTaskStatusHistory, reassignCommitteeTask, requestCommitteeTaskDueDate, reportKagawadTaskBlocker, updateCommitteeTaskStatus, type CommitteeTaskDueDateReview, type CommitteeTaskRow } from './committee-data'
+import { addCommitteeTaskProgressNote, addKagawadActionItemNote, assignCommitteeMember, completeKagawadTask, COMMITTEE_CONTENT_PAGE_SIZE, COMMITTEE_MEMBER_PAGE_SIZE, COMMITTEE_PAGE_SIZE, createCommittee, createCommitteeTask, decideCommitteeTaskDueDateRequest, getCommitteeTaskNotificationContext, listActiveCommitteeMembers, listAssignableCommitteeMembers, listCommitteeMembers, listCommittees, listCommitteeTasks, listCommitteeTaskDueDateRequests, listKagawadActionItemNotes, listKagawadAssignedActionItems, listKagawadCompletedWork, listKagawadTaskAssignmentHistory, listKagawadTaskDueDateRequestHistory, listKagawadTaskStatusHistory, reassignCommitteeTask, requestCommitteeTaskDueDate, reportKagawadTaskBlocker, updateCommitteeTaskStatus, withdrawCommitteeTaskDueDateRequest, type CommitteeTaskDueDateReview, type CommitteeTaskRow } from './committee-data'
 import { hasPermission } from './data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 
 const committeeSchema = z.object({ name: z.string().trim().min(2).max(120), description: z.string().trim().max(1000) })
 const taskSchema = z.object({ title: z.string().trim().min(3).max(180), description: z.string().trim().max(2000), assignedTo: z.string(), dueDate: z.string() })
 const taskNoteSchema = z.string().trim().min(3).max(2000)
+const dateInputValue = (value: string) => {
+  const date = new Date(value)
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
 
 function KagawadTaskStatusHistory({ taskId }: { taskId: string }) {
   const [open, setOpen] = useState(false)
@@ -80,12 +84,24 @@ function KagawadDueDateRequestPanel({ taskId, currentDueDate, disabled }: { task
     } catch (err) { setError(err instanceof Error ? err.message : 'Unable to submit the due-date request.') }
     finally { setBusy(false) }
   }
+  async function withdraw(requestId: string) {
+    if (!window.confirm('Withdraw this pending due-date request?')) return
+    setBusy(true); setError('')
+    try {
+      await withdrawCommitteeTaskDueDateRequest(requestId)
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['kagawad-task-due-date-request-history', taskId] }),
+        queryClient.invalidateQueries({ queryKey: ['committee-due-date-review-queue'] }),
+      ])
+    } catch (err) { setError(err instanceof Error ? err.message : 'Unable to withdraw the due-date request.') }
+    finally { setBusy(false) }
+  }
   return <div className="kagawad-due-date-request">
     <button type="button" className="text-action kagawad-task-note-toggle" aria-expanded={open} disabled={disabled} onClick={() => setOpen((value) => !value)}>{open ? 'Close due-date request' : 'Request due-date change'}</button>
     {open && <div className="kagawad-due-date-request-content">
       {request.isPending && <LoadingNotice compact />}
       {request.error && <ErrorNotice message="Your due-date request could not be loaded." onRetry={() => void request.refetch()} retrying={request.isFetching} />}
-      {request.data?.rows.map((entry) => <article key={entry.id} className={`due-date-request-status ${entry.status}`}><strong>{entry.status === 'pending' ? 'Awaiting manager review' : entry.status === 'approved' ? 'Approved' : 'Declined'}</strong><span>{entry.current_due_date ? `Requested ${new Date(`${entry.current_due_date}T00:00:00`).toLocaleDateString()} → ${new Date(`${entry.proposed_due_date}T00:00:00`).toLocaleDateString()}` : `Proposed date: ${new Date(`${entry.proposed_due_date}T00:00:00`).toLocaleDateString()}`}</span><p>{entry.reason}</p>{entry.decision_note && entry.status !== 'pending' && <p className="due-date-decision-note">Decision: {entry.decision_note}</p>}<small>Submitted {new Date(entry.created_at).toLocaleString()}</small></article>)}
+      {request.data?.rows.map((entry) => <article key={entry.id} className={`due-date-request-status ${entry.status}`}><strong>{entry.status === 'pending' ? 'Awaiting manager review' : entry.status === 'approved' ? 'Approved' : entry.status === 'withdrawn' ? 'Withdrawn by you' : 'Declined'}</strong><span>{entry.current_due_date ? `Requested ${new Date(`${entry.current_due_date}T00:00:00`).toLocaleDateString()} → ${new Date(`${entry.proposed_due_date}T00:00:00`).toLocaleDateString()}` : `Proposed date: ${new Date(`${entry.proposed_due_date}T00:00:00`).toLocaleDateString()}`}</span><p>{entry.reason}</p>{entry.decision_note && entry.status !== 'pending' && <p className="due-date-decision-note">{entry.status === 'withdrawn' ? 'Note: ' : 'Decision: '}{entry.decision_note}</p>}<small>Submitted {new Date(entry.created_at).toLocaleString()}</small>{entry.id === latestRequest?.id && entry.status === 'pending' && !disabled && <button type="button" className="button outline due-date-request-withdraw" disabled={busy} onClick={() => void withdraw(entry.id)}>{busy ? 'Withdrawing…' : 'Withdraw request'}</button>}</article>)}
       {request.data && request.data.totalCount > 5 && <div className="committee-picker-pagination"><span>Page {currentPage + 1} of {totalPages} · {request.data.totalCount} requests</span><div><button type="button" className="button outline" disabled={currentPage === 0 || request.isFetching} onClick={() => setPage(currentPage - 1)}>Previous</button><button type="button" className="button outline" disabled={currentPage + 1 >= totalPages || request.isFetching} onClick={() => setPage(currentPage + 1)}>Next</button></div></div>}
       {(!latestRequest || latestRequest.status !== 'pending') && !request.error && !request.isPending && !disabled && <form onSubmit={(event) => void submit(event)}><label>Proposed due date<input type="date" min={minDateValue} value={proposedDate} required onChange={(event) => setProposedDate(event.target.value)} /></label><label>Reason<textarea value={reason} minLength={3} maxLength={2000} required placeholder="Explain why you need more time." onChange={(event) => setReason(event.target.value)} /></label><button className="button outline" disabled={busy || reason.trim().length < 3}>{busy ? 'Submitting…' : 'Send request'}</button></form>}
       {error && <ErrorNotice message={error} />}
@@ -320,6 +336,8 @@ export function CommitteesPage({ focusId, onFocusHandled }: { focusId?: string; 
   const [myTaskPage, setMyTaskPage] = useState(0)
   const [taskAssignmentHistoryPage, setTaskAssignmentHistoryPage] = useState(0)
   const [completedWorkPage, setCompletedWorkPage] = useState(0)
+  const [completedWorkFilters, setCompletedWorkFilters] = useState({ search: '', completedAfter: '', completedBefore: '' })
+  const [completedWorkDraft, setCompletedWorkDraft] = useState({ search: '', completedAfter: '', completedBefore: '' })
   const [taskHistoryDraft, setTaskHistoryDraft] = useState({ search: '', status: 'all', assignedAfter: '', assignedBefore: '' })
   const [taskHistoryFilters, setTaskHistoryFilters] = useState({ search: '', status: 'all', assignedAfter: '', assignedBefore: '' })
   const [myTaskStatus, setMyTaskStatus] = useState<'all' | CommitteeTaskRow['status']>('all')
@@ -328,11 +346,14 @@ export function CommitteesPage({ focusId, onFocusHandled }: { focusId?: string; 
   const [myTaskSearch, setMyTaskSearch] = useState('')
   const [taskNotesFor, setTaskNotesFor] = useState('')
   const [taskNoteDraft, setTaskNoteDraft] = useState('')
+  const [taskNotesSearch, setTaskNotesSearch] = useState('')
+  const [taskNotesAfter, setTaskNotesAfter] = useState('')
+  const [taskNotesBefore, setTaskNotesBefore] = useState('')
   const [pendingTaskAction, setPendingTaskAction] = useState<{ taskId: string; status: 'blocked' | 'completed' } | null>(null)
   const [taskActionReason, setTaskActionReason] = useState('')
   const [focusedTaskId, setFocusedTaskId] = useState('')
   const isKagawad = membership?.role?.key === 'kagawad'
-  useEffect(() => { setPage(0); setMyTaskPage(0); setTaskAssignmentHistoryPage(0); setCompletedWorkPage(0); setTaskHistoryDraft({ search: '', status: 'all', assignedAfter: '', assignedBefore: '' }); setTaskHistoryFilters({ search: '', status: 'all', assignedAfter: '', assignedBefore: '' }); setMyTaskStatus('all'); setMyTaskDueFilter('all'); setMyTaskSearch(''); setMyTaskSearchInput(''); setTaskNotesFor(''); setTaskNoteDraft('') }, [tenantId])
+  useEffect(() => { setPage(0); setMyTaskPage(0); setTaskAssignmentHistoryPage(0); setCompletedWorkPage(0); setCompletedWorkFilters({ search: '', completedAfter: '', completedBefore: '' }); setCompletedWorkDraft({ search: '', completedAfter: '', completedBefore: '' }); setTaskHistoryDraft({ search: '', status: 'all', assignedAfter: '', assignedBefore: '' }); setTaskHistoryFilters({ search: '', status: 'all', assignedAfter: '', assignedBefore: '' }); setMyTaskStatus('all'); setMyTaskDueFilter('all'); setMyTaskSearch(''); setMyTaskSearchInput(''); setTaskNotesFor(''); setTaskNoteDraft('') }, [tenantId])
   useEffect(() => {
     if (!focusId) return
     setFocusedTaskId(focusId)
@@ -342,8 +363,13 @@ export function CommitteesPage({ focusId, onFocusHandled }: { focusId?: string; 
   const committees = useQuery({ queryKey: ['committees', tenantId, page], queryFn: () => listCommittees(tenantId, page), enabled: Boolean(tenantId) })
   const myTasks = useQuery({ queryKey: ['kagawad-my-action-items', tenantId, myTaskPage, myTaskStatus, myTaskDueFilter, myTaskSearch], queryFn: () => listKagawadAssignedActionItems(tenantId, myTaskPage, myTaskStatus, myTaskSearch, myTaskDueFilter), enabled: Boolean(tenantId && isKagawad) })
   const taskAssignmentHistory = useQuery({ queryKey: ['kagawad-task-assignment-history', tenantId, taskAssignmentHistoryPage, taskHistoryFilters], queryFn: () => listKagawadTaskAssignmentHistory(tenantId, taskAssignmentHistoryPage, taskHistoryFilters), enabled: Boolean(tenantId && isKagawad) })
-  const completedWork = useQuery({ queryKey: ['kagawad-completed-work', tenantId, completedWorkPage], queryFn: () => listKagawadCompletedWork(tenantId, completedWorkPage), enabled: Boolean(tenantId && isKagawad) })
+  const completedWork = useQuery({ queryKey: ['kagawad-completed-work', tenantId, completedWorkPage, completedWorkFilters], queryFn: () => listKagawadCompletedWork(tenantId, completedWorkPage, completedWorkFilters), enabled: Boolean(tenantId && isKagawad) })
   const taskNotes = useQuery({ queryKey: ['kagawad-action-item-notes', tenantId, taskNotesFor], queryFn: () => listKagawadActionItemNotes(taskNotesFor), enabled: Boolean(tenantId && taskNotesFor && isKagawad) })
+  const visibleTaskNotes = taskNotes.data?.filter((note) => {
+    const matchesSearch = `${note.author_name} ${note.note}`.toLocaleLowerCase().includes(taskNotesSearch.trim().toLocaleLowerCase())
+    const noteDate = dateInputValue(note.created_at)
+    return matchesSearch && (!taskNotesAfter || noteDate >= taskNotesAfter) && (!taskNotesBefore || noteDate <= taskNotesBefore)
+  }) ?? []
   const myTaskPages = Math.ceil((myTasks.data?.totalCount ?? 0) / 10)
   const totalPages = Math.ceil((committees.data?.totalCount ?? 0) / COMMITTEE_PAGE_SIZE)
   const [showCreate, setShowCreate] = useState(false)
@@ -460,10 +486,16 @@ export function CommitteesPage({ focusId, onFocusHandled }: { focusId?: string; 
     {Boolean(tenantId) && !canManage.isPending && !canManage.error && !canManage.data && <div className="ops-panel archive-access"><UsersRound size={20} /><div><strong>Committee access is assignment-based</strong><p>You will see committees after an authorized administrator assigns you to one.</p></div></div>}
     {isKagawad && <section className="ops-panel kagawad-completed-work" aria-labelledby="kagawad-completed-work-title">
       <div className="ops-panel-heading"><div><h2 id="kagawad-completed-work-title">My completed work</h2><p>Completion summaries you submitted, including tasks later transferred or archived.</p></div><CheckCircle2 size={19} /></div>
+      <form className="kagawad-completed-work-filters" onSubmit={(event) => { event.preventDefault(); if (completedWorkDraft.completedAfter && completedWorkDraft.completedBefore && completedWorkDraft.completedAfter > completedWorkDraft.completedBefore) { setError('The completion start date must be on or before the end date.'); return } setError(''); setCompletedWorkPage(0); setCompletedWorkFilters({ ...completedWorkDraft, search: completedWorkDraft.search.trim() }) }}>
+        <label>Search completed work<input type="search" maxLength={100} placeholder="Task, committee, or summary" value={completedWorkDraft.search} onChange={(event) => setCompletedWorkDraft((current) => ({ ...current, search: event.target.value }))} /></label>
+        <label>Completed on or after<input type="date" value={completedWorkDraft.completedAfter} onChange={(event) => setCompletedWorkDraft((current) => ({ ...current, completedAfter: event.target.value }))} /></label>
+        <label>Completed on or before<input type="date" value={completedWorkDraft.completedBefore} onChange={(event) => setCompletedWorkDraft((current) => ({ ...current, completedBefore: event.target.value }))} /></label>
+        <div className="kagawad-completed-work-filter-actions"><button className="button primary" type="submit">Apply filters</button><button className="button outline" type="button" onClick={() => { const empty = { search: '', completedAfter: '', completedBefore: '' }; setCompletedWorkDraft(empty); setCompletedWorkFilters(empty); setCompletedWorkPage(0); setError('') }}>Clear</button></div>
+      </form>
       {completedWork.isPending ? <LoadingNotice compact /> : completedWork.error ? <ErrorNotice message="Your completed-work history could not be loaded." onRetry={() => void completedWork.refetch()} retrying={completedWork.isFetching} /> : completedWork.data?.rows.length ? <>
         <ol className="kagawad-completed-work-list">{completedWork.data.rows.map((entry) => <li key={entry.id}><div><strong>{entry.task_title}</strong><small>{entry.committee_name} · Completed {new Date(entry.completed_at).toLocaleString()}</small></div><p>{entry.summary}</p></li>)}</ol>
         {completedWork.data.totalCount > 10 && <nav className="committee-picker-pagination" aria-label="Completed-work history pages"><span>Page {completedWorkPage + 1} of {Math.ceil(completedWork.data.totalCount / 10)} · {completedWork.data.totalCount} completions</span><div><button type="button" className="button outline" disabled={completedWorkPage === 0 || completedWork.isFetching} onClick={() => setCompletedWorkPage((current) => current - 1)}>Previous</button><button type="button" className="button outline" disabled={(completedWorkPage + 1) * 10 >= completedWork.data.totalCount || completedWork.isFetching} onClick={() => setCompletedWorkPage((current) => current + 1)}>Next</button></div></nav>}
-      </> : <p className="field-hint">Your task completion summaries will appear here.</p>}
+      </> : <p className="field-hint">{completedWorkFilters.search || completedWorkFilters.completedAfter || completedWorkFilters.completedBefore ? 'No completed work matches these filters.' : 'Your task completion summaries will appear here.'}</p>}
     </section>}
     {isKagawad && <section className="ops-panel kagawad-invited-meetings" aria-labelledby="kagawad-task-assignment-history-title">
       <div className="ops-panel-heading"><div><h2 id="kagawad-task-assignment-history-title">Task assignment history</h2><p>Assignments recorded for you, including completed work and tasks later transferred away.</p></div><History size={19} /></div>
@@ -499,9 +531,11 @@ export function CommitteesPage({ focusId, onFocusHandled }: { focusId?: string; 
           <KagawadTaskStatusHistory taskId={task.id} />
           {task.status !== 'completed' && <KagawadDueDateRequestPanel taskId={task.id} currentDueDate={task.due_date} disabled={pendingTaskAction?.taskId === task.id} />}
           {pendingTaskAction?.taskId === task.id && <form className={`kagawad-task-action-form ${pendingTaskAction.status}`} onSubmit={(event) => void submitTaskAction(task.id, event)}><label htmlFor={`task-action-${task.id}`}>{pendingTaskAction.status === 'blocked' ? 'Why is this task blocked?' : 'What was completed?'}<textarea id={`task-action-${task.id}`} value={taskActionReason} minLength={3} maxLength={2000} required autoFocus placeholder={pendingTaskAction.status === 'blocked' ? 'Describe what is preventing progress and what support is needed.' : 'Summarize the work completed and any useful handoff details.'} onChange={(event) => setTaskActionReason(event.target.value)} /></label><div><button className="button primary" disabled={busy || taskActionReason.trim().length < 3}>{busy ? 'Sending…' : pendingTaskAction.status === 'blocked' ? 'Report blocker' : 'Complete task'}</button><button type="button" className="button outline" disabled={busy} onClick={() => { setPendingTaskAction(null); setTaskActionReason('') }}>Cancel</button></div></form>}
-          <button type="button" className="text-action kagawad-task-note-toggle" aria-expanded={taskNotesFor === task.id} onClick={() => { setTaskNotesFor((current) => current === task.id ? '' : task.id); setTaskNoteDraft('') }}><MessageSquareText size={14} />{taskNotesFor === task.id ? 'Hide progress notes' : 'Progress notes'}</button>
+          <button type="button" className="text-action kagawad-task-note-toggle" aria-expanded={taskNotesFor === task.id} onClick={() => { setTaskNotesFor((current) => current === task.id ? '' : task.id); setTaskNoteDraft(''); setTaskNotesSearch(''); setTaskNotesAfter(''); setTaskNotesBefore('') }}><MessageSquareText size={14} />{taskNotesFor === task.id ? 'Hide progress notes' : 'Progress notes'}</button>
           {taskNotesFor === task.id && <div className="kagawad-task-notes">
-            {taskNotes.isPending ? <LoadingNotice compact /> : taskNotes.error ? <ErrorNotice message="Progress notes could not be loaded." onRetry={() => void taskNotes.refetch()} retrying={taskNotes.isFetching} /> : taskNotes.data?.length ? <ol>{taskNotes.data.map((note) => <li key={note.id}><p>{note.note}</p><small>{note.author_name} · {new Date(note.created_at).toLocaleString()}</small></li>)}</ol> : <p className="field-hint">No progress notes yet.</p>}
+            {taskNotes.data?.length ? <div className="kagawad-task-note-filters"><label>Search notes<input type="search" maxLength={100} placeholder="Author or message" value={taskNotesSearch} onChange={(event) => setTaskNotesSearch(event.target.value)} /></label><label>From<input type="date" max={taskNotesBefore || undefined} value={taskNotesAfter} onChange={(event) => setTaskNotesAfter(event.target.value)} /></label><label>To<input type="date" min={taskNotesAfter || undefined} value={taskNotesBefore} onChange={(event) => setTaskNotesBefore(event.target.value)} /></label><button type="button" className="button outline" onClick={() => { setTaskNotesSearch(''); setTaskNotesAfter(''); setTaskNotesBefore('') }} disabled={!taskNotesSearch && !taskNotesAfter && !taskNotesBefore}>Clear filters</button></div> : null}
+            {taskNotesAfter && taskNotesBefore && taskNotesAfter > taskNotesBefore && <p className="field-hint" role="alert">The start date must be on or before the end date.</p>}
+            {taskNotes.isPending ? <LoadingNotice compact /> : taskNotes.error ? <ErrorNotice message="Progress notes could not be loaded." onRetry={() => void taskNotes.refetch()} retrying={taskNotes.isFetching} /> : taskNotes.data?.length ? visibleTaskNotes.length ? <ol>{visibleTaskNotes.map((note) => <li key={note.id}><p>{note.note}</p><small>{note.author_name} · {new Date(note.created_at).toLocaleString()}</small></li>)}</ol> : <p className="field-hint">No progress notes match these filters.</p> : <p className="field-hint">No progress notes yet.</p>}
             <form onSubmit={(event) => void submitTaskNote(task.id, event)}><label htmlFor={`task-note-${task.id}`}>Add a progress or blocker note<textarea id={`task-note-${task.id}`} value={taskNoteDraft} maxLength={2000} minLength={3} required placeholder="Share what changed or what is blocking this task." onChange={(event) => setTaskNoteDraft(event.target.value)} /></label><button className="button outline" disabled={busy || taskNoteDraft.trim().length < 3}>Add note</button></form>
           </div>}
         </div>

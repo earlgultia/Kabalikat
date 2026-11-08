@@ -7,7 +7,7 @@ import { hasPermission } from './data'
 import { addBarangayProjectUpdate, BARANGAY_PROJECT_PAGE_SIZE, createBarangayProject, listBarangayProjects, listKagawadProjectContributions, updateBarangayProjectStatus, type BarangayProject } from './projects-data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 import { formatDateTime } from './format'
-import { ProjectProgressHistory } from './ProjectHistory'
+import { BarangayProjectUpdateResponseThread, ProjectProgressHistory } from './ProjectHistory'
 
 const projectSchema = z.object({ title: z.string().trim().min(3).max(180), description: z.string().trim().max(4000), start: z.string(), end: z.string() })
 const updateSchema = z.object({ type: z.enum(['milestone', 'progress']), title: z.string().trim().min(3).max(180), details: z.string().trim().max(3000) })
@@ -113,6 +113,7 @@ export function ProjectsPage({ focusProjectId, focusProjectPage, focusUpdateId, 
         <p className="kagawad-contribution-project">{entry.project_title} · {entry.project_status.replaceAll('_', ' ')}</p>
         {entry.details && <p>{entry.details}</p>}
         <time dateTime={entry.created_at}>{formatDateTime(entry.created_at)}</time>
+        <BarangayProjectUpdateResponseThread updateId={entry.update_id} isOwnUpdate canRespond={false} />
       </li>)}</ol>}
       {contributionPages > 1 && <div className="committee-picker-pagination"><span>Page {contributionPage + 1} of {contributionPages} · {contributions.data?.totalCount ?? 0} updates</span><div><button type="button" className="button outline" disabled={contributionPage === 0 || contributions.isFetching} onClick={() => setContributionPage((current) => current - 1)}>Previous</button><button type="button" className="button outline" disabled={contributionPage + 1 >= contributionPages || contributions.isFetching} onClick={() => setContributionPage((current) => current + 1)}>Next</button></div></div>}
     </section>}
