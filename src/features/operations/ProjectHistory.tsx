@@ -20,9 +20,12 @@ export function BarangayProjectUpdateResponseThread({ updateId, isOwnUpdate, can
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const [filters, setFilters] = useState({ search: '', createdAfter: '', createdBefore: '' })
+  const [filterDraft, setFilterDraft] = useState({ search: '', createdAfter: '', createdBefore: '' })
+  const [filterError, setFilterError] = useState('')
   const responses = useQuery({
-    queryKey: ['barangay-project-update-responses', updateId, page],
-    queryFn: () => listBarangayProjectUpdateResponses(updateId, page),
+    queryKey: ['barangay-project-update-responses', updateId, page, filters],
+    queryFn: () => listBarangayProjectUpdateResponses(updateId, page, filters),
     enabled: open,
   })
   useEffect(() => {
@@ -52,11 +55,37 @@ export function BarangayProjectUpdateResponseThread({ updateId, isOwnUpdate, can
     } finally { setBusy(false) }
   }
 
+  function applyFilters(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (filterDraft.createdAfter && filterDraft.createdBefore && filterDraft.createdAfter > filterDraft.createdBefore) {
+      setFilterError('The start date must be on or before the end date.')
+      return
+    }
+    setFilterError('')
+    setPage(0)
+    setFilters({ ...filterDraft, search: filterDraft.search.trim() })
+  }
+
+  function clearFilters() {
+    const empty = { search: '', createdAfter: '', createdBefore: '' }
+    setFilters(empty)
+    setFilterDraft(empty)
+    setFilterError('')
+    setPage(0)
+  }
+
   return <details ref={detailsRef} className="project-update-response-thread" onToggle={(event: SyntheticEvent<HTMLDetailsElement>) => setOpen(event.currentTarget.open)}>
     <summary>Responses{responses.data ? ` (${responses.data.totalCount})` : ''}</summary>
     {responses.isPending && open && <LoadingNotice compact />}
     {responses.error && <ErrorNotice message="Responses could not be loaded." />}
-    {responses.data?.totalCount === 0 && <p className="field-hint">No responses yet.</p>}
+    <form className="project-response-filters" onSubmit={applyFilters}>
+      <label>Search replies<input type="search" maxLength={100} placeholder="Author or message" value={filterDraft.search} onChange={(event) => setFilterDraft((current) => ({ ...current, search: event.target.value }))} /></label>
+      <label>From<input type="date" max={filterDraft.createdBefore || undefined} value={filterDraft.createdAfter} onChange={(event) => setFilterDraft((current) => ({ ...current, createdAfter: event.target.value }))} /></label>
+      <label>To<input type="date" min={filterDraft.createdAfter || undefined} value={filterDraft.createdBefore} onChange={(event) => setFilterDraft((current) => ({ ...current, createdBefore: event.target.value }))} /></label>
+      <div><button className="button primary" type="submit">Apply</button><button className="button outline" type="button" onClick={clearFilters} disabled={!filterDraft.search && !filterDraft.createdAfter && !filterDraft.createdBefore}>Clear</button></div>
+    </form>
+    {filterError && <p className="field-hint" role="alert">{filterError}</p>}
+    {responses.data?.totalCount === 0 && <p className="field-hint">{filters.search || filters.createdAfter || filters.createdBefore ? 'No replies match these filters.' : 'No responses yet.'}</p>}
     {responses.data?.rows.length ? <ol className="project-update-response-list">{responses.data.rows.map((response) => <li key={response.id}>
       <div><strong>{response.author_name}</strong><time dateTime={response.created_at}>{formatDateTime(response.created_at)}</time></div>
       <p>{response.content}</p>

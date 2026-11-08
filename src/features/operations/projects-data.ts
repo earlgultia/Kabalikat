@@ -46,9 +46,12 @@ export async function listBarangayProjectUpdates(projectId: string, page: number
   return { rows, totalCount: Number(rows[0]?.total_count ?? 0) }
 }
 
-export async function listBarangayProjectUpdateResponses(updateId: string, page: number): Promise<BarangayProjectUpdateResponsePage> {
+export async function listBarangayProjectUpdateResponses(updateId: string, page: number, filters: { search: string; createdAfter: string; createdBefore: string }): Promise<BarangayProjectUpdateResponsePage> {
   const rows = await rpc<Array<BarangayProjectUpdateResponse & { total_count: number }>>('list_barangay_project_update_response_page', {
     p_update_id: updateId, p_page: page, p_page_size: 10,
+    p_search: filters.search.trim() || null,
+    p_created_after: filters.createdAfter || null,
+    p_created_before: filters.createdBefore || null,
   })
   return { rows, totalCount: Number(rows[0]?.total_count ?? 0) }
 }

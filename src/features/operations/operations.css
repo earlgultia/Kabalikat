@@ -336,6 +336,11 @@
 .project-update-response-thread { background: #f7f9f6; border: 1px solid #dfe8e2; border-radius: 9px; display: grid; gap: 10px; margin-top: 10px; padding: 11px 13px; }
 .project-progress-history li[id^="project-update-"] { scroll-margin-top: 96px; }
 .project-update-response-thread > summary { color: #315b46; cursor: pointer; font-size: 12px; font-weight: 700; }
+.project-response-filters { align-items: end; display: grid; gap: 8px; grid-template-columns: minmax(160px, 2fr) repeat(2, minmax(120px, 1fr)) auto; min-width: 0; }
+.project-response-filters label { color: #435957; display: grid; font-size: 11px; font-weight: 700; gap: 5px; min-width: 0; }
+.project-response-filters input { background: #fffefa; border: 1px solid #bfcec8; border-radius: 8px; color: #24353b; font: inherit; font-weight: 400; min-height: 38px; min-width: 0; padding: 7px 9px; width: 100%; }
+.project-response-filters > div { display: flex; flex-wrap: wrap; gap: 6px; }
+.project-response-filters > div > button { min-height: 38px; padding: 7px 10px; }
 .project-update-response-list { display: grid; gap: 9px; list-style: none; margin: 0; padding: 0; }
 .project-update-response-list > li { background: #fffefa; border: 1px solid #e1e8e3; border-radius: 8px; display: grid; gap: 5px; padding: 10px; }
 .project-update-response-list > li > div { align-items: baseline; display: flex; flex-wrap: wrap; gap: 5px 12px; justify-content: space-between; }
@@ -464,6 +469,9 @@
 .patrol-reschedule-form .ops-panel-heading p { margin: 4px 0 0; }
 .patrol-reschedule-form textarea { background: #fffefa; border: 1px solid #bfcec8; border-radius: 8px; color: #24353b; font: inherit; min-height: 76px; padding: 9px 10px; resize: vertical; width: 100%; }
 @media (max-width: 650px) {
+  .project-response-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .project-response-filters label:first-child, .project-response-filters > div { grid-column: 1 / -1; }
+  .project-response-filters > div > button { flex: 1; }
   .patrol-coverage-heading { align-items: stretch; }
   .patrol-coverage-dates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .patrol-coverage-dates input { max-width: 100%; min-width: 0; width: 100%; }
@@ -1562,10 +1570,32 @@
 .committee-due-date-review-queue { display: grid; gap: 12px; margin-bottom: 16px; }
 .committee-due-date-review-queue > summary { align-items: center; cursor: pointer; display: flex; gap: 12px; justify-content: space-between; list-style: none; }
 .committee-due-date-review-queue > summary::-webkit-details-marker { display: none; }
+.committee-due-date-filters { align-items: end; background: #f8faf7; border: 1px solid #e2e9e4; border-radius: 9px; display: grid; gap: 9px; grid-template-columns: minmax(180px, 2fr) repeat(2, minmax(145px, 1fr)) auto; min-width: 0; padding: 10px; }
+.committee-due-date-history .committee-due-date-filters { grid-template-columns: minmax(170px, 2fr) minmax(120px, 1fr) repeat(2, minmax(135px, 1fr)) auto; }
+.committee-due-date-filters label { color: #435957; display: grid; font-size: 11px; font-weight: 700; gap: 5px; min-width: 0; }
+.committee-due-date-filters input, .committee-due-date-filters select { background: #fffefa; border: 1px solid #bfcec8; border-radius: 8px; color: #24353b; font: inherit; font-weight: 400; min-height: 38px; min-width: 0; padding: 7px 9px; width: 100%; }
+.committee-due-date-filters > div { display: flex; flex-wrap: wrap; gap: 6px; }
+.committee-due-date-filters > div > button { min-height: 38px; padding: 7px 10px; }
 .committee-due-date-review-queue > summary h2 { align-items: center; color: #354f4c; display: flex; font-size: 15px; gap: 8px; margin: 0; }
 .committee-due-date-review-queue > summary h2 span { background: #eaf1ed; border-radius: 999px; color: #3a6555; font-size: 11px; padding: 3px 8px; }
 .committee-due-date-review-queue > summary p { color: #697a72; font-size: 12px; margin: 5px 0 0; }
 .committee-due-request-card { background: #fffefa; border: 1px solid #e2e9e4; border-radius: 11px; display: grid; gap: 10px; min-width: 0; padding: 13px; }
+.committee-due-date-history { display: grid; gap: 12px; margin-bottom: 16px; min-width: 0; }
+.committee-due-date-history > summary { align-items: center; cursor: pointer; display: flex; gap: 12px; justify-content: space-between; list-style: none; }
+.committee-due-date-history > summary::-webkit-details-marker { display: none; }
+.committee-due-date-history > summary h2 { align-items: center; color: #354f4c; display: flex; font-size: 15px; gap: 8px; margin: 0; }
+.committee-due-date-history > summary h2 span { background: #eaf1ed; border-radius: 999px; color: #3a6555; font-size: 11px; padding: 3px 8px; }
+.committee-due-date-history > summary p { color: #697a72; font-size: 12px; margin: 5px 0 0; }
+.committee-due-date-history-list { display: grid; gap: 9px; list-style: none; margin: 0; padding: 0; }
+.committee-due-date-history-list > li { background: #fffefa; border: 1px solid #e2e9e4; border-radius: 10px; display: grid; gap: 7px; min-width: 0; padding: 12px; }
+.committee-due-date-history-list > li > div { display: grid; gap: 4px; min-width: 0; }
+.committee-due-date-history-list strong, .committee-due-date-history-list small, .committee-due-date-history-list p { overflow-wrap: anywhere; }
+.committee-due-date-history-list small { color: #697a72; font-size: 11px; }
+.committee-due-date-history-list > li > p { margin: 0; }
+.committee-due-history-status { border-radius: 999px; font-size: 10px; font-weight: 700; justify-self: start; padding: 4px 8px; text-transform: capitalize; }
+.committee-due-history-status.approved { background: #e5f3ec; color: #28766c; }
+.committee-due-history-status.declined { background: #fbeae7; color: #a0443c; }
+.committee-due-history-status.withdrawn { background: #edf1ef; color: #66766e; }
 .committee-due-request-card h3 { color: #293f40; font-size: 13px; margin: 7px 0 3px; overflow-wrap: anywhere; }
 .committee-due-request-card > div:first-child p { color: #697a72; font-size: 11px; margin: 0; }
 .committee-due-request-dates { align-items: center; color: #596d63; display: flex; flex-wrap: wrap; gap: 8px; font-size: 12px; }
@@ -1593,6 +1623,12 @@
   .kagawad-correction-history-filters label:first-child, .kagawad-correction-history-filter-actions { grid-column: 1 / -1; }
 }
 @media (max-width: 650px) {
+  .committee-due-date-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .committee-due-date-filters label:first-child, .committee-due-date-filters > div { grid-column: 1 / -1; }
+  .committee-due-date-filters > div > button { flex: 1; }
+  .committee-due-date-history .committee-due-date-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .committee-due-date-history .committee-due-date-filters label:first-child,
+  .committee-due-date-history .committee-due-date-filters > div { grid-column: 1 / -1; }
   .kagawad-task-note-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .kagawad-task-note-filters label:first-child, .kagawad-task-note-filters > button { grid-column: 1 / -1; }
   .kagawad-task-note-filters > button { width: 100%; }
@@ -1731,7 +1767,10 @@
   display: grid;
   gap: 10px;
   grid-template-columns: minmax(220px, 1.4fr) repeat(3, minmax(130px, 1fr)) auto;
+  margin-bottom: 14px;
+  min-width: 0;
   padding: 0;
+  width: 100%;
 }
 .workspace-shell .announcement-filters > .archive-search {
   align-items: center;
@@ -1781,10 +1820,14 @@
   font-weight: 400;
   min-height: 44px;
   min-width: 0;
+  box-sizing: border-box;
+  display: block;
+  max-width: 100%;
   padding: 8px 10px;
   width: 100%;
 }
 .workspace-shell .announcement-filters .announcement-date-filter input { cursor: text; }
+.workspace-shell .announcement-filters ~ .ops-empty { margin-top: 12px; }
 .workspace-shell .announcement-filters .announcement-date-filter input:focus-visible,
 .workspace-shell .announcement-filters > label:not(.archive-search) select:focus-visible { outline: 3px solid #28766c40; border-color: #28766c; }
 @media (max-width: 900px) {
@@ -1793,12 +1836,15 @@
   .workspace-shell .announcement-filters > .button { grid-column: 1 / -1; justify-self: start; }
 }
 @media (max-width: 650px) {
-  .workspace-shell .announcement-filters { grid-template-columns: minmax(0, 1fr); }
+  .workspace-shell .announcement-filters { grid-template-columns: minmax(0, 1fr); margin-bottom: 16px; }
   .workspace-shell .announcement-filters > *,
   .workspace-shell .announcement-filters > .archive-search,
   .workspace-shell .announcement-filters > label:not(.archive-search),
   .workspace-shell .announcement-filters .announcement-date-filter { grid-column: 1; min-width: 0; width: 100%; }
   .workspace-shell .announcement-filters > .button { justify-content: center; width: 100%; }
+  .workspace-shell .announcement-filters .announcement-date-filter,
+  .workspace-shell .announcement-filters .announcement-date-filter input { box-sizing: border-box; max-width: 100%; min-width: 0; width: 100%; }
+  .captain-workspace .operation-page .announcement-filters { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* Keep support filters in predictable grid cells at every viewport width. */

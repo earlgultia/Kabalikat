@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
 import { CheckCircle2, ChevronLeft, ChevronRight, History, MessageSquareText, UsersRound } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
-import { addCommitteeTaskProgressNote, addKagawadActionItemNote, assignCommitteeMember, completeKagawadTask, COMMITTEE_CONTENT_PAGE_SIZE, COMMITTEE_MEMBER_PAGE_SIZE, COMMITTEE_PAGE_SIZE, createCommittee, createCommitteeTask, decideCommitteeTaskDueDateRequest, getCommitteeTaskNotificationContext, listActiveCommitteeMembers, listAssignableCommitteeMembers, listCommitteeMembers, listCommittees, listCommitteeTasks, listCommitteeTaskDueDateRequests, listKagawadActionItemNotes, listKagawadAssignedActionItems, listKagawadCompletedWork, listKagawadTaskAssignmentHistory, listKagawadTaskDueDateRequestHistory, listKagawadTaskStatusHistory, reassignCommitteeTask, requestCommitteeTaskDueDate, reportKagawadTaskBlocker, updateCommitteeTaskStatus, withdrawCommitteeTaskDueDateRequest, type CommitteeTaskDueDateReview, type CommitteeTaskRow } from './committee-data'
+import { addCommitteeTaskProgressNote, addKagawadActionItemNote, assignCommitteeMember, completeKagawadTask, COMMITTEE_CONTENT_PAGE_SIZE, COMMITTEE_MEMBER_PAGE_SIZE, COMMITTEE_PAGE_SIZE, createCommittee, createCommitteeTask, decideCommitteeTaskDueDateRequest, getCommitteeTaskNotificationContext, listActiveCommitteeMembers, listAssignableCommitteeMembers, listCommitteeMembers, listCommittees, listCommitteeTasks, listCommitteeTaskDueDateRequestHistory, listCommitteeTaskDueDateRequests, listKagawadActionItemNotes, listKagawadAssignedActionItems, listKagawadCompletedWork, listKagawadTaskAssignmentHistory, listKagawadTaskDueDateRequestHistory, listKagawadTaskStatusHistory, reassignCommitteeTask, requestCommitteeTaskDueDate, reportKagawadTaskBlocker, updateCommitteeTaskStatus, withdrawCommitteeTaskDueDateRequest, type CommitteeTaskDueDateReview, type CommitteeTaskRow } from './committee-data'
 import { hasPermission } from './data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 
@@ -126,16 +126,34 @@ function CommitteeDueDateReviewQueue({ tenantId }: { tenantId: string }) {
   const [page, setPage] = useState(0)
   const [busyRequest, setBusyRequest] = useState('')
   const [error, setError] = useState('')
-  const requests = useQuery({ queryKey: ['committee-due-date-review-queue', tenantId, page], queryFn: () => listCommitteeTaskDueDateRequests(tenantId, page) })
+  const [filters, setFilters] = useState({ search: '', createdAfter: '', createdBefore: '' })
+  const [filterDraft, setFilterDraft] = useState({ search: '', createdAfter: '', createdBefore: '' })
+  const [filterError, setFilterError] = useState('')
+  const requests = useQuery({ queryKey: ['committee-due-date-review-queue', tenantId, page, filters], queryFn: () => listCommitteeTaskDueDateRequests(tenantId, page, filters) })
   const totalPages = Math.max(1, Math.ceil((requests.data?.totalCount ?? 0) / 20))
   const currentPage = Math.min(page, totalPages - 1)
   useEffect(() => { if (page !== currentPage) setPage(currentPage) }, [currentPage, page])
+  function applyFilters(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (filterDraft.createdAfter && filterDraft.createdBefore && filterDraft.createdAfter > filterDraft.createdBefore) {
+      setFilterError('The start date must be on or before the end date.')
+      return
+    }
+    setFilterError('')
+    setPage(0)
+    setFilters({ ...filterDraft, search: filterDraft.search.trim() })
+  }
+  function clearFilters() {
+    const empty = { search: '', createdAfter: '', createdBefore: '' }
+    setFilters(empty); setFilterDraft(empty); setFilterError(''); setPage(0)
+  }
   async function decide(requestId: string, decision: 'approved' | 'declined', note: string) {
     setBusyRequest(requestId); setError('')
     try {
       await decideCommitteeTaskDueDateRequest(requestId, decision, note)
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['committee-due-date-review-queue', tenantId] }),
+        queryClient.invalidateQueries({ queryKey: ['committee-due-date-review-history', tenantId] }),
         queryClient.invalidateQueries({ queryKey: ['committee-tasks', tenantId] }),
         queryClient.invalidateQueries({ queryKey: ['committee-task-notes'] }),
       ])
@@ -144,11 +162,68 @@ function CommitteeDueDateReviewQueue({ tenantId }: { tenantId: string }) {
   }
   return <details className="ops-panel committee-due-date-review-queue" open>
     <summary><div><h2>Due-date requests <span>{requests.data?.totalCount ?? 0}</span></h2><p>Review schedule changes requested by assigned Kagawads.</p></div><History size={18} /></summary>
+    <form className="committee-due-date-filters" onSubmit={applyFilters}>
+      <label>Search requests<input type="search" maxLength={100} placeholder="Task, committee, requester, or reason" value={filterDraft.search} onChange={(event) => setFilterDraft((current) => ({ ...current, search: event.target.value }))} /></label>
+      <label>Submitted on or after<input type="date" max={filterDraft.createdBefore || undefined} value={filterDraft.createdAfter} onChange={(event) => setFilterDraft((current) => ({ ...current, createdAfter: event.target.value }))} /></label>
+      <label>Submitted on or before<input type="date" min={filterDraft.createdAfter || undefined} value={filterDraft.createdBefore} onChange={(event) => setFilterDraft((current) => ({ ...current, createdBefore: event.target.value }))} /></label>
+      <div><button className="button primary" type="submit">Apply</button><button className="button outline" type="button" onClick={clearFilters} disabled={!filterDraft.search && !filterDraft.createdAfter && !filterDraft.createdBefore}>Clear</button></div>
+    </form>
+    {filterError && <p className="field-hint" role="alert">{filterError}</p>}
     {requests.isPending && <LoadingNotice compact />}{requests.error && <ErrorNotice message="Due-date requests could not be loaded." onRetry={() => void requests.refetch()} retrying={requests.isFetching} />}
     {error && <ErrorNotice message={error} />}
-    {requests.data?.rows.length === 0 && <p className="field-hint">There are no due-date requests awaiting review.</p>}
+    {requests.data?.rows.length === 0 && <p className="field-hint">{filters.search || filters.createdAfter || filters.createdBefore ? 'No due-date requests match these filters.' : 'There are no due-date requests awaiting review.'}</p>}
     {requests.data?.rows.map((request) => <CommitteeDueDateRequestCard key={request.id} request={request} busy={busyRequest === request.id} onDecide={(id, decision, note) => void decide(id, decision, note)} />)}
     {totalPages > 1 && <div className="committee-picker-pagination"><span>Page {currentPage + 1} of {totalPages} · {requests.data?.totalCount ?? 0} requests</span><div><button type="button" className="button outline" disabled={currentPage === 0 || requests.isFetching} onClick={() => setPage(currentPage - 1)}>Previous</button><button type="button" className="button outline" disabled={currentPage + 1 >= totalPages || requests.isFetching} onClick={() => setPage(currentPage + 1)}>Next</button></div></div>}
+  </details>
+}
+
+function CommitteeDueDateRequestHistory({ tenantId }: { tenantId: string }) {
+  const [open, setOpen] = useState(false)
+  const [page, setPage] = useState(0)
+  const [filters, setFilters] = useState({ status: 'all', search: '', createdAfter: '', createdBefore: '' })
+  const [draft, setDraft] = useState({ status: 'all', search: '', createdAfter: '', createdBefore: '' })
+  const [filterError, setFilterError] = useState('')
+  const history = useQuery({
+    queryKey: ['committee-due-date-review-history', tenantId, page, filters],
+    queryFn: () => listCommitteeTaskDueDateRequestHistory(tenantId, page, filters),
+    enabled: Boolean(open && tenantId),
+  })
+  const totalPages = Math.max(1, Math.ceil((history.data?.totalCount ?? 0) / 20))
+  const currentPage = Math.min(page, totalPages - 1)
+  useEffect(() => { if (page !== currentPage) setPage(currentPage) }, [currentPage, page])
+  function applyFilters(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (draft.createdAfter && draft.createdBefore && draft.createdAfter > draft.createdBefore) {
+      setFilterError('The start date must be on or before the end date.')
+      return
+    }
+    setFilterError(''); setPage(0); setFilters({ ...draft, search: draft.search.trim() })
+  }
+  function clearFilters() {
+    const empty = { status: 'all', search: '', createdAfter: '', createdBefore: '' }
+    setFilters(empty); setDraft(empty); setFilterError(''); setPage(0)
+  }
+  return <details className="ops-panel committee-due-date-history" onToggle={(event) => setOpen(event.currentTarget.open)}>
+    <summary><div><h2>Reviewed due-date requests <span>{history.data?.totalCount ?? '—'}</span></h2><p>Find approved, declined, or withdrawn requests.</p></div><History size={18} /></summary>
+    <form className="committee-due-date-filters" onSubmit={applyFilters}>
+      <label>Search history<input type="search" maxLength={100} placeholder="Task, requester, or decision" value={draft.search} onChange={(event) => setDraft((current) => ({ ...current, search: event.target.value }))} /></label>
+      <label>Outcome<select value={draft.status} onChange={(event) => setDraft((current) => ({ ...current, status: event.target.value }))}><option value="all">All outcomes</option><option value="approved">Approved</option><option value="declined">Declined</option><option value="withdrawn">Withdrawn</option></select></label>
+      <label>Submitted on or after<input type="date" max={draft.createdBefore || undefined} value={draft.createdAfter} onChange={(event) => setDraft((current) => ({ ...current, createdAfter: event.target.value }))} /></label>
+      <label>Submitted on or before<input type="date" min={draft.createdAfter || undefined} value={draft.createdBefore} onChange={(event) => setDraft((current) => ({ ...current, createdBefore: event.target.value }))} /></label>
+      <div><button className="button primary" type="submit">Apply</button><button className="button outline" type="button" onClick={clearFilters} disabled={!draft.search && draft.status === 'all' && !draft.createdAfter && !draft.createdBefore}>Clear</button></div>
+    </form>
+    {filterError && <p className="field-hint" role="alert">{filterError}</p>}
+    {history.isPending && open && <LoadingNotice compact />}
+    {history.error && <ErrorNotice message="Reviewed due-date requests could not be loaded." onRetry={() => void history.refetch()} retrying={history.isFetching} />}
+    {history.data?.rows.length === 0 && <p className="field-hint">{filters.search || filters.status !== 'all' || filters.createdAfter || filters.createdBefore ? 'No reviewed requests match these filters.' : 'No due-date requests have been reviewed yet.'}</p>}
+    {history.data?.rows.length ? <ul className="committee-due-date-history-list">{history.data.rows.map((entry) => <li key={entry.id}>
+      <div><span className={`committee-due-history-status ${entry.status}`}>{entry.status.replaceAll('_', ' ')}</span><strong>{entry.task_title}</strong><small>{entry.committee_name} · Requested by {entry.requester_name}</small></div>
+      <p>{entry.current_due_date ? `Requested ${new Date(`${entry.current_due_date}T00:00:00`).toLocaleDateString()} → ${new Date(`${entry.proposed_due_date}T00:00:00`).toLocaleDateString()}` : `Proposed ${new Date(`${entry.proposed_due_date}T00:00:00`).toLocaleDateString()}`}</p>
+      <p className="committee-due-request-reason">{entry.reason}</p>
+      <small>{entry.status === 'withdrawn' ? 'Withdrawn by' : 'Reviewed by'} {entry.reviewer_name} · {entry.reviewed_at ? new Date(entry.reviewed_at).toLocaleString() : 'Review time unavailable'}</small>
+      {entry.decision_note && <p className="due-date-decision-note">{entry.decision_note}</p>}
+    </li>)}</ul> : null}
+    {history.data && totalPages > 1 && <div className="committee-picker-pagination"><span>Page {currentPage + 1} of {totalPages} · {history.data.totalCount} requests</span><div><button type="button" className="button outline" disabled={currentPage === 0 || history.isFetching} onClick={() => setPage(currentPage - 1)}>Previous</button><button type="button" className="button outline" disabled={currentPage + 1 >= totalPages || history.isFetching} onClick={() => setPage(currentPage + 1)}>Next</button></div></div>}
   </details>
 }
 
@@ -482,7 +557,7 @@ export function CommitteesPage({ focusId, onFocusHandled }: { focusId?: string; 
     {canManage.error && <ErrorNotice message="Committee management access could not be checked. Existing assignments can still be viewed; management controls are unavailable until access can be verified." />}
     {message && <div className="ops-success"><CheckCircle2 size={16} />{message}</div>}{error && <ErrorNotice message={error} />}
     {focusedTaskId && <FocusedCommitteeTask taskId={focusedTaskId} onClose={() => setFocusedTaskId('')} />}
-    {canManage.data && tenantId && <CommitteeDueDateReviewQueue tenantId={tenantId} />}
+    {canManage.data && tenantId && <><CommitteeDueDateReviewQueue tenantId={tenantId} /><CommitteeDueDateRequestHistory tenantId={tenantId} /></>}
     {Boolean(tenantId) && !canManage.isPending && !canManage.error && !canManage.data && <div className="ops-panel archive-access"><UsersRound size={20} /><div><strong>Committee access is assignment-based</strong><p>You will see committees after an authorized administrator assigns you to one.</p></div></div>}
     {isKagawad && <section className="ops-panel kagawad-completed-work" aria-labelledby="kagawad-completed-work-title">
       <div className="ops-panel-heading"><div><h2 id="kagawad-completed-work-title">My completed work</h2><p>Completion summaries you submitted, including tasks later transferred or archived.</p></div><CheckCircle2 size={19} /></div>

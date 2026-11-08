@@ -37,6 +37,11 @@ export type CommitteeTaskDueDateReview = {
   requester_name: string; created_at: string; total_count: number
 }
 export type CommitteeTaskDueDateReviewPage = { rows: CommitteeTaskDueDateReview[]; totalCount: number }
+export type CommitteeTaskDueDateReviewHistory = CommitteeTaskDueDateReview & {
+  status: 'approved' | 'declined' | 'withdrawn'; decision_note: string; reviewer_name: string
+  reviewed_at: string; total_count: number
+}
+export type CommitteeTaskDueDateReviewHistoryPage = { rows: CommitteeTaskDueDateReviewHistory[]; totalCount: number }
 export type AssignableMemberRow = { user_id: string; display_name: string; role_label: string }
 export type AssignableMemberPage = { rows: AssignableMemberRow[]; totalCount: number }
 export type CommitteePage = { rows: CommitteeRow[]; totalCount: number }
@@ -207,12 +212,28 @@ export async function withdrawCommitteeTaskDueDateRequest(requestId: string): Pr
   if (error) throw new Error(error.message)
 }
 
-export async function listCommitteeTaskDueDateRequests(tenantId: string, page: number): Promise<CommitteeTaskDueDateReviewPage> {
+export async function listCommitteeTaskDueDateRequests(tenantId: string, page: number, filters: { search: string; createdAfter: string; createdBefore: string }): Promise<CommitteeTaskDueDateReviewPage> {
   const { data, error } = await client().rpc('list_committee_task_due_date_requests', {
     p_barangay_id: tenantId, p_page: page, p_page_size: 20,
+    p_search: filters.search.trim() || null,
+    p_created_after: filters.createdAfter || null,
+    p_created_before: filters.createdBefore || null,
   })
   if (error) throw new Error(error.message)
   const rows = (data ?? []) as CommitteeTaskDueDateReview[]
+  return { rows, totalCount: Number(rows[0]?.total_count ?? 0) }
+}
+
+export async function listCommitteeTaskDueDateRequestHistory(tenantId: string, page: number, filters: { status: string; search: string; createdAfter: string; createdBefore: string }): Promise<CommitteeTaskDueDateReviewHistoryPage> {
+  const { data, error } = await client().rpc('list_committee_task_due_date_request_history', {
+    p_barangay_id: tenantId, p_page: page, p_page_size: 20,
+    p_status: filters.status,
+    p_search: filters.search.trim() || null,
+    p_created_after: filters.createdAfter || null,
+    p_created_before: filters.createdBefore || null,
+  })
+  if (error) throw new Error(error.message)
+  const rows = (data ?? []) as CommitteeTaskDueDateReviewHistory[]
   return { rows, totalCount: Number(rows[0]?.total_count ?? 0) }
 }
 
