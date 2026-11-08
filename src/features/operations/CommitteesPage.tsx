@@ -352,7 +352,7 @@ function CommitteeMemberPicker({ tenantId, committeeId, busy, onAssign }: {
         <button className="button outline" type="submit">Search</button>
       </form>
       {candidates.isPending && <p className="field-hint" role="status">Loading active members…</p>}
-      {candidates.error && <p className="ops-error" role="alert">Unable to load active members. Try searching again.</p>}
+      {candidates.error && <ErrorNotice message="Unable to load active members." onRetry={() => void candidates.refetch()} retrying={candidates.isFetching} />}
       {candidates.data && total > 0 && <>
         <form className="committee-inline-form" onSubmit={onAssign}>
           <label>Choose a member<select name="userId" required defaultValue=""><option value="" disabled>Select active member</option>{rows.map((candidate) => <option key={candidate.user_id} value={candidate.user_id}>{candidate.display_name} · {candidate.role_label}</option>)}</select></label>
@@ -444,7 +444,7 @@ function CommitteeWorkspaceCard({
     <details className="committee-members" onToggle={(event) => setMembersOpen(event.currentTarget.open)}>
       <summary><h3>Members <span>{members.isPending && membersOpen ? '…' : members.data?.totalCount ?? '—'}</span></h3></summary>
       {membersOpen && members.isPending && <p className="field-hint" role="status">Loading committee members…</p>}
-      {membersOpen && members.error && <p className="ops-error" role="alert">Unable to load committee members.</p>}
+      {membersOpen && members.error && <ErrorNotice message="Unable to load committee members." onRetry={() => void members.refetch()} retrying={members.isFetching} />}
       {membersOpen && members.data && <>
         {committeeMembers.length ? <ul>{committeeMembers.map((member) => {
           const name = member.profile?.display_name || 'Assigned member'
@@ -457,7 +457,7 @@ function CommitteeWorkspaceCard({
     <details className="committee-tasks" onToggle={(event) => setTasksOpen(event.currentTarget.open)}>
       <summary><h3>Action items <span>{tasks.isPending && tasksOpen ? '…' : tasks.data?.totalCount ?? '—'}</span></h3></summary>
       {tasksOpen && tasks.isPending && <p className="field-hint" role="status">Loading action items…</p>}
-      {tasksOpen && tasks.error && <p className="ops-error" role="alert">Unable to load committee action items.</p>}
+      {tasksOpen && tasks.error && <ErrorNotice message="Unable to load committee action items." onRetry={() => void tasks.refetch()} retrying={tasks.isFetching} />}
       {tasksOpen && tasks.data && <>
         {committeeTasks.length ? <ul>{committeeTasks.map((task) => <li key={task.id}><div><strong>{task.title}</strong>{task.description && <p>{task.description}</p>}<small>{task.assigned_to ? `Assigned to ${task.assignee_name || (task.assigned_to === currentUserId ? 'You' : 'Assigned member')}` : 'Unassigned'}{task.due_date ? ` · Due ${new Date(`${task.due_date}T00:00:00`).toLocaleDateString()}` : ''}</small>{canManage && task.status !== 'completed' && <CommitteeTaskAssigneeEditor tenantId={tenantId} committeeId={committee.id} task={task} busy={busy} onReassign={onReassignTask} />}{canManage && task.assigned_to && <><button type="button" className="text-action kagawad-task-note-toggle" aria-expanded={progressNotesTaskId === task.id} onClick={() => setProgressNotesTaskId((current) => current === task.id ? '' : task.id)}><MessageSquareText size={14} />{progressNotesTaskId === task.id ? 'Hide progress notes' : 'View progress notes'}</button>{progressNotesTaskId === task.id && <CommitteeTaskNotesViewer taskId={task.id} />}</>}</div><div className="committee-task-status"><StatusPill status={task.status} />{(canManage || task.assigned_to === currentUserId) && <select aria-label={`Update status for ${task.title}`} value={task.status} disabled={busy} onChange={(event) => onChangeTask(task, event.target.value as CommitteeTaskRow['status'])}><option value="open">Open</option><option value="in_progress">In progress</option><option value="blocked">Blocked</option><option value="completed">Completed</option></select>}</div></li>)}</ul> : <p>No action items yet.</p>}
         {taskPages > 1 && <div className="committee-picker-pagination"><span>Page {currentTaskPage + 1} of {taskPages} · {taskTotal} action items</span><div><button type="button" className="button outline" disabled={currentTaskPage === 0 || tasks.isFetching} onClick={() => setTaskPage(currentTaskPage - 1)}>Previous</button><button type="button" className="button outline" disabled={currentTaskPage + 1 >= taskPages || tasks.isFetching} onClick={() => setTaskPage(currentTaskPage + 1)}>Next</button></div></div>}

@@ -35,7 +35,7 @@ export function ProjectsPage({ focusProjectId, focusProjectPage, focusUpdateId, 
   const canContribute = useQuery({ queryKey: ['permission', tenantId, 'project.update'], queryFn: () => hasPermission(tenantId, 'project.update'), enabled: Boolean(tenantId && isKagawad) })
   const canRecordUpdates = Boolean(canManage.data || canContribute.data)
   const projects = useQuery({ queryKey: ['barangay-projects', tenantId, page], queryFn: () => listBarangayProjects(tenantId, page), enabled: Boolean(tenantId) })
-  const contributions = useQuery({ queryKey: ['kagawad-project-contributions', tenantId, contributionPage, contributionFilters], queryFn: () => listKagawadProjectContributions(tenantId, contributionPage, contributionFilters), enabled: Boolean(tenantId && isKagawad) })
+  const contributions = useQuery({ queryKey: ['kagawad-project-contributions', tenantId, contributionPage, contributionFilters], queryFn: () => listKagawadProjectContributions(tenantId, contributionPage, contributionFilters), enabled: Boolean(tenantId && isKagawad && canContribute.data) })
   const contributionPages = Math.ceil((contributions.data?.totalCount ?? 0) / 10)
   const totalPages = Math.ceil((projects.data?.totalCount ?? 0) / BARANGAY_PROJECT_PAGE_SIZE)
   const [showForm, setShowForm] = useState(false)
@@ -92,33 +92,36 @@ export function ProjectsPage({ focusProjectId, focusProjectPage, focusUpdateId, 
     </PageHeading>
     {!tenantId && <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to view project status and progress." />}
     {Boolean(tenantId) && canManage.isPending && <LoadingNotice compact />}
-    {canManage.error && <ErrorNotice message="Project management access could not be checked. Project records remain available under your current access; management controls are unavailable until permissions can be verified." />}
+    {canManage.error && <ErrorNotice message="Project management access could not be checked. Project records remain available under your current access; management controls are unavailable until permissions can be verified." onRetry={() => void canManage.refetch()} retrying={canManage.isFetching} />}
+    {isKagawad && canContribute.error && <ErrorNotice message="Project contribution access could not be checked. Your contribution history and update controls are unavailable until permissions can be verified." onRetry={() => void canContribute.refetch()} retrying={canContribute.isFetching} />}
     {message && <div className="ops-success" role="status"><CheckCircle2 size={16} />{message}</div>}{error && <ErrorNotice message={error} />}
     {Boolean(tenantId) && !canManage.data && !canContribute.data && !canManage.isPending && (!isKagawad || !canContribute.isPending) && !canManage.error && !canContribute.error && <div className="ops-panel archive-access"><FolderKanban size={20} /><div><strong>Read-only project access</strong><p>Active barangay members can view project status. Creating projects and recording updates is limited to authorized members.</p></div></div>}
     {showForm && canManage.data && <form className="ops-panel ops-form" onSubmit={(event) => void createProject(event)}><div className="ops-panel-heading"><div><h2>New barangay project</h2><p>Project notes are separate from the official finance ledger.</p></div><FolderKanban size={19} /></div><div className="ops-form-grid"><label>Project title<input name="title" minLength={3} maxLength={180} required /></label><label>Planned start<input name="start" type="date" /></label><label>Planned end<input name="end" type="date" /></label><label className="span-two">Description<textarea name="description" maxLength={4000} /></label></div><div className="ops-form-actions"><button className="button primary" disabled={busy}>Create project</button></div></form>}
     {isKagawad && <section className="ops-panel kagawad-project-contributions" aria-labelledby="kagawad-project-contributions-title">
       <div className="ops-panel-heading"><div><h2 id="kagawad-project-contributions-title">Your project contributions</h2><p>Progress reports and milestones you have recorded.</p></div><FolderKanban size={19} /></div>
-      {contributions.isPending && <LoadingNotice compact />}
-      {contributions.error && <ErrorNotice message="Your project contribution history could not be loaded." />}
-      {contributions.data?.totalCount === 0 && <p className="field-hint">{contributionFilters.search || contributionFilters.updateType !== 'all' || contributionFilters.createdAfter || contributionFilters.createdBefore ? 'No contributions match these filters.' : 'You have not recorded any project updates yet.'}</p>}
-      <form className="kagawad-contribution-filters" onSubmit={(event) => { event.preventDefault(); if (contributionDraft.createdAfter && contributionDraft.createdBefore && contributionDraft.createdAfter > contributionDraft.createdBefore) { setError('The start date must be on or before the end date.'); return } setError(''); setContributionPage(0); setContributionFilters({ ...contributionDraft, search: contributionDraft.search.trim() }) }}>
+      {canContribute.isPending && <LoadingNotice compact />}
+      {canContribute.data === false && !canContribute.isPending && !canContribute.error && <p className="field-hint">Your account does not have permission to record or view project contributions in this workspace.</p>}
+      {canContribute.data && contributions.isPending && <LoadingNotice compact />}
+      {canContribute.data && contributions.error && <ErrorNotice message="Your project contribution history could not be loaded." onRetry={() => void contributions.refetch()} retrying={contributions.isFetching} />}
+      {canContribute.data && contributions.data?.totalCount === 0 && <p className="field-hint">{contributionFilters.search || contributionFilters.updateType !== 'all' || contributionFilters.createdAfter || contributionFilters.createdBefore ? 'No contributions match these filters.' : 'You have not recorded any project updates yet.'}</p>}
+      {canContribute.data && <form className="kagawad-contribution-filters" onSubmit={(event) => { event.preventDefault(); if (contributionDraft.createdAfter && contributionDraft.createdBefore && contributionDraft.createdAfter > contributionDraft.createdBefore) { setError('The start date must be on or before the end date.'); return } setError(''); setContributionPage(0); setContributionFilters({ ...contributionDraft, search: contributionDraft.search.trim() }) }}>
         <label className="kagawad-contribution-search">Search your updates<input type="search" maxLength={100} placeholder="Project, title, or details" value={contributionDraft.search} onChange={(event) => setContributionDraft((current) => ({ ...current, search: event.target.value }))} /></label>
         <label>Update type<select value={contributionDraft.updateType} onChange={(event) => setContributionDraft((current) => ({ ...current, updateType: event.target.value }))}><option value="all">All types</option><option value="progress">Progress reports</option><option value="milestone">Milestones</option></select></label>
         <label>Created on or after<input type="date" value={contributionDraft.createdAfter} onChange={(event) => setContributionDraft((current) => ({ ...current, createdAfter: event.target.value }))} /></label>
         <label>Created on or before<input type="date" value={contributionDraft.createdBefore} onChange={(event) => setContributionDraft((current) => ({ ...current, createdBefore: event.target.value }))} /></label>
         <div className="kagawad-contribution-filter-actions"><button className="button primary" type="submit">Apply filters</button><button className="button outline" type="button" onClick={() => { const empty = { search: '', updateType: 'all', createdAfter: '', createdBefore: '' }; setContributionDraft(empty); setContributionFilters(empty); setContributionPage(0); setError('') }}>Clear</button></div>
-      </form>
-      {Boolean(contributions.data?.rows.length) && <ol className="kagawad-contribution-list">{contributions.data?.rows.map((entry) => <li key={entry.update_id}>
+      </form>}
+      {canContribute.data && Boolean(contributions.data?.rows.length) && <ol className="kagawad-contribution-list">{contributions.data?.rows.map((entry) => <li key={entry.update_id}>
         <div><strong>{entry.title}</strong><span className="status-pill">{entry.update_type === 'milestone' ? 'Milestone' : 'Progress report'}</span></div>
         <p className="kagawad-contribution-project">{entry.project_title} · {entry.project_status.replaceAll('_', ' ')}</p>
         {entry.details && <p>{entry.details}</p>}
         <time dateTime={entry.created_at}>{formatDateTime(entry.created_at)}</time>
         <BarangayProjectUpdateResponseThread updateId={entry.update_id} isOwnUpdate canRespond={false} />
       </li>)}</ol>}
-      {contributionPages > 1 && <div className="committee-picker-pagination"><span>Page {contributionPage + 1} of {contributionPages} · {contributions.data?.totalCount ?? 0} updates</span><div><button type="button" className="button outline" disabled={contributionPage === 0 || contributions.isFetching} onClick={() => setContributionPage((current) => current - 1)}>Previous</button><button type="button" className="button outline" disabled={contributionPage + 1 >= contributionPages || contributions.isFetching} onClick={() => setContributionPage((current) => current + 1)}>Next</button></div></div>}
+      {canContribute.data && contributionPages > 1 && <div className="committee-picker-pagination"><span>Page {contributionPage + 1} of {contributionPages} · {contributions.data?.totalCount ?? 0} updates</span><div><button type="button" className="button outline" disabled={contributionPage === 0 || contributions.isFetching} onClick={() => setContributionPage((current) => current - 1)}>Previous</button><button type="button" className="button outline" disabled={contributionPage + 1 >= contributionPages || contributions.isFetching} onClick={() => setContributionPage((current) => current + 1)}>Next</button></div></div>}
     </section>}
     {projects.isPending && tenantId && <LoadingNotice />}
-    {projects.error && <ErrorNotice message="Unable to load project records." />}
+    {projects.error && <ErrorNotice message="Unable to load project records." onRetry={() => void projects.refetch()} retrying={projects.isFetching} />}
     {projects.data?.totalCount === 0 && <div className="ops-empty"><FolderKanban size={22} /><strong>No barangay projects yet</strong><p>When an authorized official adds a project, its status and progress will appear here.</p></div>}
     <div className="barangay-project-list">{projects.data?.rows.map((project) => {
       return <article className="ops-panel barangay-project-card" key={project.id}>

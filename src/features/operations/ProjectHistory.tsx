@@ -77,7 +77,7 @@ export function BarangayProjectUpdateResponseThread({ updateId, isOwnUpdate, can
   return <details ref={detailsRef} className="project-update-response-thread" onToggle={(event: SyntheticEvent<HTMLDetailsElement>) => setOpen(event.currentTarget.open)}>
     <summary>Responses{responses.data ? ` (${responses.data.totalCount})` : ''}</summary>
     {responses.isPending && open && <LoadingNotice compact />}
-    {responses.error && <ErrorNotice message="Responses could not be loaded." />}
+    {responses.error && <ErrorNotice message="Responses could not be loaded." onRetry={() => void responses.refetch()} retrying={responses.isFetching} />}
     <form className="project-response-filters" onSubmit={applyFilters}>
       <label>Search replies<input type="search" maxLength={100} placeholder="Author or message" value={filterDraft.search} onChange={(event) => setFilterDraft((current) => ({ ...current, search: event.target.value }))} /></label>
       <label>From<input type="date" max={filterDraft.createdBefore || undefined} value={filterDraft.createdAfter} onChange={(event) => setFilterDraft((current) => ({ ...current, createdAfter: event.target.value }))} /></label>
@@ -125,7 +125,7 @@ export function ProjectProgressHistory({ tenantId, projectId, scope, canRespond 
   return <details ref={detailsRef} className="incident-history project-progress-history" onToggle={(event: SyntheticEvent<HTMLDetailsElement>) => setOpen(event.currentTarget.open)}>
     <summary>Milestones &amp; progress{history.data ? ` (${history.data.totalCount})` : ''}</summary>
     {history.isPending && open && <LoadingNotice compact />}
-    {history.error && <ErrorNotice message="Project progress history could not be loaded." />}
+    {history.error && <ErrorNotice message="Project progress history could not be loaded." onRetry={() => void history.refetch()} retrying={history.isFetching} />}
     {history.data?.totalCount === 0 && <p>No progress updates yet.</p>}
     {history.data?.rows.length ? <ol>{history.data.rows.map((update) => <li id={`project-update-${update.id}`} key={update.id}>
       <strong>{update.title}</strong>
