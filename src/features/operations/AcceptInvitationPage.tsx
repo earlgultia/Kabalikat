@@ -53,7 +53,7 @@ export function AcceptInvitationPage() {
           options: { emailRedirectTo: window.location.href, data: { display_name: displayName } },
         })
         if (authError) throw authError
-        if (!data.session) setAccountMessage('Check your email to confirm your account. This invitation link will be waiting when you return.')
+        if (!data.session) setAccountMessage('Check your email to confirm your account. Then return to this invitation link, sign in, and tap Accept invitation. Your barangay membership will not be active until you accept.')
       }
     } catch {
       setError('We could not authenticate that account. Check your details or try the other option.')
@@ -79,6 +79,7 @@ export function AcceptInvitationPage() {
     <p className="muted">{user ? <>Signed in as <strong>{user.email}</strong>. Membership is granted only when the invitation email matches.</> : 'Use the email address that received this invitation. Your account gets no barangay access unless the invitation is valid.'}</p>
     {error && <ErrorNotice message={error} />}
     {accountMessage && <div className="notice"><CheckCircle2 size={17} />{accountMessage}</div>}
+    {!user && !accepted && <div className="notice"><CheckCircle2 size={17} />Step 1: create an account or sign in with the invited email. Step 2: once signed in, tap Accept invitation here to join the barangay. Creating an account alone does not accept the invitation.</div>}
     {accepted ? <div className="ops-success"><CheckCircle2 size={16} />Your membership is active. Opening your workspace...</div> : user ? <>
       <button className="button primary full" onClick={() => void accept()} disabled={busy || token.length !== 64}>{busy ? 'Checking invitation...' : 'Accept invitation'}</button>
       {user.email_confirmed_at == null && <p className="field-hint" style={{ marginTop: 12 }}>Confirm your email before accepting this invitation.</p>}
@@ -90,7 +91,7 @@ export function AcceptInvitationPage() {
         <label>Email address<input name="email" type="email" required autoComplete="email" /></label>
         <label>Password<div className="auth-password-field"><input name="password" type={showPassword ? 'text' : 'password'} required minLength={mode === 'create-account' ? 12 : 8} maxLength={128} autoComplete={mode === 'sign-in' ? 'current-password' : 'new-password'} /><button type="button" className="auth-password-toggle" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></div></label>
         {mode === 'create-account' && <><span className="field-hint">New passwords need at least 12 characters, including uppercase, lowercase, and a number.</span><label>Confirm password<div className="auth-password-field"><input name="confirmation" type={showConfirmation ? 'text' : 'password'} required minLength={12} maxLength={128} autoComplete="new-password" /><button type="button" className="auth-password-toggle" onClick={() => setShowConfirmation((visible) => !visible)} aria-label={showConfirmation ? 'Hide password confirmation' : 'Show password confirmation'} aria-pressed={showConfirmation}>{showConfirmation ? <EyeOff size={18} /> : <Eye size={18} />}</button></div></label></>}
-        <button className="button primary full" disabled={busy || token.length !== 64}>{busy ? 'Please wait...' : mode === 'sign-in' ? 'Sign in' : 'Create account'}</button>
+        <button className="button primary full" disabled={busy || token.length !== 64}>{busy ? 'Please wait...' : mode === 'sign-in' ? 'Sign in to continue' : 'Create account to continue'}</button>
       </form>
       <button className="button outline full" style={{ marginTop: 10 }} onClick={() => { setMode(mode === 'sign-in' ? 'create-account' : 'sign-in'); setError(''); setAccountMessage('') }}>
         {mode === 'sign-in' ? 'Create an account' : 'I already have an account'}
