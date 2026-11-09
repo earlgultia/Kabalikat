@@ -24,7 +24,7 @@ export function StatusPill({ status }: { status: string }) {
   return <span className={'status-pill status-' + normalized}>{status.replaceAll('_', ' ')}</span>
 }
 
-export function EmptyNotice({ title, detail }: { title: string; detail: string }) {
-  return <div className="ops-empty"><strong>{title}</strong><p>{detail}</p></div>
+export function EmptyNotice({ title, detail, className }: { title: string; detail: string; className?: string }) {
+  return <div className={['ops-empty', className].filter(Boolean).join(' ')}><strong>{title}</strong><p>{detail}</p></div>
 }
 
