@@ -65,9 +65,9 @@ export async function getProjectResponseNotificationTarget(updateId: string): Pr
   return rows[0] ?? null
 }
 
-export async function listKagawadProjectContributions(tenantId: string, page: number, filters: { search: string; updateType: string; createdAfter: string; createdBefore: string }) {
+export async function listKagawadProjectContributions(tenantId: string, page: number, filters: { search: string; updateType: string; createdAfter: string; createdBefore: string }, pageSize = 10) {
   const { data, error } = await client().rpc('search_kagawad_project_contribution_page', {
-    p_barangay_id: tenantId, p_page: page, p_page_size: 10,
+    p_barangay_id: tenantId, p_page: page, p_page_size: pageSize,
     p_search: filters.search || null,
     p_update_type: filters.updateType,
     p_created_after: filters.createdAfter || null,

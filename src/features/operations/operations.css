@@ -1681,6 +1681,7 @@
   .kagawad-contribution-filters { grid-template-columns: minmax(0, 1fr); }
   .kagawad-contribution-filter-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .kagawad-contribution-filter-actions .button { justify-content: center; min-width: 0; }
+  .kagawad-contribution-filter-actions .button:nth-child(3) { grid-column: 1 / -1; }
   .kagawad-contribution-list > li { padding: 11px; }
   .kagawad-contribution-list > li > div { flex-direction: column; }
   .kagawad-contribution-list .status-pill { align-self: flex-start; }
@@ -1722,6 +1723,7 @@
   .kagawad-assignment-history-filters { grid-template-columns: minmax(0,1fr); }
   .kagawad-assignment-history-filters label:first-child, .kagawad-assignment-history-actions { grid-column: 1; }
   .kagawad-assignment-history-actions { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .kagawad-assignment-history-actions > button:nth-child(3) { grid-column: 1 / -1; }
   .kagawad-completed-work-filters { grid-template-columns: minmax(0, 1fr); }
   .kagawad-completed-work-filters label:first-child, .kagawad-completed-work-filter-actions { grid-column: 1; }
   .kagawad-completed-work-filter-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -2194,6 +2196,7 @@
   .kagawad-due-date-history-filters label:first-child,
   .kagawad-due-date-history-actions { grid-column: 1; }
   .kagawad-due-date-history-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kagawad-due-date-history-actions > button:nth-child(3) { grid-column: 1 / -1; }
   .kagawad-due-date-history-actions > button { width: 100%; }
 }
 

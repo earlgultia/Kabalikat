@@ -13,6 +13,7 @@ import { formatDateTime } from './format'
 import { MeetingRecordsPanel } from './MeetingRecordsPanel'
 import { MeetingQrPanel } from './MeetingQrPanel'
 import { MeetingReasonDialog } from './MeetingReasonDialog'
+import { encodeCsv } from './csv'
 
 type MeetingReasonRequest = {
   title: string; description: string; label: string; confirmLabel: string
@@ -90,6 +91,8 @@ export function MeetingsPage({ focusId, focusPage, focusCorrectionRequestId, foc
   const [meetingHistoryDraft, setMeetingHistoryDraft] = useState({ search: '', attendanceStatus: 'all', meetingDateAfter: '', meetingDateBefore: '' })
   const [meetingHistoryFilters, setMeetingHistoryFilters] = useState({ search: '', attendanceStatus: 'all', meetingDateAfter: '', meetingDateBefore: '' })
   const [rsvpHistoryPage, setRsvpHistoryPage] = useState(0)
+  const [rsvpHistoryExportBusy, setRsvpHistoryExportBusy] = useState(false)
+  const [rsvpHistoryExportMessage, setRsvpHistoryExportMessage] = useState('')
   const [rsvpHistoryDraft, setRsvpHistoryDraft] = useState({ search: '', response: 'all', meetingDateAfter: '', meetingDateBefore: '' })
   const [rsvpHistoryFilters, setRsvpHistoryFilters] = useState({ search: '', response: 'all', meetingDateAfter: '', meetingDateBefore: '' })
   const [correctionRequestPage, setCorrectionRequestPage] = useState(0)
@@ -126,6 +129,7 @@ export function MeetingsPage({ focusId, focusPage, focusCorrectionRequestId, foc
     setMeetingHistoryDraft({ search: '', attendanceStatus: 'all', meetingDateAfter: '', meetingDateBefore: '' })
     setMeetingHistoryFilters({ search: '', attendanceStatus: 'all', meetingDateAfter: '', meetingDateBefore: '' })
     setRsvpHistoryPage(0)
+    setRsvpHistoryExportMessage('')
     setRsvpHistoryDraft({ search: '', response: 'all', meetingDateAfter: '', meetingDateBefore: '' })
     setRsvpHistoryFilters({ search: '', response: 'all', meetingDateAfter: '', meetingDateBefore: '' })
     setCorrectionRequestPage(0)
@@ -459,6 +463,41 @@ export function MeetingsPage({ focusId, focusPage, focusCorrectionRequestId, foc
     finally { setScheduleExportBusy(false) }
   }
 
+  async function exportKagawadRsvpHistory() {
+    setRsvpHistoryExportBusy(true)
+    setRsvpHistoryExportMessage('Preparing your matching RSVP history…')
+    try {
+      const firstPage = await listKagawadMeetingInvitationResponseHistory(tenantId, 0, rsvpHistoryFilters, 50)
+      const totalCount = Number(firstPage[0]?.total_count ?? 0)
+      if (totalCount > 10_000) {
+        throw new Error('There are more than 10,000 matching RSVP records. Add a date or search filter and try again.')
+      }
+      const rows = [...firstPage]
+      const pageCount = Math.ceil(totalCount / 50)
+      for (let exportPage = 1; exportPage < pageCount; exportPage += 1) {
+        const result = await listKagawadMeetingInvitationResponseHistory(tenantId, exportPage, rsvpHistoryFilters, 50)
+        rows.push(...result)
+      }
+      const csv = encodeCsv([
+        ['Meeting', 'Meeting date', 'Response', 'Responded at'],
+        ...rows.map((row) => [row.meeting_title, row.meeting_starts_at, row.response, row.responded_at]),
+      ])
+      const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `kabalikat-my-rsvp-history-${new Date().toISOString().slice(0, 10)}.csv`
+      link.click()
+      window.setTimeout(() => URL.revokeObjectURL(url), 1_000)
+      setRsvpHistoryExportMessage(`Export ready with ${rows.length.toLocaleString()} matching responses.`)
+    } catch (exportError) {
+      setRsvpHistoryExportMessage(exportError instanceof Error && exportError.message.startsWith('There are more than')
+        ? exportError.message
+        : 'Unable to export your RSVP history. Try again.')
+    } finally {
+      setRsvpHistoryExportBusy(false)
+    }
+  }
+
   function exportMeetingCalendarFile(meeting: { id: string; title: string; location: string; starts_at: string; ends_at: string | null; agenda: string }) {
     const escapeIcsText = (value: string) => value.replaceAll('\\', '\\\\').replace(/\r?\n/g, '\\n').replaceAll(',', '\\,').replaceAll(';', '\\;')
     const formatUtc = (value: Date) => value.toISOString().replaceAll('-', '').replaceAll(':', '').replace(/\.\d{3}Z$/, 'Z')
@@ -554,13 +593,14 @@ export function MeetingsPage({ focusId, focusPage, focusCorrectionRequestId, foc
     </section>}
     {isKagawad && <section className="ops-panel kagawad-invited-meetings" aria-labelledby="kagawad-meeting-rsvp-history-title">
       <div className="ops-panel-heading"><div><h2 id="kagawad-meeting-rsvp-history-title">My RSVP history</h2><p>Review your previous availability responses. These entries are not attendance records.</p></div><History size={19} /></div>
-      <form className="kagawad-rsvp-history-filters" onSubmit={(event) => { event.preventDefault(); if (rsvpHistoryDraft.meetingDateAfter && rsvpHistoryDraft.meetingDateBefore && rsvpHistoryDraft.meetingDateAfter > rsvpHistoryDraft.meetingDateBefore) return; setRsvpHistoryPage(0); setRsvpHistoryFilters({ ...rsvpHistoryDraft, search: rsvpHistoryDraft.search.trim() }) }}>
+      <form className="kagawad-rsvp-history-filters" onSubmit={(event) => { event.preventDefault(); if (rsvpHistoryDraft.meetingDateAfter && rsvpHistoryDraft.meetingDateBefore && rsvpHistoryDraft.meetingDateAfter > rsvpHistoryDraft.meetingDateBefore) return; setRsvpHistoryPage(0); setRsvpHistoryExportMessage(''); setRsvpHistoryFilters({ ...rsvpHistoryDraft, search: rsvpHistoryDraft.search.trim() }) }}>
         <label>Search meeting title<input type="search" maxLength={100} placeholder="Meeting title" value={rsvpHistoryDraft.search} onChange={(event) => setRsvpHistoryDraft((current) => ({ ...current, search: event.target.value }))} /></label>
         <label>Response<select value={rsvpHistoryDraft.response} onChange={(event) => setRsvpHistoryDraft((current) => ({ ...current, response: event.target.value }))}><option value="all">All responses</option><option value="attending">Plan to attend</option><option value="unavailable">Unavailable</option><option value="withdrawn">Withdrawn</option></select></label>
         <label>Meeting on or after<input type="date" max={rsvpHistoryDraft.meetingDateBefore || undefined} value={rsvpHistoryDraft.meetingDateAfter} onChange={(event) => setRsvpHistoryDraft((current) => ({ ...current, meetingDateAfter: event.target.value }))} /></label>
         <label>Meeting on or before<input type="date" min={rsvpHistoryDraft.meetingDateAfter || undefined} value={rsvpHistoryDraft.meetingDateBefore} onChange={(event) => setRsvpHistoryDraft((current) => ({ ...current, meetingDateBefore: event.target.value }))} /></label>
-        <div className="kagawad-rsvp-history-actions"><button className="button primary" type="submit">Apply filters</button><button className="button outline" type="button" onClick={() => { const empty = { search: '', response: 'all', meetingDateAfter: '', meetingDateBefore: '' }; setRsvpHistoryDraft(empty); setRsvpHistoryFilters(empty); setRsvpHistoryPage(0) }}>Clear</button></div>
+        <div className="kagawad-rsvp-history-actions"><button className="button primary" type="submit">Apply filters</button><button className="button outline" type="button" onClick={() => { const empty = { search: '', response: 'all', meetingDateAfter: '', meetingDateBefore: '' }; setRsvpHistoryDraft(empty); setRsvpHistoryFilters(empty); setRsvpHistoryPage(0); setRsvpHistoryExportMessage('') }}>Clear</button><button className="button outline" type="button" onClick={() => void exportKagawadRsvpHistory()} disabled={rsvpHistoryExportBusy || !Number(rsvpHistory.data?.[0]?.total_count ?? 0)}><Download size={15} />{rsvpHistoryExportBusy ? 'Preparing…' : 'Export CSV'}</button></div>
       </form>
+      {rsvpHistoryExportMessage && <p className="field-hint" role={rsvpHistoryExportMessage.startsWith('There are more than') || rsvpHistoryExportMessage.startsWith('Unable') ? 'alert' : 'status'}>{rsvpHistoryExportMessage}</p>}
       {rsvpHistoryDraft.meetingDateAfter && rsvpHistoryDraft.meetingDateBefore && rsvpHistoryDraft.meetingDateAfter > rsvpHistoryDraft.meetingDateBefore && <p className="account-security-error" role="alert">The start date must be on or before the end date.</p>}
       {rsvpHistory.isPending ? <LoadingNotice compact /> : rsvpHistory.error ? <ErrorNotice message="Your RSVP history could not be loaded." onRetry={() => void rsvpHistory.refetch()} retrying={rsvpHistory.isFetching} /> : rsvpHistory.data?.length ? <>
         <ul className="kagawad-invited-meeting-list">{rsvpHistory.data.map((entry) => <li key={entry.id}>

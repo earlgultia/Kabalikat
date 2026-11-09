@@ -1,11 +1,12 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
-import { CheckCircle2, ChevronLeft, ChevronRight, History, MessageSquareText, UsersRound } from 'lucide-react'
+import { CheckCircle2, ChevronLeft, ChevronRight, Download, History, MessageSquareText, UsersRound } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import { addCommitteeTaskProgressNote, addKagawadActionItemNote, assignCommitteeMember, completeKagawadTask, COMMITTEE_CONTENT_PAGE_SIZE, COMMITTEE_MEMBER_PAGE_SIZE, COMMITTEE_PAGE_SIZE, createCommittee, createCommitteeTask, decideCommitteeTaskDueDateRequest, getCommitteeTaskNotificationContext, listActiveCommitteeMembers, listAssignableCommitteeMembers, listCommitteeMembers, listCommittees, listCommitteeTasks, listCommitteeTaskDueDateRequestHistory, listCommitteeTaskDueDateRequests, listCommitteeTaskDueDateRequestsForTask, listKagawadActionItemNotes, listKagawadAssignedActionItems, listKagawadCompletedWork, listKagawadTaskAssignmentHistory, listKagawadTaskDueDateRequestHistory, listKagawadTaskStatusHistory, reassignCommitteeTask, requestCommitteeTaskDueDate, reportKagawadTaskBlocker, searchKagawadDueDateRequestHistory, updateCommitteeTaskStatus, withdrawCommitteeTaskDueDateRequest, type CommitteeTaskDueDateReview, type CommitteeTaskRow } from './committee-data'
 import { hasPermission } from './data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
+import { encodeCsv } from './csv'
 
 const committeeSchema = z.object({ name: z.string().trim().min(2).max(120), description: z.string().trim().max(1000) })
 const taskSchema = z.object({ title: z.string().trim().min(3).max(180), description: z.string().trim().max(2000), assignedTo: z.string(), dueDate: z.string() })
@@ -475,14 +476,20 @@ export function CommitteesPage({ focusId, focusDueDateRequestStatus, onFocusHand
   const [myTaskPage, setMyTaskPage] = useState(0)
   const [taskAssignmentHistoryPage, setTaskAssignmentHistoryPage] = useState(0)
   const [completedWorkPage, setCompletedWorkPage] = useState(0)
+  const [exportingCompletedWork, setExportingCompletedWork] = useState(false)
+  const [completedWorkExportMessage, setCompletedWorkExportMessage] = useState('')
   const [dueDateHistoryPage, setDueDateHistoryPage] = useState(0)
   const [dueDateHistoryFilters, setDueDateHistoryFilters] = useState({ status: 'all', search: '', createdAfter: '', createdBefore: '', reviewedAfter: '', reviewedBefore: '' })
   const [dueDateHistoryDraft, setDueDateHistoryDraft] = useState({ status: 'all', search: '', createdAfter: '', createdBefore: '', reviewedAfter: '', reviewedBefore: '' })
   const [dueDateHistoryFilterError, setDueDateHistoryFilterError] = useState('')
+  const [exportingDueDateHistory, setExportingDueDateHistory] = useState(false)
+  const [dueDateHistoryExportMessage, setDueDateHistoryExportMessage] = useState('')
   const [completedWorkFilters, setCompletedWorkFilters] = useState({ search: '', completedAfter: '', completedBefore: '' })
   const [completedWorkDraft, setCompletedWorkDraft] = useState({ search: '', completedAfter: '', completedBefore: '' })
   const [taskHistoryDraft, setTaskHistoryDraft] = useState({ search: '', status: 'all', assignedAfter: '', assignedBefore: '' })
   const [taskHistoryFilters, setTaskHistoryFilters] = useState({ search: '', status: 'all', assignedAfter: '', assignedBefore: '' })
+  const [exportingTaskHistory, setExportingTaskHistory] = useState(false)
+  const [taskHistoryExportMessage, setTaskHistoryExportMessage] = useState('')
   const [myTaskStatus, setMyTaskStatus] = useState<'all' | CommitteeTaskRow['status']>('all')
   const [myTaskDueFilter, setMyTaskDueFilter] = useState<'all' | 'due_soon' | 'overdue'>('all')
   const [myTaskSearchInput, setMyTaskSearchInput] = useState('')
@@ -496,7 +503,7 @@ export function CommitteesPage({ focusId, focusDueDateRequestStatus, onFocusHand
   const [taskActionReason, setTaskActionReason] = useState('')
   const [focusedTaskId, setFocusedTaskId] = useState('')
   const isKagawad = membership?.role?.key === 'kagawad'
-  useEffect(() => { setPage(0); setMyTaskPage(0); setTaskAssignmentHistoryPage(0); setCompletedWorkPage(0); setDueDateHistoryPage(0); setDueDateHistoryFilters({ status: 'all', search: '', createdAfter: '', createdBefore: '', reviewedAfter: '', reviewedBefore: '' }); setDueDateHistoryDraft({ status: 'all', search: '', createdAfter: '', createdBefore: '', reviewedAfter: '', reviewedBefore: '' }); setDueDateHistoryFilterError(''); setCompletedWorkFilters({ search: '', completedAfter: '', completedBefore: '' }); setCompletedWorkDraft({ search: '', completedAfter: '', completedBefore: '' }); setTaskHistoryDraft({ search: '', status: 'all', assignedAfter: '', assignedBefore: '' }); setTaskHistoryFilters({ search: '', status: 'all', assignedAfter: '', assignedBefore: '' }); setMyTaskStatus('all'); setMyTaskDueFilter('all'); setMyTaskSearch(''); setMyTaskSearchInput(''); setTaskNotesFor(''); setTaskNoteDraft('') }, [tenantId])
+  useEffect(() => { setPage(0); setMyTaskPage(0); setTaskAssignmentHistoryPage(0); setCompletedWorkPage(0); setCompletedWorkExportMessage(''); setDueDateHistoryPage(0); setDueDateHistoryFilters({ status: 'all', search: '', createdAfter: '', createdBefore: '', reviewedAfter: '', reviewedBefore: '' }); setDueDateHistoryDraft({ status: 'all', search: '', createdAfter: '', createdBefore: '', reviewedAfter: '', reviewedBefore: '' }); setDueDateHistoryFilterError(''); setDueDateHistoryExportMessage(''); setCompletedWorkFilters({ search: '', completedAfter: '', completedBefore: '' }); setCompletedWorkDraft({ search: '', completedAfter: '', completedBefore: '' }); setTaskHistoryDraft({ search: '', status: 'all', assignedAfter: '', assignedBefore: '' }); setTaskHistoryFilters({ search: '', status: 'all', assignedAfter: '', assignedBefore: '' }); setMyTaskStatus('all'); setMyTaskDueFilter('all'); setMyTaskSearch(''); setMyTaskSearchInput(''); setTaskNotesFor(''); setTaskNoteDraft('') }, [tenantId])
   useEffect(() => {
     if (!focusId) return
     setFocusedTaskId(focusId)
@@ -548,6 +555,108 @@ export function CommitteesPage({ focusId, focusDueDateRequestStatus, onFocusHand
       queryClient.invalidateQueries({ queryKey: ['kagawad-completed-work', tenantId] }),
       queryClient.invalidateQueries({ queryKey: ['kagawad-action-item-notes', tenantId, taskNotesFor] }),
     ])
+  }
+
+  async function exportCompletedWorkHistory() {
+    setExportingCompletedWork(true)
+    setCompletedWorkExportMessage('Preparing your matching completed-work history…')
+    try {
+      const firstPage = await listKagawadCompletedWork(tenantId, 0, completedWorkFilters, 50)
+      if (firstPage.totalCount > 10_000) {
+        throw new Error('There are more than 10,000 matching completions. Add a date or search filter and try again.')
+      }
+      const rows = [...firstPage.rows]
+      const pageCount = Math.ceil(firstPage.totalCount / 50)
+      for (let exportPage = 1; exportPage < pageCount; exportPage += 1) {
+        const result = await listKagawadCompletedWork(tenantId, exportPage, completedWorkFilters, 50)
+        rows.push(...result.rows)
+      }
+      const csv = encodeCsv([
+        ['Task', 'Committee', 'Completion summary', 'Completed at'],
+        ...rows.map((row) => [row.task_title, row.committee_name, row.summary, row.completed_at]),
+      ])
+      const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `kabalikat-my-completed-work-${new Date().toISOString().slice(0, 10)}.csv`
+      link.click()
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+      setCompletedWorkExportMessage(`Export ready with ${rows.length.toLocaleString()} matching completions.`)
+    } catch (exportError) {
+      setCompletedWorkExportMessage(exportError instanceof Error && exportError.message.startsWith('There are more than')
+        ? exportError.message
+        : 'Unable to export your completed-work history. Try again.')
+    } finally {
+      setExportingCompletedWork(false)
+    }
+  }
+
+  async function exportTaskAssignmentHistory() {
+    setExportingTaskHistory(true)
+    setTaskHistoryExportMessage('Preparing your matching assignment history…')
+    try {
+      const firstPage = await listKagawadTaskAssignmentHistory(tenantId, 0, taskHistoryFilters, 50)
+      if (firstPage.totalCount > 10_000) {
+        throw new Error('There are more than 10,000 matching assignments. Add a date or search filter and try again.')
+      }
+      const rows = [...firstPage.rows]
+      const pageCount = Math.ceil(firstPage.totalCount / 50)
+      for (let exportPage = 1; exportPage < pageCount; exportPage += 1) {
+        const result = await listKagawadTaskAssignmentHistory(tenantId, exportPage, taskHistoryFilters, 50)
+        rows.push(...result.rows)
+      }
+      const csv = encodeCsv([
+        ['Task', 'Committee', 'Current status', 'Due date', 'Assigned at', 'Assigned by', 'Transferred from'],
+        ...rows.map((row) => [row.task_title, row.committee_name, row.task_status, row.due_date, row.assigned_at, row.assigned_by_name, row.previous_assignee_name]),
+      ])
+      const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `kabalikat-my-task-assignment-history-${new Date().toISOString().slice(0, 10)}.csv`
+      link.click()
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+      setTaskHistoryExportMessage(`Export ready with ${rows.length.toLocaleString()} matching assignments.`)
+    } catch (exportError) {
+      setTaskHistoryExportMessage(exportError instanceof Error && exportError.message.startsWith('There are more than')
+        ? exportError.message
+        : 'Unable to export your assignment history. Try again.')
+    } finally {
+      setExportingTaskHistory(false)
+    }
+  }
+
+  async function exportDueDateRequestHistory() {
+    setExportingDueDateHistory(true)
+    setDueDateHistoryExportMessage('Preparing your matching due-date request history…')
+    try {
+      const firstPage = await searchKagawadDueDateRequestHistory(tenantId, 0, dueDateHistoryFilters, 50)
+      if (firstPage.totalCount > 10_000) {
+        throw new Error('There are more than 10,000 matching requests. Add a date or search filter and try again.')
+      }
+      const rows = [...firstPage.rows]
+      const pageCount = Math.ceil(firstPage.totalCount / 50)
+      for (let exportPage = 1; exportPage < pageCount; exportPage += 1) {
+        const result = await searchKagawadDueDateRequestHistory(tenantId, exportPage, dueDateHistoryFilters, 50)
+        rows.push(...result.rows)
+      }
+      const csv = encodeCsv([
+        ['Task', 'Committee', 'Status', 'Previous due date', 'Proposed due date', 'Reason', 'Decision', 'Reviewer', 'Submitted at', 'Reviewed at'],
+        ...rows.map((row) => [row.task_title, row.committee_name, row.status, row.current_due_date, row.proposed_due_date, row.reason, row.decision_note, row.reviewer_name, row.created_at, row.reviewed_at]),
+      ])
+      const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `kabalikat-my-due-date-requests-${new Date().toISOString().slice(0, 10)}.csv`
+      link.click()
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+      setDueDateHistoryExportMessage(`Export ready with ${rows.length.toLocaleString()} matching requests.`)
+    } catch (exportError) {
+      setDueDateHistoryExportMessage(exportError instanceof Error && exportError.message.startsWith('There are more than')
+        ? exportError.message
+        : 'Unable to export your due-date request history. Try again.')
+    } finally {
+      setExportingDueDateHistory(false)
+    }
   }
 
   async function submitCommittee(event: FormEvent<HTMLFormElement>) {
@@ -673,9 +782,10 @@ export function CommitteesPage({ focusId, focusDueDateRequestStatus, onFocusHand
         <label>Submitted on or before<input type="date" min={dueDateHistoryDraft.createdAfter || undefined} value={dueDateHistoryDraft.createdBefore} onChange={(event) => setDueDateHistoryDraft((current) => ({ ...current, createdBefore: event.target.value }))} /></label>
         <label>Reviewed on or after<input type="date" max={dueDateHistoryDraft.reviewedBefore || undefined} value={dueDateHistoryDraft.reviewedAfter} onChange={(event) => setDueDateHistoryDraft((current) => ({ ...current, reviewedAfter: event.target.value }))} /></label>
         <label>Reviewed on or before<input type="date" min={dueDateHistoryDraft.reviewedAfter || undefined} value={dueDateHistoryDraft.reviewedBefore} onChange={(event) => setDueDateHistoryDraft((current) => ({ ...current, reviewedBefore: event.target.value }))} /></label>
-        <div className="kagawad-due-date-history-actions"><button className="button primary" type="submit">Apply filters</button><button className="button outline" type="button" onClick={() => { const empty = { status: 'all', search: '', createdAfter: '', createdBefore: '', reviewedAfter: '', reviewedBefore: '' }; setDueDateHistoryDraft(empty); setDueDateHistoryFilters(empty); setDueDateHistoryFilterError(''); setDueDateHistoryPage(0) }} disabled={dueDateHistoryDraft.status === 'all' && !dueDateHistoryDraft.search && !dueDateHistoryDraft.createdAfter && !dueDateHistoryDraft.createdBefore && !dueDateHistoryDraft.reviewedAfter && !dueDateHistoryDraft.reviewedBefore}>Clear</button></div>
+        <div className="kagawad-due-date-history-actions"><button className="button primary" type="submit">Apply filters</button><button className="button outline" type="button" onClick={() => { const empty = { status: 'all', search: '', createdAfter: '', createdBefore: '', reviewedAfter: '', reviewedBefore: '' }; setDueDateHistoryDraft(empty); setDueDateHistoryFilters(empty); setDueDateHistoryFilterError(''); setDueDateHistoryExportMessage(''); setDueDateHistoryPage(0) }} disabled={dueDateHistoryDraft.status === 'all' && !dueDateHistoryDraft.search && !dueDateHistoryDraft.createdAfter && !dueDateHistoryDraft.createdBefore && !dueDateHistoryDraft.reviewedAfter && !dueDateHistoryDraft.reviewedBefore}>Clear</button><button className="button outline" type="button" onClick={() => void exportDueDateRequestHistory()} disabled={exportingDueDateHistory || !dueDateHistory.data?.totalCount}><Download size={15} />{exportingDueDateHistory ? 'Preparing…' : 'Export CSV'}</button></div>
       </form>
       {dueDateHistoryFilterError && <p className="field-hint" role="alert">{dueDateHistoryFilterError}</p>}
+      {dueDateHistoryExportMessage && <p className="field-hint" role={dueDateHistoryExportMessage.startsWith('There are more than') || dueDateHistoryExportMessage.startsWith('Unable') ? 'alert' : 'status'}>{dueDateHistoryExportMessage}</p>}
       {dueDateHistory.isPending ? <LoadingNotice compact /> : dueDateHistory.error ? <ErrorNotice message="Your due-date request history could not be loaded." onRetry={() => void dueDateHistory.refetch()} retrying={dueDateHistory.isFetching} /> : dueDateHistory.data?.rows.length ? <>
         <ol className="kagawad-due-date-history-list">{dueDateHistory.data.rows.map((entry) => <li key={entry.id}>
           <div><span className={`due-date-request-status-badge ${entry.status}`}>{entry.status === 'pending' ? 'Awaiting review' : entry.status === 'withdrawn' ? 'Withdrawn' : entry.status === 'approved' ? 'Approved' : 'Declined'}</span><strong>{entry.task_title}</strong><small>{entry.committee_name} · Submitted {new Date(entry.created_at).toLocaleString()}</small></div>
@@ -688,12 +798,13 @@ export function CommitteesPage({ focusId, focusDueDateRequestStatus, onFocusHand
     </section>}
     {isKagawad && <section className="ops-panel kagawad-completed-work" aria-labelledby="kagawad-completed-work-title">
       <div className="ops-panel-heading"><div><h2 id="kagawad-completed-work-title">My completed work</h2><p>Completion summaries you submitted, including tasks later transferred or archived.</p></div><CheckCircle2 size={19} /></div>
-      <form className="kagawad-completed-work-filters" onSubmit={(event) => { event.preventDefault(); if (completedWorkDraft.completedAfter && completedWorkDraft.completedBefore && completedWorkDraft.completedAfter > completedWorkDraft.completedBefore) { setError('The completion start date must be on or before the end date.'); return } setError(''); setCompletedWorkPage(0); setCompletedWorkFilters({ ...completedWorkDraft, search: completedWorkDraft.search.trim() }) }}>
+      <form className="kagawad-completed-work-filters" onSubmit={(event) => { event.preventDefault(); if (completedWorkDraft.completedAfter && completedWorkDraft.completedBefore && completedWorkDraft.completedAfter > completedWorkDraft.completedBefore) { setError('The completion start date must be on or before the end date.'); return } setError(''); setCompletedWorkExportMessage(''); setCompletedWorkPage(0); setCompletedWorkFilters({ ...completedWorkDraft, search: completedWorkDraft.search.trim() }) }}>
         <label>Search completed work<input type="search" maxLength={100} placeholder="Task, committee, or summary" value={completedWorkDraft.search} onChange={(event) => setCompletedWorkDraft((current) => ({ ...current, search: event.target.value }))} /></label>
         <label>Completed on or after<input type="date" value={completedWorkDraft.completedAfter} onChange={(event) => setCompletedWorkDraft((current) => ({ ...current, completedAfter: event.target.value }))} /></label>
         <label>Completed on or before<input type="date" value={completedWorkDraft.completedBefore} onChange={(event) => setCompletedWorkDraft((current) => ({ ...current, completedBefore: event.target.value }))} /></label>
-        <div className="kagawad-completed-work-filter-actions"><button className="button primary" type="submit">Apply filters</button><button className="button outline" type="button" onClick={() => { const empty = { search: '', completedAfter: '', completedBefore: '' }; setCompletedWorkDraft(empty); setCompletedWorkFilters(empty); setCompletedWorkPage(0); setError('') }}>Clear</button></div>
+        <div className="kagawad-completed-work-filter-actions"><button className="button primary" type="submit">Apply filters</button><button className="button outline" type="button" onClick={() => { const empty = { search: '', completedAfter: '', completedBefore: '' }; setCompletedWorkDraft(empty); setCompletedWorkFilters(empty); setCompletedWorkPage(0); setCompletedWorkExportMessage(''); setError('') }}>Clear</button><button className="button outline" type="button" onClick={() => void exportCompletedWorkHistory()} disabled={exportingCompletedWork || !completedWork.data?.totalCount}><Download size={15} />{exportingCompletedWork ? 'Preparing…' : 'Export CSV'}</button></div>
       </form>
+      {completedWorkExportMessage && <p className="field-hint" role={completedWorkExportMessage.startsWith('There are more than') || completedWorkExportMessage.startsWith('Unable') ? 'alert' : 'status'}>{completedWorkExportMessage}</p>}
       {completedWork.isPending ? <LoadingNotice compact /> : completedWork.error ? <ErrorNotice message="Your completed-work history could not be loaded." onRetry={() => void completedWork.refetch()} retrying={completedWork.isFetching} /> : completedWork.data?.rows.length ? <>
         <ol className="kagawad-completed-work-list">{completedWork.data.rows.map((entry) => <li key={entry.id}><div><strong>{entry.task_title}</strong><small>{entry.committee_name} · Completed {new Date(entry.completed_at).toLocaleString()}</small></div><p>{entry.summary}</p></li>)}</ol>
         {completedWork.data.totalCount > 10 && <nav className="committee-picker-pagination" aria-label="Completed-work history pages"><span>Page {completedWorkPage + 1} of {Math.ceil(completedWork.data.totalCount / 10)} · {completedWork.data.totalCount} completions</span><div><button type="button" className="button outline" disabled={completedWorkPage === 0 || completedWork.isFetching} onClick={() => setCompletedWorkPage((current) => current - 1)}>Previous</button><button type="button" className="button outline" disabled={(completedWorkPage + 1) * 10 >= completedWork.data.totalCount || completedWork.isFetching} onClick={() => setCompletedWorkPage((current) => current + 1)}>Next</button></div></nav>}
@@ -706,8 +817,9 @@ export function CommitteesPage({ focusId, focusDueDateRequestStatus, onFocusHand
         <label>Status<select value={taskHistoryDraft.status} onChange={(event) => setTaskHistoryDraft((current) => ({ ...current, status: event.target.value }))}><option value="all">All statuses</option><option value="open">Open</option><option value="in_progress">In progress</option><option value="blocked">Blocked</option><option value="completed">Completed</option></select></label>
         <label>Assigned on or after<input type="date" max={taskHistoryDraft.assignedBefore || undefined} value={taskHistoryDraft.assignedAfter} onChange={(event) => setTaskHistoryDraft((current) => ({ ...current, assignedAfter: event.target.value }))} /></label>
         <label>Assigned on or before<input type="date" min={taskHistoryDraft.assignedAfter || undefined} value={taskHistoryDraft.assignedBefore} onChange={(event) => setTaskHistoryDraft((current) => ({ ...current, assignedBefore: event.target.value }))} /></label>
-        <div className="kagawad-assignment-history-actions"><button className="button primary" type="submit">Apply filters</button><button className="button outline" type="button" onClick={() => { const empty = { search: '', status: 'all', assignedAfter: '', assignedBefore: '' }; setTaskHistoryDraft(empty); setTaskHistoryFilters(empty); setTaskAssignmentHistoryPage(0) }}>Clear</button></div>
+        <div className="kagawad-assignment-history-actions"><button className="button primary" type="submit">Apply filters</button><button className="button outline" type="button" onClick={() => { const empty = { search: '', status: 'all', assignedAfter: '', assignedBefore: '' }; setTaskHistoryDraft(empty); setTaskHistoryFilters(empty); setTaskAssignmentHistoryPage(0); setTaskHistoryExportMessage('') }}>Clear</button><button className="button outline" type="button" onClick={() => void exportTaskAssignmentHistory()} disabled={exportingTaskHistory || !taskAssignmentHistory.data?.totalCount}><Download size={15} />{exportingTaskHistory ? 'Preparing…' : 'Export CSV'}</button></div>
       </form>
+      {taskHistoryExportMessage && <p className="field-hint" role={taskHistoryExportMessage.startsWith('There are more than') || taskHistoryExportMessage.startsWith('Unable') ? 'alert' : 'status'}>{taskHistoryExportMessage}</p>}
       {taskHistoryDraft.assignedAfter && taskHistoryDraft.assignedBefore && taskHistoryDraft.assignedAfter > taskHistoryDraft.assignedBefore && <p className="account-security-error" role="alert">The start date must be on or before the end date.</p>}
       {taskAssignmentHistory.isPending ? <LoadingNotice compact /> : taskAssignmentHistory.error ? <ErrorNotice message="Your task assignment history could not be loaded." onRetry={() => void taskAssignmentHistory.refetch()} retrying={taskAssignmentHistory.isFetching} /> : taskAssignmentHistory.data?.rows.length ? <>
         <ul className="kagawad-invited-meeting-list">{taskAssignmentHistory.data.rows.map((entry) => <li key={entry.id}>

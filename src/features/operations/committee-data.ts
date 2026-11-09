@@ -134,9 +134,9 @@ export async function getKagawadAgendaTasks(tenantId: string): Promise<KagawadAs
     .slice(0, 4)
 }
 
-export async function listKagawadTaskAssignmentHistory(tenantId: string, page: number, filters: { search: string; status: string; assignedAfter: string; assignedBefore: string }): Promise<KagawadTaskAssignmentHistoryPage> {
+export async function listKagawadTaskAssignmentHistory(tenantId: string, page: number, filters: { search: string; status: string; assignedAfter: string; assignedBefore: string }, pageSize = 10): Promise<KagawadTaskAssignmentHistoryPage> {
   const { data, error } = await client().rpc('search_kagawad_task_assignment_history', {
-    p_barangay_id: tenantId, p_page: page, p_page_size: 10,
+    p_barangay_id: tenantId, p_page: page, p_page_size: pageSize,
     p_search: filters.search.trim() || null, p_status: filters.status,
     p_assigned_after: filters.assignedAfter || null, p_assigned_before: filters.assignedBefore || null,
   })
@@ -145,9 +145,9 @@ export async function listKagawadTaskAssignmentHistory(tenantId: string, page: n
   return { rows, totalCount: Number(rows[0]?.total_count ?? 0) }
 }
 
-export async function listKagawadCompletedWork(tenantId: string, page: number, filters: { search: string; completedAfter: string; completedBefore: string }): Promise<KagawadCompletedWorkPage> {
+export async function listKagawadCompletedWork(tenantId: string, page: number, filters: { search: string; completedAfter: string; completedBefore: string }, pageSize = 10): Promise<KagawadCompletedWorkPage> {
   const { data, error } = await client().rpc('search_kagawad_completed_work_history', {
-    p_barangay_id: tenantId, p_page: page, p_page_size: 10,
+    p_barangay_id: tenantId, p_page: page, p_page_size: pageSize,
     p_search: filters.search.trim() || null,
     p_completed_after: filters.completedAfter || null,
     p_completed_before: filters.completedBefore || null,
@@ -213,9 +213,9 @@ export async function listKagawadTaskDueDateRequestHistory(taskId: string, page:
 
 export async function searchKagawadDueDateRequestHistory(tenantId: string, page: number, filters: {
   status: string; search: string; createdAfter: string; createdBefore: string; reviewedAfter: string; reviewedBefore: string
-}): Promise<KagawadDueDateRequestHistoryPage> {
+}, pageSize = 10): Promise<KagawadDueDateRequestHistoryPage> {
   const { data, error } = await client().rpc('search_kagawad_due_date_request_history', {
-    p_barangay_id: tenantId, p_page: page, p_page_size: 10, p_status: filters.status,
+    p_barangay_id: tenantId, p_page: page, p_page_size: pageSize, p_status: filters.status,
     p_search: filters.search.trim() || null,
     p_created_after: filters.createdAfter || null,
     p_created_before: filters.createdBefore || null,

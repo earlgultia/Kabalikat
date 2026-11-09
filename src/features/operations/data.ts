@@ -290,9 +290,9 @@ export function setKagawadMeetingInvitationResponse(meetingId: string, response:
   return rpc<void>('set_kagawad_meeting_invitation_response', { p_meeting_id: meetingId, p_response: response })
 }
 
-export function listKagawadMeetingInvitationResponseHistory(tenantId: string, page: number, filters: { search: string; response: string; meetingDateAfter: string; meetingDateBefore: string }) {
+export function listKagawadMeetingInvitationResponseHistory(tenantId: string, page: number, filters: { search: string; response: string; meetingDateAfter: string; meetingDateBefore: string }, pageSize = 10) {
   return rpc<KagawadMeetingInvitationResponseHistory[]>('search_kagawad_meeting_rsvp_history', {
-    p_barangay_id: tenantId, p_page: page, p_page_size: 10,
+    p_barangay_id: tenantId, p_page: page, p_page_size: pageSize,
     p_search: filters.search.trim() || null, p_response: filters.response,
     p_meeting_date_after: filters.meetingDateAfter || null,
     p_meeting_date_before: filters.meetingDateBefore || null,

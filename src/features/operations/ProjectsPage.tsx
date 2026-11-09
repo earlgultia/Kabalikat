@@ -1,13 +1,14 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
-import { CheckCircle2, ChevronLeft, ChevronRight, FolderKanban, Plus, Waypoints } from 'lucide-react'
+import { CheckCircle2, ChevronLeft, ChevronRight, Download, FolderKanban, Plus, Waypoints } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import { hasPermission } from './data'
 import { addBarangayProjectUpdate, BARANGAY_PROJECT_PAGE_SIZE, createBarangayProject, listBarangayProjects, listKagawadProjectContributions, updateBarangayProjectStatus, type BarangayProject } from './projects-data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 import { formatDateTime } from './format'
 import { BarangayProjectUpdateResponseThread, ProjectProgressHistory } from './ProjectHistory'
+import { encodeCsv } from './csv'
 
 const projectSchema = z.object({ title: z.string().trim().min(3).max(180), description: z.string().trim().max(4000), start: z.string(), end: z.string() })
 const updateSchema = z.object({ type: z.enum(['milestone', 'progress']), title: z.string().trim().min(3).max(180), details: z.string().trim().max(3000) })
@@ -41,6 +42,8 @@ export function ProjectsPage({ focusProjectId, focusProjectPage, focusUpdateId, 
   const [showForm, setShowForm] = useState(false)
   const [updateProject, setUpdateProject] = useState('')
   const [busy, setBusy] = useState(false)
+  const [exportingContributions, setExportingContributions] = useState(false)
+  const [contributionExportMessage, setContributionExportMessage] = useState('')
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
 
@@ -86,6 +89,40 @@ export function ProjectsPage({ focusProjectId, focusProjectPage, focusUpdateId, 
     finally { setBusy(false) }
   }
 
+  async function exportKagawadContributions() {
+    setExportingContributions(true)
+    setContributionExportMessage('Preparing your matching contribution history…')
+    try {
+      const firstPage = await listKagawadProjectContributions(tenantId, 0, contributionFilters, 50)
+      if (firstPage.totalCount > 10_000) {
+        throw new Error('There are more than 10,000 matching records. Add a date or search filter and try again.')
+      }
+      const rows = [...firstPage.rows]
+      const pageCount = Math.ceil(firstPage.totalCount / 50)
+      for (let exportPage = 1; exportPage < pageCount; exportPage += 1) {
+        const result = await listKagawadProjectContributions(tenantId, exportPage, contributionFilters, 50)
+        rows.push(...result.rows)
+      }
+      const csv = encodeCsv([
+        ['Project', 'Project status', 'Update type', 'Title', 'Details', 'Recorded at'],
+        ...rows.map((row) => [row.project_title, row.project_status, row.update_type, row.title, row.details, row.created_at]),
+      ])
+      const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `kabalikat-my-project-contributions-${new Date().toISOString().slice(0, 10)}.csv`
+      link.click()
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+      setContributionExportMessage(`Export ready with ${rows.length.toLocaleString()} matching contributions.`)
+    } catch (exportError) {
+      setContributionExportMessage(exportError instanceof Error && exportError.message.startsWith('There are more than')
+        ? exportError.message
+        : 'Unable to export your contributions. Try again.')
+    } finally {
+      setExportingContributions(false)
+    }
+  }
+
   return <section className="operation-page">
     <PageHeading title="Barangay projects" description="Track community projects, planned dates, status, and progress updates.">
       {canManage.data && <button className="button primary" onClick={() => setShowForm((visible) => !visible)}><Plus size={15} />New project</button>}
@@ -109,8 +146,9 @@ export function ProjectsPage({ focusProjectId, focusProjectPage, focusUpdateId, 
         <label>Update type<select value={contributionDraft.updateType} onChange={(event) => setContributionDraft((current) => ({ ...current, updateType: event.target.value }))}><option value="all">All types</option><option value="progress">Progress reports</option><option value="milestone">Milestones</option></select></label>
         <label>Created on or after<input type="date" value={contributionDraft.createdAfter} onChange={(event) => setContributionDraft((current) => ({ ...current, createdAfter: event.target.value }))} /></label>
         <label>Created on or before<input type="date" value={contributionDraft.createdBefore} onChange={(event) => setContributionDraft((current) => ({ ...current, createdBefore: event.target.value }))} /></label>
-        <div className="kagawad-contribution-filter-actions"><button className="button primary" type="submit">Apply filters</button><button className="button outline" type="button" onClick={() => { const empty = { search: '', updateType: 'all', createdAfter: '', createdBefore: '' }; setContributionDraft(empty); setContributionFilters(empty); setContributionPage(0); setError('') }}>Clear</button></div>
+        <div className="kagawad-contribution-filter-actions"><button className="button primary" type="submit">Apply filters</button><button className="button outline" type="button" onClick={() => { const empty = { search: '', updateType: 'all', createdAfter: '', createdBefore: '' }; setContributionDraft(empty); setContributionFilters(empty); setContributionPage(0); setError(''); setContributionExportMessage('') }}>Clear</button><button className="button outline" type="button" onClick={() => void exportKagawadContributions()} disabled={exportingContributions || !contributions.data?.totalCount}><Download size={15} />{exportingContributions ? 'Preparing…' : 'Export CSV'}</button></div>
       </form>}
+      {canContribute.data && contributionExportMessage && <p className="field-hint" role={contributionExportMessage.startsWith('There are more than') || contributionExportMessage.startsWith('Unable') ? 'alert' : 'status'}>{contributionExportMessage}</p>}
       {canContribute.data && Boolean(contributions.data?.rows.length) && <ol className="kagawad-contribution-list">{contributions.data?.rows.map((entry) => <li key={entry.update_id}>
         <div><strong>{entry.title}</strong><span className="status-pill">{entry.update_type === 'milestone' ? 'Milestone' : 'Progress report'}</span></div>
         <p className="kagawad-contribution-project">{entry.project_title} · {entry.project_status.replaceAll('_', ' ')}</p>
