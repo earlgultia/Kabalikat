@@ -218,6 +218,8 @@ function Workspace() {
     queryFn: () => getBarangayPlanFeatures(membership!.barangay_id),
     enabled: Boolean(membership?.barangay_id), staleTime: 60_000, refetchInterval: 60_000,
   })
+  const kagawadHasCommunityPrograms = planFeaturesQuery.data?.community_programs === true
+  const kagawadHasCoreServices = planFeaturesQuery.data?.core_services === true
   const visibleNav = useMemo(() => nav.filter((item) =>
     (item.roles.length === 0 || item.roles.includes(membership?.role?.key ?? ''))
       && (!item.feature || planFeaturesQuery.isPending || planFeaturesQuery.data?.[item.feature] === true),
@@ -243,11 +245,11 @@ function Workspace() {
   const captainReviewQueue = useQuery({ queryKey: ['captain-review-queue', membership?.barangay_id], queryFn: () => getCaptainReviewQueueSummary(membership!.barangay_id), enabled: Boolean(membership?.barangay_id && membership.role?.key === 'captain' && activeSection === 'overview'), staleTime: 0 })
   const secretaryReviewQueue = useQuery({ queryKey: ['secretary-review-queue', membership?.barangay_id], queryFn: () => getSecretaryReviewQueueSummary(membership!.barangay_id), enabled: Boolean(membership?.barangay_id && membership.role?.key === 'secretary' && activeSection === 'overview'), staleTime: 0 })
   const treasurerFollowUp = useQuery({ queryKey: ['treasurer-follow-up', membership?.barangay_id], queryFn: () => getTreasurerFollowUpSummary(membership!.barangay_id), enabled: Boolean(membership?.barangay_id && membership.role?.key === 'treasurer' && activeSection === 'overview'), staleTime: 0 })
-  const kagawadActionItems = useQuery({ queryKey: ['kagawad-action-items', membership?.barangay_id], queryFn: () => getKagawadActionItemSummary(membership!.barangay_id), enabled: Boolean(membership?.barangay_id && membership.role?.key === 'kagawad' && activeSection === 'overview'), staleTime: 0 })
-  const kagawadDueDateRequests = useQuery({ queryKey: ['kagawad-due-date-request-summary', membership?.barangay_id], queryFn: () => getKagawadDueDateRequestSummary(membership!.barangay_id), enabled: Boolean(membership?.barangay_id && membership.role?.key === 'kagawad' && activeSection === 'overview'), staleTime: 0 })
-  const kagawadMeetingParticipation = useQuery({ queryKey: ['kagawad-meeting-participation', membership?.barangay_id], queryFn: () => getKagawadMeetingParticipationSummary(membership!.barangay_id), enabled: Boolean(membership?.barangay_id && membership.role?.key === 'kagawad' && activeSection === 'overview'), staleTime: 0 })
-  const kagawadAgendaTasks = useQuery({ queryKey: ['kagawad-agenda-tasks', membership?.barangay_id], queryFn: () => getKagawadAgendaTasks(membership!.barangay_id), enabled: Boolean(membership?.barangay_id && membership.role?.key === 'kagawad' && activeSection === 'overview'), staleTime: 0 })
-  const kagawadAgendaMeetings = useQuery({ queryKey: ['kagawad-agenda-meetings', membership?.barangay_id], queryFn: () => listKagawadInvitedMeetings(membership!.barangay_id, 0), enabled: Boolean(membership?.barangay_id && membership.role?.key === 'kagawad' && activeSection === 'overview'), staleTime: 0 })
+  const kagawadActionItems = useQuery({ queryKey: ['kagawad-action-items', membership?.barangay_id], queryFn: () => getKagawadActionItemSummary(membership!.barangay_id), enabled: Boolean(membership?.barangay_id && membership.role?.key === 'kagawad' && kagawadHasCommunityPrograms && activeSection === 'overview'), staleTime: 0 })
+  const kagawadDueDateRequests = useQuery({ queryKey: ['kagawad-due-date-request-summary', membership?.barangay_id], queryFn: () => getKagawadDueDateRequestSummary(membership!.barangay_id), enabled: Boolean(membership?.barangay_id && membership.role?.key === 'kagawad' && kagawadHasCommunityPrograms && activeSection === 'overview'), staleTime: 0 })
+  const kagawadMeetingParticipation = useQuery({ queryKey: ['kagawad-meeting-participation', membership?.barangay_id], queryFn: () => getKagawadMeetingParticipationSummary(membership!.barangay_id), enabled: Boolean(membership?.barangay_id && membership.role?.key === 'kagawad' && kagawadHasCoreServices && activeSection === 'overview'), staleTime: 0 })
+  const kagawadAgendaTasks = useQuery({ queryKey: ['kagawad-agenda-tasks', membership?.barangay_id], queryFn: () => getKagawadAgendaTasks(membership!.barangay_id), enabled: Boolean(membership?.barangay_id && membership.role?.key === 'kagawad' && kagawadHasCommunityPrograms && activeSection === 'overview'), staleTime: 0 })
+  const kagawadAgendaMeetings = useQuery({ queryKey: ['kagawad-agenda-meetings', membership?.barangay_id], queryFn: () => listKagawadInvitedMeetings(membership!.barangay_id, 0), enabled: Boolean(membership?.barangay_id && membership.role?.key === 'kagawad' && kagawadHasCoreServices && activeSection === 'overview'), staleTime: 0 })
   const notifications = useInfiniteQuery({ queryKey: ['community-notifications', membership?.barangay_id], queryFn: ({ pageParam }) => listCommunityNotificationPage(membership!.barangay_id, pageParam), initialPageParam: 0, getNextPageParam: (lastPage, allPages) => allPages.reduce((total, page) => total + page.rows.length, 0) < lastPage.totalCount ? allPages.length : undefined, enabled: Boolean(membership?.barangay_id), staleTime: 20_000, refetchInterval: 60_000, refetchIntervalInBackground: false })
   const unreadNotificationCount = useQuery({ queryKey: ['community-notification-unread-count', membership?.barangay_id], queryFn: () => countUnreadCommunityNotifications(membership!.barangay_id), enabled: Boolean(membership?.barangay_id), staleTime: 20_000, refetchInterval: 60_000, refetchIntervalInBackground: false })
   const kagawadUpcomingMeetings = (kagawadAgendaMeetings.data ?? []).filter((meeting) => new Date(meeting.starts_at).getTime() >= Date.now()).slice(0, 4)
@@ -614,7 +616,7 @@ function Workspace() {
               {treasurerFollowUp.data.transaction_changes_awaiting_review !== null && <button className="dashboard-metric" onClick={() => setActiveSection('finance')}><span className="dashboard-metric-icon green"><ClipboardList size={19} /></span><span><small>Transaction changes pending</small><strong>{treasurerFollowUp.data.transaction_changes_awaiting_review.toLocaleString()}</strong></span><ArrowRight size={16} /></button>}
             </div>}
           </section>}
-          {membership.role?.key === 'kagawad' && <section className="captain-review-queue" aria-labelledby="kagawad-action-items-title">
+          {membership.role?.key === 'kagawad' && kagawadHasCommunityPrograms && <section className="captain-review-queue" aria-labelledby="kagawad-action-items-title">
             <div className="section-heading"><div><h2 id="kagawad-action-items-title">Your committee action items</h2><p>Tasks assigned to you in active committee workspaces.</p></div><span className="role-pill">Private summary</span></div>
             {kagawadActionItems.isPending && <div className="dashboard-metrics-loading" role="status">Loading your action items…</div>}
             {kagawadActionItems.error && <div className="error-banner" role="alert">Your action items could not be loaded. Open Committees to check your assignments.</div>}
@@ -627,7 +629,7 @@ function Workspace() {
               {kagawadActionItems.data.completed_by_me !== null && <button className="dashboard-metric" onClick={() => setActiveSection('committees')}><span className="dashboard-metric-icon green"><CheckCircle2 size={19} /></span><span><small>Completed by you</small><strong>{kagawadActionItems.data.completed_by_me.toLocaleString()}</strong></span><ArrowRight size={16} /></button>}
             </div>}
           </section>}
-          {membership.role?.key === 'kagawad' && <section className="captain-review-queue" aria-labelledby="kagawad-due-date-requests-title">
+          {membership.role?.key === 'kagawad' && kagawadHasCommunityPrograms && <section className="captain-review-queue" aria-labelledby="kagawad-due-date-requests-title">
             <div className="section-heading"><div><h2 id="kagawad-due-date-requests-title">Due-date requests</h2><p>Track requests for more time on your assigned tasks.</p></div><span className="role-pill">Private summary</span></div>
             {kagawadDueDateRequests.isPending && <div className="dashboard-metrics-loading" role="status">Loading due-date requests...</div>}
             {kagawadDueDateRequests.error && <div className="error-banner" role="alert">Your due-date request summary could not be loaded. Open Committees to review your requests.</div>}
@@ -636,7 +638,7 @@ function Workspace() {
               {kagawadDueDateRequests.data.reviewed_last_30_days !== null && <button className="dashboard-metric" onClick={() => { setFocusedCommunityUpdate({ section: 'committees', id: '', dueDateRequestStatus: 'reviewed' }); setActiveSection('committees') }}><span className="dashboard-metric-icon green"><CheckCircle2 size={19} /></span><span><small>Reviewed in 30 days</small><strong>{kagawadDueDateRequests.data.reviewed_last_30_days.toLocaleString()}</strong></span><ArrowRight size={16} /></button>}
             </div>}
           </section>}
-          {membership.role?.key === 'kagawad' && <section className="captain-review-queue" aria-labelledby="kagawad-meetings-title">
+          {membership.role?.key === 'kagawad' && kagawadHasCoreServices && <section className="captain-review-queue" aria-labelledby="kagawad-meetings-title">
             <div className="section-heading"><div><h2 id="kagawad-meetings-title">Meeting participation</h2><p>Scheduled meetings you are invited to attend.</p></div><span className="role-pill">Private summary</span></div>
             {kagawadMeetingParticipation.isPending && <div className="dashboard-metrics-loading" role="status">Loading your meeting schedule...</div>}
             {kagawadMeetingParticipation.error && <div className="error-banner" role="alert">Your meeting summary could not be loaded. Open Meetings to check your invitations.</div>}
@@ -649,25 +651,25 @@ function Workspace() {
               {kagawadMeetingParticipation.data.excused_meetings !== null && <button className="dashboard-metric" onClick={() => setActiveSection('meetings')}><span className="dashboard-metric-icon blue"><ClipboardList size={19} /></span><span><small>Recorded excused</small><strong>{kagawadMeetingParticipation.data.excused_meetings.toLocaleString()}</strong></span><ArrowRight size={16} /></button>}
             </div>}
           </section>}
-          {membership.role?.key === 'kagawad' && <section className="workspace-upcoming kagawad-agenda" aria-labelledby="kagawad-agenda-title">
+          {membership.role?.key === 'kagawad' && (kagawadHasCommunityPrograms || kagawadHasCoreServices) && <section className="workspace-upcoming kagawad-agenda" aria-labelledby="kagawad-agenda-title">
             <div className="workspace-upcoming-heading"><div><h2 id="kagawad-agenda-title">Your next steps</h2><p>Upcoming meeting invitations and assigned task deadlines</p></div></div>
-            {(kagawadAgendaTasks.isPending || kagawadAgendaMeetings.isPending) && <p className="workspace-upcoming-state" role="status">Loading your agenda...</p>}
-            {(kagawadAgendaTasks.error || kagawadAgendaMeetings.error) && <p className="workspace-upcoming-state error" role="alert">Some agenda items could not be loaded. Open Meetings or Committees to review them.</p>}
-            {kagawadAgendaTasks.data && kagawadAgendaMeetings.data && <div className="kagawad-agenda-columns">
-              <div className="kagawad-agenda-group"><h3><ClipboardList size={16} /> Assigned tasks</h3>
-                {kagawadAgendaTasks.data.map((task) => <button type="button" className="kagawad-agenda-item" key={task.id} onClick={() => { setFocusedCommunityUpdate({ section: 'committees', id: task.id }); openTool('committees') }}>
+            {((kagawadHasCommunityPrograms && kagawadAgendaTasks.isPending) || (kagawadHasCoreServices && kagawadAgendaMeetings.isPending)) && <p className="workspace-upcoming-state" role="status">Loading your agenda...</p>}
+            {((kagawadHasCommunityPrograms && kagawadAgendaTasks.error) || (kagawadHasCoreServices && kagawadAgendaMeetings.error)) && <p className="workspace-upcoming-state error" role="alert">Some agenda items could not be loaded. Open the related workspace section to try again.</p>}
+            {(!kagawadHasCommunityPrograms || kagawadAgendaTasks.data) && (!kagawadHasCoreServices || kagawadAgendaMeetings.data) && <div className="kagawad-agenda-columns">
+              {kagawadHasCommunityPrograms && <div className="kagawad-agenda-group"><h3><ClipboardList size={16} /> Assigned tasks</h3>
+                {kagawadAgendaTasks.data?.map((task) => <button type="button" className="kagawad-agenda-item" key={task.id} onClick={() => { setFocusedCommunityUpdate({ section: 'committees', id: task.id }); openTool('committees') }}>
                   <span className={`kagawad-agenda-status ${task.status}`}>{task.status.replace('_', ' ')}</span><strong>{task.title}</strong><small>{task.committee_name}{task.due_date ? ` · Due ${new Date(`${task.due_date}T00:00:00`).toLocaleDateString()}` : ' · No deadline set'}</small>
                 </button>)}
-                {kagawadAgendaTasks.data.length === 0 && <p className="workspace-upcoming-state">No open assigned tasks.</p>}
+                {kagawadAgendaTasks.data?.length === 0 && <p className="workspace-upcoming-state">No open assigned tasks.</p>}
                 <button type="button" className="text-action kagawad-agenda-link" onClick={() => openTool('committees')}>Open Committees <ArrowRight size={14} /></button>
-              </div>
-              <div className="kagawad-agenda-group"><h3><CalendarDays size={16} /> Invited meetings</h3>
+              </div>}
+              {kagawadHasCoreServices && <div className="kagawad-agenda-group"><h3><CalendarDays size={16} /> Invited meetings</h3>
                 {kagawadUpcomingMeetings.map((meeting) => <button type="button" className="kagawad-agenda-item" key={meeting.id} onClick={() => { setFocusedCommunityUpdate({ section: 'meetings', id: meeting.id }); openTool('meetings') }}>
                   <span className="kagawad-agenda-status meeting">{meeting.invitation_response === 'attending' ? 'Attending' : meeting.invitation_response === 'unavailable' ? 'Unavailable' : 'RSVP needed'}</span><strong>{meeting.title}</strong><small>{new Date(meeting.starts_at).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} · {meeting.location}</small>
                 </button>)}
                 {kagawadUpcomingMeetings.length === 0 && <p className="workspace-upcoming-state">No upcoming invited meetings.</p>}
                 <button type="button" className="text-action kagawad-agenda-link" onClick={() => openTool('meetings')}>Open Meetings <ArrowRight size={14} /></button>
-              </div>
+              </div>}
             </div>}
           </section>}
           <div className="section-heading"><div><h2>Your workspace</h2><p>Tools available to your account</p></div><span className="role-pill">{membership.role?.label ?? 'Member'}</span></div>
