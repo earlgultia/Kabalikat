@@ -107,7 +107,8 @@ export type FinanceBudgetAmendmentRow = {
 }
 export type WorkspaceDashboardMetrics = {
   residents: number | null; pending_documents: number | null; upcoming_meetings: number | null
-  pending_finance: number | null; published_announcements: number | null; generated_at: string
+  pending_finance: number | null; published_announcements: number | null
+  sk_projects?: number | null; upcoming_sk_events?: number | null; generated_at: string
 }
 export type CaptainReviewQueueSummary = {
   pending_residency_verifications: number | null
