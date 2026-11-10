@@ -1113,6 +1113,16 @@
 .workspace-shell .operation-page * { min-width: 0; }
 .workspace-shell .operation-page :where(h1,h2,h3,h4,p,li,dd,dt,strong,small,span,label) { overflow-wrap: anywhere; }
 .workspace-shell .operation-page :where(input,select,textarea,button) { max-width: 100%; }
+.secretary-workspace .operation-page { align-content: start; display: grid; gap: 14px; }
+.secretary-workspace .operation-page > * { min-width: 0; }
+.secretary-workspace .operation-page .ops-section-title { margin: 12px 0 0; }
+.secretary-workspace .dashboard-metric,
+.secretary-workspace .module-card,
+.secretary-workspace .captain-review-queue { min-width: 0; }
+.secretary-workspace .dashboard-metric > span:nth-child(2),
+.secretary-workspace .module-card > div:nth-child(2) { min-width: 0; overflow-wrap: anywhere; }
+.secretary-workspace .dashboard-metric small { line-height: 1.4; overflow-wrap: anywhere; }
+.secretary-workspace .section-heading { align-items: flex-start; flex-wrap: wrap; gap: 10px 14px; }
 .workspace-shell .operation-heading,
 .workspace-shell .ops-panel-heading,
 .workspace-shell .ops-section-title,
