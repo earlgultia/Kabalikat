@@ -282,7 +282,9 @@
 .finance-adjustment p, .finance-adjustment small { color: #53696a; font-size: 12px; line-height: 1.5; margin: 0; }
 .finance-adjustment-toggle { margin-top: 10px; }
 .committee-workspace-list { display: grid; gap: 14px; }
-.committee-workspace { display: grid; gap: 18px; }
+.committee-workspace { align-content: start; display: grid; gap: 18px; min-width: 0; }
+.kagawad-committee-workspaces-page { display: grid; gap: 16px; }
+.kagawad-committee-workspaces-page > * { min-width: 0; }
 .committee-workspace-heading { align-items: flex-start; border-bottom: 1px solid #e1e8e3; display: flex; justify-content: space-between; padding-bottom: 14px; }
 .committee-workspace-heading > div { display: grid; gap: 7px; }
 .committee-workspace-heading h2 { color: #293f40; font-size: 18px; margin: 0; }
@@ -512,7 +514,7 @@
 .advisory-card.advisory-watch { border-left-color: #d4ad49; }
 .advisory-card.advisory-warning { border-left-color: #d17e35; }
 .advisory-card.advisory-emergency { border-left-color: #bd4c3f; }
-.emergency-resource-panel { display: grid; gap: 13px; margin-bottom: 16px; }
+.emergency-resource-panel { display: grid; gap: 13px; margin: 14px 0 16px; }
 .emergency-resource-print-button { justify-self: start; }
 .emergency-resource-filters { align-items: end; display: flex; flex-wrap: wrap; gap: 10px; }
 .emergency-resource-filters label { color: #354f4c; display: grid; flex: 1 1 170px; font-size: 11px; font-weight: 700; gap: 5px; }
@@ -986,12 +988,12 @@
 .sk-event-reach-item strong { color: #2f5145; font-size: 12px; }
 .sk-event-reach-item span { color: #53696a; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
 .health-outreach-summary article { display: grid; gap: 8px; min-width: 0; padding: 16px; }
-.health-outreach-summary-action { appearance: none; color: inherit; cursor: pointer; font: inherit; text-align: left; transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease; width: 100%; }
+.health-outreach-summary-action { appearance: none; color: inherit; cursor: pointer; display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr); align-content: start; min-width: 0; font: inherit; text-align: left; transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease; width: 100%; }
 .health-outreach-summary-action:hover { border-color: #7ca58a; box-shadow: 0 5px 16px rgb(37 79 59 / 10%); transform: translateY(-1px); }
 .health-outreach-summary-action:focus-visible { outline: 3px solid #5e9872; outline-offset: 2px; }
-.health-outreach-summary-action small { color: #51745f; font-size: 11px; font-weight: 650; }
-.health-outreach-summary span { color: #5b7066; font-size: 12px; font-weight: 650; }
-.health-outreach-summary strong { color: #244b3d; font-size: clamp(20px, 3vw, 28px); font-variant-numeric: tabular-nums; }
+.health-outreach-summary-action small { color: #51745f; display: block; font-size: 11px; font-weight: 650; line-height: 1.4; overflow-wrap: anywhere; }
+.health-outreach-summary span { color: #5b7066; display: block; font-size: 12px; font-weight: 650; line-height: 1.4; overflow-wrap: anywhere; }
+.health-outreach-summary strong { color: #244b3d; display: block; font-size: clamp(20px, 3vw, 28px); font-variant-numeric: tabular-nums; line-height: 1.2; }
 .health-attendance-form { align-items: end; flex-wrap: wrap; }
 .health-attendance-form label { color: #354f4c; display: grid; flex: 1 1 220px; font-size: 12px; font-weight: 700; gap: 6px; }
 .health-attendance-form input { background: #fffefa; border: 1px solid #bfcec8; border-radius: 8px; color: #24353b; font: inherit; min-height: 42px; padding: 9px 10px; width: 100%; }

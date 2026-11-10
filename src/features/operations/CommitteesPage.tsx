@@ -749,7 +749,7 @@ export function CommitteesPage({ focusId, focusDueDateRequestStatus, onFocusHand
     finally { setBusy(false) }
   }
 
-  return <section className="operation-page">
+  return <section className={`operation-page${isKagawad ? ' kagawad-committee-workspaces-page' : ''}`}>
     <PageHeading title="Committee workspaces" description="Coordinate assigned members and track committee action items.">
       {canManage.data && <button className="button primary" onClick={() => setShowCreate((visible) => !visible)}>New committee</button>}
     </PageHeading>
