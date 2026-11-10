@@ -542,7 +542,7 @@ function Workspace() {
     setActiveSection(section); setMenuOpen(false); setToolFinderOpen(false); setToolQuery(''); setUpdatesOpen(false)
   }
   function closeToolFinder() { setToolFinderOpen(false); setToolQuery('') }
-  return <div className={`app-shell workspace-shell ${membership?.role?.key === 'captain' ? 'captain-workspace' : ''} ${membership?.role?.key === 'secretary' ? 'secretary-workspace' : ''}`}><a className="skip-link" href="#main-content">Skip to main content</a>
+  return <div className={`app-shell workspace-shell ${membership?.role?.key === 'captain' ? 'captain-workspace' : ''} ${membership?.role?.key === 'secretary' ? 'secretary-workspace' : ''} ${membership?.role?.key === 'kagawad' ? 'kagawad-workspace' : ''} ${membership?.role?.key === 'treasurer' ? 'treasurer-workspace' : ''} ${membership?.role?.key === 'sk_chairperson' ? 'sk-chairperson-workspace' : ''} ${membership?.role?.key === 'bhw' ? 'health-worker-workspace' : ''} ${membership?.role?.key === 'tanod' ? 'tanod-workspace' : ''} ${membership?.role?.key === 'resident' ? 'resident-workspace' : ''}`}><a className="skip-link" href="#main-content">Skip to main content</a>
     <aside ref={sidebarRef} id="workspace-sidebar" className={`sidebar ${menuOpen ? 'open' : ''}`} role={menuOpen ? 'dialog' : undefined} aria-modal={menuOpen ? true : undefined} aria-label={menuOpen ? 'Workspace navigation' : undefined} onKeyDown={(event) => {
       if (event.key === 'Escape') { setMenuOpen(false); return }
       if (event.key !== 'Tab') return

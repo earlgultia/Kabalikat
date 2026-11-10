@@ -1113,6 +1113,10 @@
 .workspace-shell .operation-page * { min-width: 0; }
 .workspace-shell .operation-page :where(h1,h2,h3,h4,p,li,dd,dt,strong,small,span,label) { overflow-wrap: anywhere; }
 .workspace-shell .operation-page :where(input,select,textarea,button) { max-width: 100%; }
+.platform-shell .platform-content .operation-page { align-content: start; display: grid; gap: 14px; max-width: 100%; min-width: 0; }
+.platform-shell .platform-content .operation-page > * { max-width: 100%; min-width: 0; }
+.platform-shell .platform-content .operation-page :where(h1,h2,h3,h4,p,li,dd,dt,strong,small,span,label) { overflow-wrap: anywhere; }
+.platform-shell .platform-content .operation-page .ops-section-title { margin: 12px 0 0; }
 .secretary-workspace .operation-page { align-content: start; display: grid; gap: 14px; }
 .secretary-workspace .operation-page > * { min-width: 0; }
 .secretary-workspace .operation-page .ops-section-title { margin: 12px 0 0; }
@@ -1123,6 +1127,89 @@
 .secretary-workspace .module-card > div:nth-child(2) { min-width: 0; overflow-wrap: anywhere; }
 .secretary-workspace .dashboard-metric small { line-height: 1.4; overflow-wrap: anywhere; }
 .secretary-workspace .section-heading { align-items: flex-start; flex-wrap: wrap; gap: 10px 14px; }
+.kagawad-workspace .operation-page { align-content: start; display: grid; gap: 14px; }
+.kagawad-workspace .operation-page > * { min-width: 0; }
+.kagawad-workspace .operation-page .ops-section-title { margin: 12px 0 0; }
+.kagawad-workspace .captain-review-queue { margin: 24px 0 28px; min-width: 0; }
+.kagawad-workspace .captain-review-queue .section-heading { align-items: flex-start; flex-wrap: wrap; gap: 10px 14px; }
+.kagawad-workspace .captain-review-queue .dashboard-metrics { grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); }
+.kagawad-workspace .dashboard-metric,
+.kagawad-workspace .module-card { min-width: 0; }
+.kagawad-workspace .dashboard-metric > span:nth-child(2),
+.kagawad-workspace .module-card > div:nth-child(2) { min-width: 0; overflow-wrap: anywhere; }
+.kagawad-workspace .dashboard-metric small { line-height: 1.4; overflow-wrap: anywhere; }
+.treasurer-workspace .operation-page { align-content: start; display: grid; gap: 14px; }
+.treasurer-workspace .operation-page > * { min-width: 0; }
+.treasurer-workspace .operation-page .ops-section-title { margin: 12px 0 0; }
+.treasurer-workspace .captain-review-queue { margin: 24px 0 28px; min-width: 0; }
+.treasurer-workspace .captain-review-queue .section-heading { align-items: flex-start; flex-wrap: wrap; gap: 10px 14px; }
+.treasurer-workspace .captain-review-queue .dashboard-metrics { grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); }
+.treasurer-workspace .dashboard-metric { min-width: 0; }
+.treasurer-workspace .dashboard-metric > span:nth-child(2) { min-width: 0; overflow-wrap: anywhere; }
+.treasurer-workspace .dashboard-metric small { line-height: 1.4; overflow-wrap: anywhere; }
+.treasurer-workspace .section-heading { align-items: flex-start; flex-wrap: wrap; gap: 10px 14px; }
+.treasurer-workspace .section-heading > div { flex: 1 1 240px; min-width: 0; }
+.treasurer-workspace .module-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 285px), 1fr)); }
+.treasurer-workspace .module-card { min-width: 0; }
+.treasurer-workspace .module-card > div:nth-child(2) { min-width: 0; overflow-wrap: anywhere; }
+.sk-chairperson-workspace .operation-page { align-content: start; display: grid; gap: 14px; }
+.sk-chairperson-workspace .operation-page > * { min-width: 0; }
+.sk-chairperson-workspace .operation-page .ops-section-title { margin: 12px 0 0; }
+.sk-chairperson-workspace .section-heading { align-items: flex-start; flex-wrap: wrap; gap: 10px 14px; }
+.sk-chairperson-workspace .section-heading > div { flex: 1 1 240px; min-width: 0; }
+.sk-chairperson-workspace .module-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 285px), 1fr)); }
+.sk-chairperson-workspace .module-card,
+.sk-chairperson-workspace .sk-project-card { min-width: 0; }
+.sk-chairperson-workspace .module-card > div:nth-child(2),
+.sk-chairperson-workspace .sk-project-header > div { min-width: 0; overflow-wrap: anywhere; }
+.sk-chairperson-workspace .sk-project-header { flex-wrap: wrap; }
+.sk-chairperson-workspace .sk-project-budget { flex: 0 1 auto; max-width: 100%; overflow-wrap: anywhere; }
+.sk-chairperson-workspace .operation-page :where(.sk-event-summary, .health-outreach-summary) { grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); }
+.health-worker-workspace .operation-page { align-content: start; display: grid; gap: 14px; }
+.health-worker-workspace .operation-page > * { min-width: 0; }
+.health-worker-workspace .operation-page .ops-section-title { margin: 12px 0 0; }
+.health-worker-workspace .section-heading { align-items: flex-start; flex-wrap: wrap; gap: 10px 14px; }
+.health-worker-workspace .section-heading > div { flex: 1 1 240px; min-width: 0; }
+.health-worker-workspace .module-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 285px), 1fr)); }
+.health-worker-workspace .module-card,
+.health-worker-workspace .ops-panel,
+.health-worker-workspace .incident-card { min-width: 0; }
+.health-worker-workspace .module-card > div:nth-child(2),
+.health-worker-workspace .incident-card > header > div { min-width: 0; overflow-wrap: anywhere; }
+.health-worker-workspace .operation-page :where(.health-outreach-summary, .incident-summary, .sk-event-summary) { grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); }
+.tanod-workspace .operation-page { align-content: start; display: grid; gap: 14px; }
+.tanod-workspace .operation-page > * { min-width: 0; }
+.tanod-workspace .operation-page .ops-section-title { margin: 12px 0 0; }
+.tanod-workspace .section-heading { align-items: flex-start; flex-wrap: wrap; gap: 10px 14px; }
+.tanod-workspace .section-heading > div { flex: 1 1 240px; min-width: 0; }
+.tanod-workspace .module-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 285px), 1fr)); }
+.tanod-workspace .module-card,
+.tanod-workspace .ops-panel,
+.tanod-workspace .incident-card,
+.tanod-workspace .patrol-card { min-width: 0; }
+.tanod-workspace .module-card > div:nth-child(2),
+.tanod-workspace .incident-card > header > div,
+.tanod-workspace .patrol-card > header > div { min-width: 0; overflow-wrap: anywhere; }
+.tanod-workspace .operation-page :where(.incident-summary, .patrol-coverage-grid) { grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); }
+.tanod-workspace .incident-filters,
+.tanod-workspace .patrol-coverage-heading,
+.tanod-workspace .patrol-log-form { min-width: 0; }
+.resident-workspace .operation-page { align-content: start; display: grid; gap: 14px; }
+.resident-workspace .operation-page > * { min-width: 0; }
+.resident-workspace .operation-page .ops-section-title { margin: 12px 0 0; }
+.resident-workspace .section-heading { align-items: flex-start; flex-wrap: wrap; gap: 10px 14px; }
+.resident-workspace .section-heading > div { flex: 1 1 240px; min-width: 0; }
+.resident-workspace .module-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 285px), 1fr)); }
+.resident-workspace .module-card,
+.resident-workspace .ops-panel,
+.resident-workspace .ops-request-card,
+.resident-workspace .resident-card,
+.resident-workspace .incident-card { min-width: 0; }
+.resident-workspace .module-card > div:nth-child(2),
+.resident-workspace .ops-request-card > div,
+.resident-workspace .resident-card > header > div,
+.resident-workspace .incident-card > header > div { min-width: 0; overflow-wrap: anywhere; }
+.resident-workspace .operation-page :where(.incident-summary, .health-outreach-summary, .sk-event-summary) { grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); }
 .workspace-shell .operation-heading,
 .workspace-shell .ops-panel-heading,
 .workspace-shell .ops-section-title,
@@ -1986,6 +2073,8 @@
   max-width: 100%;
   min-width: 0;
 }
+.captain-workspace .operation-page { align-content: start; display: grid; gap: 14px; }
+.captain-workspace .operation-page .ops-section-title { margin: 12px 0 0; }
 .captain-workspace .operation-page :where(h1, h2, h3, h4, p, small, strong, span, label, dt, dd, li, a) {
   overflow-wrap: anywhere;
 }
