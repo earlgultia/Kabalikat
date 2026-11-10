@@ -33,8 +33,10 @@ export function PlatformCaptainAccountsPanel() {
     setError('')
     setSuccess('')
     try {
-      await removePlatformCaptainAccount(pendingRemoval.user_id, reasons[pendingRemoval.user_id] ?? '')
-      setSuccess(`Captain account for ${pendingRemoval.display_name} was removed. Its barangay access is suspended and its historical records are retained.`)
+      const result = await removePlatformCaptainAccount(pendingRemoval.user_id, reasons[pendingRemoval.user_id] ?? '')
+      setSuccess(result.alreadyRemoved
+        ? `The Auth login for ${pendingRemoval.display_name} was already disabled. The removal audit has now been completed; historical records are retained.`
+        : `The Auth login for ${pendingRemoval.display_name} was soft-deleted, disabling sign-in. Its barangay access is suspended and historical records are retained.`)
       setReasons((current) => ({ ...current, [pendingRemoval.user_id]: '' }))
       setPendingRemoval(null)
       await Promise.all([
@@ -66,14 +68,17 @@ export function PlatformCaptainAccountsPanel() {
         return <article className="platform-captain-card" key={account.user_id}>
           <header><div><strong>{account.display_name}</strong><span>{account.email}</span></div><span className={`status-pill ${removalPending ? 'status-pending' : 'status-active'}`}>{removalPending ? 'Removal pending' : `${account.active_membership_count} active memberships`}</span></header>
           <p className="platform-captain-barangays">{account.barangays}</p>
-          {removalPending && <p className="platform-captain-pending-note">Access is suspended. Retry to finish removing the Auth login.</p>}
-          <label>Administrative reason<textarea rows={2} maxLength={1000} minLength={3} required value={reason} onChange={(event) => setReasons((current) => ({ ...current, [account.user_id]: event.target.value }))} placeholder="Reason for removing this account" /></label>
-          <button type="button" className="button outline danger-action" disabled={busy || reason.trim().length < 3} onClick={() => { setError(''); setPendingRemoval(account) }}><ShieldOff size={15} />{removalPending ? 'Retry removal' : 'Remove Captain account'}</button>
+          {removalPending
+            ? <p className="platform-captain-pending-note">Access is suspended. Retry to finish removing the Auth login. <strong>Original reason:</strong> {account.removal_reason || 'The recorded reason is unavailable.'}</p>
+            : <label>Administrative reason<textarea rows={2} maxLength={1000} minLength={3} required value={reason} onChange={(event) => setReasons((current) => ({ ...current, [account.user_id]: event.target.value }))} placeholder="Reason for removing this account" /></label>}
+          <button type="button" className="button outline danger-action" disabled={busy || (!removalPending && reason.trim().length < 3)} onClick={() => { setError(''); setPendingRemoval(account) }}><ShieldOff size={15} />{removalPending ? 'Retry removal' : 'Remove Captain account'}</button>
         </article>
       })}
     </div> : <p className="field-hint">No Captain accounts match this search.</p>}
     {accounts.data && totalPages > 1 && <nav className="directory-pagination" aria-label="Captain account pages"><button type="button" className="button outline" disabled={page === 0 || accounts.isFetching} onClick={() => setPage((current) => Math.max(0, current - 1))}><ChevronLeft size={15} />Previous</button><span>Page {page + 1} of {totalPages}</span><button type="button" className="button outline" disabled={page + 1 >= totalPages || accounts.isFetching} onClick={() => setPage((current) => current + 1)}>Next<ChevronRight size={15} /></button></nav>}
-    {pendingRemoval && <ActionConfirmationDialog title={`Remove ${pendingRemoval.display_name}'s Captain account?`} description={`This deletes the Auth login, suspends all ${pendingRemoval.membership_count} barangay memberships for ${pendingRemoval.email}, and revokes pending invitations to that email. Existing profile and barangay records are retained for audit history. Reason: ${reasons[pendingRemoval.user_id]?.trim()}`} confirmLabel="Remove account" busy={busy} onCancel={() => setPendingRemoval(null)} onConfirm={() => void removeAccount()} />}
+    {pendingRemoval && <ActionConfirmationDialog title={`${pendingRemoval.removal_started_at && !pendingRemoval.removal_completed_at ? 'Retry removal for' : 'Remove'} ${pendingRemoval.display_name}'s Captain account?`} description={pendingRemoval.removal_started_at && !pendingRemoval.removal_completed_at
+      ? `This retries Auth login deletion for ${pendingRemoval.email}. The original reason remains in the audit record: ${pendingRemoval.removal_reason || 'unavailable'}. Barangay access is already suspended.`
+      : `This soft-deletes the Auth login and disables sign-in, suspends all ${pendingRemoval.membership_count} barangay memberships for ${pendingRemoval.email}, and revokes pending invitations to that email. Existing profile and barangay records are retained for audit history. Reason: ${reasons[pendingRemoval.user_id]?.trim()}`} confirmLabel="Remove account" busy={busy} onCancel={() => setPendingRemoval(null)} onConfirm={() => void removeAccount()} />}
     <p className="platform-directory-privacy">Account removal history is visible only to platform administrators. Previous operational records remain attributed to their saved profile.</p>
   </section>
 }

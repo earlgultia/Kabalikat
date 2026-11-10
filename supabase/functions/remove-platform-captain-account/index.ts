@@ -47,7 +47,7 @@ Deno.serve(async (request: Request) => {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(userId)) {
     return json({ error: 'A valid Captain account is required.' }, 400)
   }
-  if (reason.length < 3 || reason.length > 1000) return json({ error: 'Enter a reason between 3 and 1000 characters.' }, 400)
+  if (reason.length > 1000) return json({ error: 'The removal reason cannot exceed 1000 characters.' }, 400)
 
   const { error: prepareError } = await caller.rpc('prepare_platform_captain_account_removal', {
     p_user_id: userId,

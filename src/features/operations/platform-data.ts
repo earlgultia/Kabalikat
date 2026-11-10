@@ -12,6 +12,7 @@ export type PlatformCaptainAccount = {
   user_id: string; display_name: string; email: string; barangays: string
   membership_count: number; active_membership_count: number
   removal_started_at: string | null; removal_completed_at: string | null
+  removal_reason: string | null
 }
 export const PLATFORM_CAPTAIN_PAGE_SIZE = 10
 
@@ -22,6 +23,19 @@ export async function listPlatformCaptainAccounts(page: number, search: string) 
   })
   if (error) throw new Error(error.message)
   const rows = (data ?? []) as (PlatformCaptainAccount & { total_count: number })[]
+  const pendingIds = rows
+    .filter((row) => row.removal_started_at && !row.removal_completed_at)
+    .map((row) => row.user_id)
+  if (pendingIds.length) {
+    const { data: removals, error: removalError } = await supabase
+      .from('platform_account_removal_events')
+      .select('target_user_id, reason')
+      .in('target_user_id', pendingIds)
+      .is('completed_at', null)
+    if (removalError) throw new Error(removalError.message)
+    const reasonByUserId = new Map((removals ?? []).map((removal) => [removal.target_user_id, removal.reason]))
+    for (const row of rows) row.removal_reason = reasonByUserId.get(row.user_id) ?? null
+  }
   return { rows, total: Number(rows[0]?.total_count ?? 0) }
 }
 
@@ -39,6 +53,7 @@ export async function removePlatformCaptainAccount(userId: string, reason: strin
     throw new Error(error.message)
   }
   if (data?.success !== true) throw new Error('Captain account removal was not confirmed by the server.')
+  return { alreadyRemoved: data.alreadyRemoved === true }
 }
 
 export async function listPlatformBarangayPage(input: { page: number; search: string; status: string }) {

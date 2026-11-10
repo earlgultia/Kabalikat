@@ -1,10 +1,11 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, Navigate, Route, Routes, useNavigate, useSearchParams } from 'react-router-dom'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
-import { Activity, AlertTriangle, Archive, ArrowLeft, ArrowLeftRight, ArrowRight, Award, Bell, BookOpen, Building2, CalendarDays, CheckCircle2, ChevronDown, CircleDollarSign, ClipboardList, Clock3, Eye, EyeOff, FileCheck2, FileText, FolderKanban, Headset, HeartHandshake, LayoutDashboard, LogOut, Megaphone, Menu, MessageSquare, Search, Settings2, ShieldCheck, UserPlus, Users, UsersRound, WalletCards, X } from 'lucide-react'
+import { Activity, AlertTriangle, Archive, ArrowLeft, ArrowLeftRight, ArrowRight, Award, Bell, BookOpen, Building2, CalendarDays, CheckCircle2, ChevronDown, CircleDollarSign, ClipboardList, Clock3, Eye, EyeOff, FileCheck2, FileText, FolderKanban, Headset, HeartHandshake, LayoutDashboard, LogOut, Megaphone, Menu, Search, ShieldCheck, UserPlus, Users, WalletCards, X } from 'lucide-react'
 import { useAuth } from './auth/AuthProvider'
 import { supabase, supabaseConfigured } from './lib/supabase'
 import { useModalFocus } from './lib/useModalFocus'
+import { getVisibleWorkspaceNavigation, workspaceNavigation } from './lib/workspace-navigation'
 import { AcceptInvitationPage } from './features/operations/AcceptInvitationPage'
 import { AccountSecurityDialog } from './features/operations/AccountSecurityDialog'
 import { LogoutConfirmationDialog } from './components/LogoutConfirmationDialog'
@@ -74,34 +75,6 @@ function SignIn() {
     <p className="auth-caption">One Barangay. One Connected Community.</p>
   </main>
 }
-
-type PlanFeatureKey = 'core_services' | 'finance' | 'community_programs' | 'public_safety'
-const nav: Array<{ label: string; section: OperationSection | 'overview'; icon: typeof LayoutDashboard; roles: string[]; feature?: PlanFeatureKey }> = [
-  { label: 'Overview', section: 'overview', icon: LayoutDashboard, roles: [] },
-  { label: 'Staff & access', section: 'members', icon: UsersRound, roles: ['captain'] },
-  { label: 'Barangay settings', section: 'barangay-settings', icon: Settings2, roles: ['captain'] },
-  { label: 'Plans & subscription', section: 'tenant-subscription', icon: CircleDollarSign, roles: ['captain'] },
-  { label: 'Residents & households', section: 'residents', icon: Users, roles: ['captain','secretary','resident'], feature: 'core_services' },
-  { label: 'Official invitations', section: 'invitations', icon: UserPlus, roles: ['captain'] },
-  { label: 'Document services', section: 'documents', icon: FileText, roles: ['captain','secretary','resident'], feature: 'core_services' },
-  { label: 'Meetings & attendance', section: 'meetings', icon: CalendarDays, roles: ['captain','secretary','kagawad','resident'], feature: 'core_services' },
-  { label: 'Announcements', section: 'announcements', icon: Bell, roles: ['captain','secretary','resident'], feature: 'core_services' },
-  { label: 'Barangay archive', section: 'archive', icon: Archive, roles: ['captain','secretary'], feature: 'core_services' },
-  { label: 'Budgets & finance', section: 'finance', icon: CircleDollarSign, roles: ['captain','treasurer'], feature: 'finance' },
-  { label: 'Committees', section: 'committees', icon: UsersRound, roles: ['captain','secretary','kagawad'], feature: 'community_programs' },
-  { label: 'Barangay projects', section: 'projects', icon: FolderKanban, roles: ['captain','secretary','treasurer','kagawad','sk_chairperson','bhw','tanod','resident'], feature: 'community_programs' },
-  { label: 'Inter-barangay referrals', section: 'referrals', icon: ArrowLeftRight, roles: ['captain','secretary'], feature: 'core_services' },
-  { label: 'Health outreach', section: 'health-outreach', icon: HeartHandshake, roles: ['captain','secretary','treasurer','kagawad','sk_chairperson','bhw','tanod','resident'], feature: 'community_programs' },
-  { label: 'SK events & programs', section: 'sk-events', icon: CalendarDays, roles: ['captain','secretary','treasurer','kagawad','sk_chairperson','bhw','tanod','resident'], feature: 'community_programs' },
-  { label: 'Community calendar', section: 'community-calendar', icon: CalendarDays, roles: ['captain','secretary','treasurer','kagawad','sk_chairperson','bhw','tanod','resident'], feature: 'community_programs' },
-  { label: 'SK projects', section: 'sk-projects', icon: FileCheck2, roles: ['captain','sk_chairperson'], feature: 'community_programs' },
-  { label: 'SK accomplishments', section: 'sk-accomplishments', icon: Award, roles: ['captain','secretary','treasurer','kagawad','sk_chairperson','bhw','tanod','resident'], feature: 'community_programs' },
-  { label: 'Incident reports', section: 'incidents', icon: AlertTriangle, roles: ['captain','tanod','resident'], feature: 'public_safety' },
-  { label: 'Tanod patrols', section: 'patrols', icon: ClipboardList, roles: ['captain','tanod'], feature: 'public_safety' },
-  { label: 'Disaster advisories', section: 'advisories', icon: Megaphone, roles: ['captain','secretary','treasurer','kagawad','sk_chairperson','bhw','tanod','resident'], feature: 'public_safety' },
-  { label: 'Community feedback', section: 'feedback', icon: MessageSquare, roles: ['captain','secretary','resident'], feature: 'core_services' },
-  { label: 'Help & support', section: 'support', icon: Headset, roles: ['captain','secretary','treasurer','kagawad','sk_chairperson','bhw','tanod','resident'] },
-]
 
 function PlatformWorkspace() {
   const { user, signOut } = useAuth()
@@ -220,10 +193,7 @@ function Workspace() {
   })
   const kagawadHasCommunityPrograms = planFeaturesQuery.data?.community_programs === true
   const kagawadHasCoreServices = planFeaturesQuery.data?.core_services === true
-  const visibleNav = useMemo(() => nav.filter((item) =>
-    (item.roles.length === 0 || item.roles.includes(membership?.role?.key ?? ''))
-      && (!item.feature || planFeaturesQuery.isPending || planFeaturesQuery.data?.[item.feature] === true),
-  ), [membership?.role?.key, planFeaturesQuery.data, planFeaturesQuery.isPending])
+  const visibleNav = getVisibleWorkspaceNavigation(membership?.role?.key, planFeaturesQuery.data ?? undefined, planFeaturesQuery.isPending)
   useEffect(() => {
     if (activeSection !== 'overview' && !visibleNav.some((item) => item.section === activeSection)) {
       setActiveSection('overview')
@@ -559,7 +529,7 @@ function Workspace() {
       <div className="sidebar-bottom"><div className="user-card"><div className="avatar">{accountInitial}</div><div className="user-details"><strong>{accountName}</strong><span>{membership?.role?.label ?? 'No active membership'}</span></div><button className="icon-button" onClick={() => setLogoutConfirmOpen(true)} aria-label="Sign out"><LogOut size={17} /></button></div></div>
     </aside>
     {menuOpen && <button className="scrim" onClick={() => setMenuOpen(false)} aria-label="Close navigation" />}
-    <main className="main-area"><header className="topbar"><div className="crumb">Workspace <span>/</span> {nav.find((item) => item.section === activeSection)?.label ?? 'Overview'}</div><div className="top-actions"><button className="search-control" onClick={() => setToolFinderOpen(true)} aria-label="Find a workspace tool"><Search size={17} /><span>Find a tool</span><kbd>Ctrl K</kbd></button><button className="icon-button search-control-mobile" onClick={() => setToolFinderOpen(true)} aria-label="Find a workspace tool"><Search size={18} /></button><button className="icon-button notification" aria-label={unreadNotificationCount.isError ? 'Open community updates; unread count unavailable' : unreadCount ? 'Open community updates, ' + unreadCount + ' unread' : 'Open community updates'} aria-haspopup="dialog" onClick={() => setUpdatesOpen(true)} disabled={!membership}><Bell size={19} />{Boolean(unreadCount && unreadCount > 0) && <span className="notification-badge" aria-hidden="true">{(unreadCount ?? 0) > 99 ? '99+' : (unreadCount ?? 0)}</span>}</button><button type="button" className="top-avatar account-avatar" onClick={() => setAccountSecurityOpen(true)} aria-label={`Open account security for ${accountName}`}>{accountInitial}</button></div></header>
+    <main className="main-area"><header className="topbar"><div className="crumb">Workspace <span>/</span> {workspaceNavigation.find((item) => item.section === activeSection)?.label ?? 'Overview'}</div><div className="top-actions"><button className="search-control" onClick={() => setToolFinderOpen(true)} aria-label="Find a workspace tool"><Search size={17} /><span>Find a tool</span><kbd>Ctrl K</kbd></button><button className="icon-button search-control-mobile" onClick={() => setToolFinderOpen(true)} aria-label="Find a workspace tool"><Search size={18} /></button><button className="icon-button notification" aria-label={unreadNotificationCount.isError ? 'Open community updates; unread count unavailable' : unreadCount ? 'Open community updates, ' + unreadCount + ' unread' : 'Open community updates'} aria-haspopup="dialog" onClick={() => setUpdatesOpen(true)} disabled={!membership}><Bell size={19} />{Boolean(unreadCount && unreadCount > 0) && <span className="notification-badge" aria-hidden="true">{(unreadCount ?? 0) > 99 ? '99+' : (unreadCount ?? 0)}</span>}</button><button type="button" className="top-avatar account-avatar" onClick={() => setAccountSecurityOpen(true)} aria-label={`Open account security for ${accountName}`}>{accountInitial}</button></div></header>
       <div className="content-wrap" id="main-content" tabIndex={-1}>
         {error && <div className="error-banner" role="alert">{error}</div>}{logoutError && <div className="error-banner" role="alert">{logoutError}</div>}
         {!membership ? <section className="empty-state"><div className="empty-icon"><Building2 size={25} /></div><h1>No barangay workspace yet</h1><p>Your subscription plan does not create account access by itself. Ask the Super Admin to issue an email-bound invitation for your account and intended role. For a Captain on an existing barangay, they can create the invitation from <strong>Barangay onboarding</strong> using your barangay code and this account's email. Open the link, sign in with the same email, and select <strong>Accept invitation</strong>.</p><div className="empty-foot"><ShieldCheck size={16} />Your account cannot select or change its own tenant. Membership is granted when an authorized invitation is accepted.</div></section> : activeSection !== 'overview' ? <OperationsSection section={activeSection} focusId={focusedCommunityUpdate?.section === activeSection && !focusedCommunityUpdate.correctionRequestId ? focusedCommunityUpdate.id : undefined} focusPage={focusedCommunityUpdate?.section === activeSection ? focusedCommunityUpdate.page : undefined} focusStatus={focusedCommunityUpdate?.section === activeSection ? focusedCommunityUpdate.healthStatus : undefined} focusDueDateRequestStatus={focusedCommunityUpdate?.section === activeSection ? focusedCommunityUpdate.dueDateRequestStatus : undefined} focusRelatedId={focusedCommunityUpdate?.section === activeSection ? focusedCommunityUpdate.relatedId : undefined} focusRelatedPage={focusedCommunityUpdate?.section === activeSection ? focusedCommunityUpdate.relatedPage : undefined} focusNestedPage={focusedCommunityUpdate?.section === activeSection ? focusedCommunityUpdate.nestedPage : undefined} focusOpenResponses={focusedCommunityUpdate?.section === activeSection ? focusedCommunityUpdate.openResponses : undefined} focusCorrectionRequestId={focusedCommunityUpdate?.section === activeSection ? focusedCommunityUpdate.correctionRequestId : undefined} focusCorrectionPage={focusedCommunityUpdate?.section === activeSection && focusedCommunityUpdate.correctionRequestId ? focusedCommunityUpdate.relatedPage : undefined} focusCorrectionQueue={focusedCommunityUpdate?.section === activeSection ? focusedCommunityUpdate.correctionQueue : undefined} onFocusHandled={clearFocusedCommunityUpdate} onOpenInvitations={() => setActiveSection('invitations')} /> : <>
