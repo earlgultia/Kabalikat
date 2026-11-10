@@ -605,7 +605,8 @@
 .support-guidance-list details p { color: #596a61; font-size: 11px; line-height: 1.55; margin: 8px 0 1px; overflow-wrap: anywhere; }
 .support-guidance-privacy { align-items: flex-start; color: #755922; display: flex; font-size: 10px; gap: 7px; line-height: 1.5; margin: 0; }
 .support-guidance-privacy svg { flex: none; margin-top: 1px; }
-.support-ticket-list { display: grid; gap: 14px; }
+.support-ticket-list { display: grid; gap: 14px; margin-top: 14px; }
+.support-ticket-empty { margin-top: 14px; }
 .support-ticket { display: grid; gap: 13px; min-width: 0; }
 .support-ticket > header { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; }
 .support-ticket > header > div { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; }
