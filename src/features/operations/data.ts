@@ -140,6 +140,34 @@ export type TreasurerFollowUpSummary = {
   transaction_changes_awaiting_review: number | null
   generated_at: string
 }
+export type SkChairpersonSubmissionFollowUp = {
+  project_proposals_awaiting_review: number | null
+  event_schedules_awaiting_review: number | null
+  accomplishments_awaiting_review: number | null
+  returned_accomplishments: number | null
+  generated_at: string
+}
+export type HealthWorkerOutreachFollowUp = {
+  schedules_awaiting_review: number
+  schedules_to_revise: number
+  upcoming_published_outreaches: number
+  generated_at: string
+}
+export type TanodDashboardFollowUp = {
+  assigned_open_incidents: number
+  upcoming_patrol_shifts: number
+  active_patrol_shifts: number
+  generated_at: string
+}
+export type ResidentDashboardFollowUp = {
+  has_resident_profile: boolean
+  residency_status: string | null
+  pending_profile_corrections: number
+  document_requests_in_progress: number | null
+  open_incident_reports: number | null
+  community_feedback_awaiting_response: number | null
+  upcoming_meetings: Array<{ id: string; title: string; location: string; starts_at: string }> | null
+}
 export type KagawadActionItemSummary = {
   open_action_items: number | null
   in_progress_action_items: number | null
@@ -257,8 +285,86 @@ export function getSecretaryReviewQueueSummary(tenantId: string) {
   return rpc<SecretaryReviewQueueSummary>('get_secretary_review_queue_summary', { p_barangay_id: tenantId })
 }
 
+export function getSecretaryReferralReviewCount(tenantId: string) {
+  return rpc<number>('get_secretary_referral_review_count', { p_barangay_id: tenantId })
+}
+
+export function getSecretaryDueDateReviewCount(tenantId: string) {
+  return rpc<number>('get_secretary_due_date_review_count', { p_barangay_id: tenantId })
+}
+
 export function getTreasurerFollowUpSummary(tenantId: string) {
   return rpc<TreasurerFollowUpSummary>('get_treasurer_follow_up_summary', { p_barangay_id: tenantId })
+}
+
+export function getSkChairpersonSubmissionFollowUp(tenantId: string) {
+  return rpc<SkChairpersonSubmissionFollowUp>('get_sk_chairperson_submission_follow_up', { p_barangay_id: tenantId })
+}
+
+export function getHealthWorkerOutreachFollowUp(tenantId: string) {
+  return rpc<HealthWorkerOutreachFollowUp>('get_health_worker_outreach_follow_up', { p_barangay_id: tenantId })
+}
+
+export function getTanodDashboardFollowUp(tenantId: string) {
+  return rpc<TanodDashboardFollowUp>('get_tanod_dashboard_follow_up', { p_barangay_id: tenantId })
+}
+
+export async function getResidentDashboardFollowUp(tenantId: string, includeCoreServices = false): Promise<ResidentDashboardFollowUp> {
+  const supabaseClient = client()
+  const { data: authData, error: authError } = await supabaseClient.auth.getUser()
+  if (authError || !authData.user) throw new Error('Sign in again to view your resident summary.')
+  const userId = authData.user.id
+  const { data: resident, error: residentError } = await supabaseClient.from('residents')
+    .select('id').eq('barangay_id', tenantId).eq('user_id', userId).maybeSingle()
+  if (residentError) throw new Error(residentError.message)
+  if (!resident) return {
+    has_resident_profile: false, residency_status: null, pending_profile_corrections: 0,
+    document_requests_in_progress: null, open_incident_reports: null,
+    community_feedback_awaiting_response: null, upcoming_meetings: [],
+  }
+
+  const [canRequestDocuments, canReportIncidents] = await Promise.all([
+    hasPermission(tenantId, 'document.request.create'),
+    hasPermission(tenantId, 'incident.report'),
+  ])
+  const [verification, corrections, documents, incidents, feedback, meetings] = await Promise.all([
+    supabaseClient.from('residency_verifications').select('status,created_at,id')
+      .eq('barangay_id', tenantId).eq('resident_id', resident.id)
+      .order('created_at', { ascending: false }).order('id', { ascending: false }).limit(1).maybeSingle(),
+    supabaseClient.from('resident_profile_change_requests').select('id', { count: 'exact', head: true })
+      .eq('barangay_id', tenantId).eq('resident_id', resident.id).eq('requested_by', userId).eq('status', 'pending'),
+    canRequestDocuments
+      ? supabaseClient.from('document_requests').select('id', { count: 'exact', head: true })
+        .eq('barangay_id', tenantId).eq('resident_id', resident.id)
+        .in('status', ['pending', 'under_review', 'awaiting_approval', 'approved', 'issued'])
+      : Promise.resolve({ count: null, data: null, error: null }),
+    canReportIncidents
+      ? supabaseClient.from('incidents').select('id', { count: 'exact', head: true })
+        .eq('barangay_id', tenantId).eq('created_by', userId).in('status', ['submitted', 'acknowledged', 'in_progress'])
+      : Promise.resolve({ count: null, data: null, error: null }),
+    includeCoreServices
+      ? supabaseClient.from('community_feedback').select('id', { count: 'exact', head: true })
+        .eq('barangay_id', tenantId).eq('submitted_by', userId).in('status', ['submitted', 'in_review'])
+      : Promise.resolve({ count: null, data: null, error: null }),
+    includeCoreServices
+      ? supabaseClient.from('meetings').select('id,title,location,starts_at,meeting_attendees!inner(user_id)')
+        .eq('barangay_id', tenantId).eq('meeting_attendees.user_id', userId).eq('status', 'scheduled')
+        .gte('starts_at', new Date().toISOString()).order('starts_at', { ascending: true }).limit(3)
+      : Promise.resolve({ data: null, error: null }),
+  ])
+  const failed = [verification, corrections, documents, incidents, feedback, meetings].find((result) => result.error)
+  if (failed?.error) throw new Error(failed.error.message)
+  return {
+    has_resident_profile: true,
+    residency_status: verification.data?.status ?? null,
+    pending_profile_corrections: corrections.count ?? 0,
+    document_requests_in_progress: canRequestDocuments ? documents.count ?? 0 : null,
+    open_incident_reports: canReportIncidents ? incidents.count ?? 0 : null,
+    community_feedback_awaiting_response: includeCoreServices ? feedback.count ?? 0 : null,
+    upcoming_meetings: includeCoreServices
+      ? ((meetings.data ?? []) as Array<{ id: string; title: string; location: string; starts_at: string }>).map(({ id, title, location, starts_at }) => ({ id, title, location, starts_at }))
+      : null,
+  }
 }
 
 export function getKagawadActionItemSummary(tenantId: string) {
@@ -974,7 +1080,7 @@ export async function listFinanceBudgetPage(tenantId: string, page: number) {
   }), total: Number(rows[0]?.total_count ?? 0) }
 }
 
-export type FinanceBudgetUsageRow = { budget_id: string; posted_expense_total: number }
+export type FinanceBudgetUsageRow = { budget_id: string; posted_expense_total: number; posted_income_total: number }
 
 export async function listFinanceBudgetUsageForPage(tenantId: string, budgetIds: string[]): Promise<FinanceBudgetUsageRow[]> {
   if (!budgetIds.length) return []

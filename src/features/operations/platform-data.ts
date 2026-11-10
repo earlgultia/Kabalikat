@@ -74,6 +74,13 @@ export async function getPlatformDirectorySummary() {
   return (data?.[0] ?? { registered_count: 0, active_count: 0, needs_attention_count: 0 }) as PlatformDirectorySummary
 }
 
+export async function getPendingCaptainRemovalCount() {
+  if (!supabase) throw new Error('Supabase is not configured.')
+  const { data, error } = await supabase.rpc('get_platform_pending_captain_removal_count')
+  if (error) throw new Error(error.message)
+  return Number(data ?? 0)
+}
+
 export async function listPlatformBarangays() {
   if (!supabase) throw new Error('Supabase is not configured.')
   const { data, error } = await supabase.rpc('get_platform_barangay_directory')

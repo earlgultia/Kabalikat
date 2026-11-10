@@ -863,6 +863,8 @@
 .finance-budget-usage { display: grid; gap: 8px; }
 .finance-budget-usage > div:first-child { align-items: center; }
 .finance-budget-usage > div:first-child strong { color: var(--ink); font-size: 13px; }
+.finance-budget-usage > div:last-child { align-items: center; border-top: 1px solid var(--line); display: flex; gap: 12px; justify-content: space-between; padding-top: 8px; }
+.finance-budget-usage > div:last-child strong { color: var(--ink); font-size: 13px; }
 .finance-budget-track { background: var(--line); border-radius: 99px; height: 9px; overflow: hidden; }
 .finance-budget-track span { background: #26786f; border-radius: inherit; display: block; height: 100%; }
 .finance-export-history-list { display: grid; gap: 8px; list-style: none; margin: 0; padding: 0; }
@@ -963,6 +965,10 @@
 .referral-privacy-notice > svg { flex: none; margin-top: 2px; }
 .referral-privacy-notice p { margin: 0; font-size: 11px; line-height: 1.65; }
 .referral-list { display: grid; gap: 14px; }
+.referral-filters { align-items: end; background: #f8faf7; border: 1px solid #e2e9e4; border-radius: 12px; display: grid; gap: 10px; grid-template-columns: minmax(220px, 2fr) minmax(160px, 1fr) auto auto; margin: 14px 0; min-width: 0; padding: 14px; }
+.referral-filters label { color: #435957; display: grid; font-size: 12px; font-weight: 700; gap: 6px; min-width: 0; }
+.referral-filters input, .referral-filters select { background: #fffefa; border: 1px solid #bfcec8; border-radius: 9px; color: #24353b; font: inherit; min-height: 42px; min-width: 0; padding: 9px 11px; width: 100%; }
+.referral-filters > button { min-height: 42px; white-space: nowrap; }
 .community-calendar-filters { align-items: end; display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0; }
 .community-calendar-filters > label { color: #354f4c; display: grid; flex: 1 1 220px; font-size: 11px; font-weight: 700; gap: 5px; }
 .community-calendar-filters input, .community-calendar-filters select { background: #fffefa; border: 1px solid #bfcec8; border-radius: 8px; color: #24353b; font: inherit; min-height: 40px; padding: 8px 10px; width: 100%; }
@@ -1106,7 +1112,8 @@
 .referral-destination-pagination { align-items: center; color: #596a6d; display: flex; flex-wrap: wrap; font-size: 11px; gap: 8px; justify-content: space-between; }
 .referral-destination-pagination > div { display: flex; flex-wrap: wrap; gap: 7px; }
 .referral-destination-pagination .button { min-height: 36px; }
-@media(max-width:650px) { .referral-card > header { flex-direction: column; } .referral-direction { text-align: left; } .referral-detail-grid { grid-template-columns: 1fr; } .referral-destination-pagination { align-items: stretch; flex-direction: column; } .referral-destination-pagination > div { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media(max-width:850px) { .referral-filters { grid-template-columns: minmax(0,1fr) minmax(0,1fr); } .referral-filters label:first-child { grid-column: 1 / -1; } .referral-filters > button { width: 100%; } }
+@media(max-width:650px) { .referral-card > header { flex-direction: column; } .referral-direction { text-align: left; } .referral-detail-grid { grid-template-columns: 1fr; } .referral-destination-pagination { align-items: stretch; flex-direction: column; } .referral-destination-pagination > div { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); } .referral-filters { grid-template-columns: minmax(0,1fr); padding: 11px; } .referral-filters label:first-child { grid-column: auto; } }
 
 /* Shared layout guards for every role's workspace tools. */
 .workspace-shell .operation-page,

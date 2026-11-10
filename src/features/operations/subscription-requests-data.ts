@@ -56,6 +56,11 @@ export async function listPlatformPlanRequests(page: number, status: string) {
   return { rows, total: Number(rows[0]?.total_count ?? 0) }
 }
 
+export async function getPendingPlatformPlanRequestCount() {
+  const result = await listPlatformPlanRequests(0, 'pending')
+  return result.total
+}
+
 export async function activatePlanRequest(requestId: string) {
   const { error } = await client().rpc('activate_subscription_plan_request', {
     p_request_id: requestId,

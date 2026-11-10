@@ -88,9 +88,10 @@ export function HealthOutreachPage({ focusId, focusPage, focusStatus, onFocusHan
   const dateWindow = { startsAfter: dateAtLocalMidnightUtc(startsFrom), startsBefore: nextLocalDateAtMidnightUtc(startsThrough) }
   useEffect(() => { setPage(0); setSearchInput(''); setSearch(''); setStatusFilter('all'); setStartsFrom(''); setStartsThrough('') }, [tenantId])
   useEffect(() => {
-    if (!focusId) return
+    if (!focusId && !focusStatus) return
     setPage(focusPage ?? 0); setSearchInput(''); setSearch(''); setStatusFilter(focusStatus ?? 'cancelled'); setStartsFrom(''); setStartsThrough('')
-  }, [focusId, focusPage, focusStatus])
+    if (!focusId) onFocusHandled?.()
+  }, [focusId, focusPage, focusStatus, onFocusHandled])
   useEffect(() => {
     const timeout = window.setTimeout(() => { setSearch(searchInput.trim()); setPage(0) }, 250)
     return () => window.clearTimeout(timeout)

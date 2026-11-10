@@ -76,7 +76,7 @@ function SkEventHistory({ tenantId, eventId, enabled }: { tenantId: string; even
   const history = useQuery({ queryKey: ['sk-event-audit', tenantId, eventId, page], queryFn: () => listSkEventAudit(tenantId, eventId, page), enabled })
   const totalPages = Math.ceil((history.data?.totalCount ?? 0) / SK_EVENT_HISTORY_PAGE_SIZE)
   if (history.isPending) return <p className="field-hint" role="status">Loading activity…</p>
-  if (history.error) return <p className="account-security-error" role="alert">Activity history could not be loaded.</p>
+  if (history.error) return <ErrorNotice message="Activity history could not be loaded." onRetry={() => void history.refetch()} retrying={history.isFetching} />
   return <>
     {history.data?.rows.length ? <ol>{history.data.rows.map((entry) => <li key={entry.id}><span><strong>{entry.action.replace('event_', '').replaceAll('_', ' ')}</strong><time dateTime={entry.created_at}>{formatDateTime(entry.created_at)}</time></span>{entry.note && <small>{entry.note}</small>}</li>)}</ol> : <p className="field-hint">No activity has been recorded for this event.</p>}
     {totalPages > 1 && <div className="finance-review-actions" aria-label="Event history pages"><span className="field-hint">Page {page + 1} of {totalPages}</span><button className="button outline" disabled={page === 0 || history.isFetching} onClick={() => setPage((current) => current - 1)}><ChevronLeft size={15} />Previous</button><button className="button outline" disabled={page + 1 >= totalPages || history.isFetching} onClick={() => setPage((current) => current + 1)}>Next<ChevronRight size={15} /></button></div>}
@@ -99,7 +99,7 @@ function SkEventScheduleHistory({ tenantId, eventId }: { tenantId: string; event
   return <details className="sk-event-audit" onToggle={(toggle) => setOpen(toggle.currentTarget.open)}>
     <summary>Schedule change history</summary>
     {open && history.isPending && <p className="field-hint" role="status">Loading schedule history…</p>}
-    {open && history.error && <p className="account-security-error" role="alert">Schedule history could not be loaded.</p>}
+    {open && history.error && <ErrorNotice message="Schedule history could not be loaded." onRetry={() => void history.refetch()} retrying={history.isFetching} />}
     {open && history.data?.rows.length === 0 && <p className="field-hint">No schedule changes have been recorded.</p>}
     {history.data?.rows.length ? <ol>{history.data.rows.map((change) => <li key={change.id}><span><strong>Updated {formatDateTime(change.created_at)}</strong></span><small>Previously: {change.previous_location} · {formatDateTime(change.previous_starts_at)} to {formatDateTime(change.previous_ends_at)}</small><small>Now: {change.new_location} · {formatDateTime(change.new_starts_at)} to {formatDateTime(change.new_ends_at)}</small><small>Reason: {change.reason}</small></li>)}</ol> : null}
     {open && totalPages > 1 && <div className="finance-review-actions" aria-label="Schedule history pages"><span className="field-hint">Page {page + 1} of {totalPages}</span><button className="button outline" disabled={page === 0 || history.isFetching} onClick={() => setPage((current) => current - 1)}><ChevronLeft size={15} />Previous</button><button className="button outline" disabled={page + 1 >= totalPages || history.isFetching} onClick={() => setPage((current) => current + 1)}>Next<ChevronRight size={15} /></button></div>}
@@ -118,7 +118,7 @@ function SkEventNotificationReach({ tenantId, eventId }: { tenantId: string; eve
   return <details className="sk-event-audit sk-event-reach" onToggle={(toggle) => setOpen(toggle.currentTarget.open)}>
     <summary>Notification reach</summary>
     {open && summary.isPending && <p className="field-hint" role="status">Loading notification counts…</p>}
-    {open && summary.error && <p className="account-security-error" role="alert">Notification counts could not be loaded.</p>}
+    {open && summary.error && <ErrorNotice message="Notification counts could not be loaded." onRetry={() => void summary.refetch()} retrying={summary.isFetching} />}
     {open && summary.data && <>
       <div className="sk-event-reach-grid">{rows.map((row) => <div className="sk-event-reach-item" key={row.label}><strong>{row.label}</strong><span>{(row.sent ?? 0).toLocaleString()} notified · {(row.read ?? 0).toLocaleString()} marked read</span></div>)}</div>
       <p className="field-hint">These counts track in-app notification status only. They do not indicate RSVP or attendance.</p>

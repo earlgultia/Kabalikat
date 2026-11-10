@@ -4,17 +4,26 @@ import { Building2, ChevronLeft, ChevronRight, Download, RefreshCw, Search } fro
 import { getPlatformDirectorySummary, listPlatformBarangayPage, PLATFORM_DIRECTORY_PAGE_SIZE, type PlatformBarangayRow } from './platform-data'
 import { encodeCsv } from './csv'
 import { PlatformCaptainAccountsPanel } from './PlatformCaptainAccountsPanel'
+import { ErrorNotice } from './shared'
 
 export function PlatformDirectory() {
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [status, setStatus] = useState('all')
   const [page, setPage] = useState(0)
   const [exporting, setExporting] = useState(false)
   const [exportError, setExportError] = useState('')
   const summary = useQuery({ queryKey: ['platform-barangay-summary'], queryFn: getPlatformDirectorySummary, staleTime: 60_000 })
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setDebouncedSearch(search.trim())
+      setPage(0)
+    }, 250)
+    return () => window.clearTimeout(timeout)
+  }, [search])
   const directory = useQuery({
-    queryKey: ['platform-barangays', page, search, status],
-    queryFn: () => listPlatformBarangayPage({ page, search, status }), staleTime: 60_000,
+    queryKey: ['platform-barangays', page, debouncedSearch, status],
+    queryFn: () => listPlatformBarangayPage({ page, search: debouncedSearch, status }), staleTime: 60_000,
   })
   const rows = directory.data?.rows ?? []
   const total = directory.data?.total ?? 0
@@ -56,12 +65,18 @@ export function PlatformDirectory() {
 
   return <><section className="panel platform-directory" aria-labelledby="platform-directory-title">
     <div className="panel-head"><div><h2 id="platform-directory-title">Barangay directory</h2><p>Platform tenant metadata and aggregate active membership counts.</p></div><Building2 size={19} /></div>
-    <div className="platform-directory-summary"><strong>{summary.data?.registered_count ?? '—'}<small> registered</small></strong><strong>{summary.data?.active_count ?? '—'}<small> active</small></strong><strong>{summary.data?.needs_attention_count ?? '—'}<small> suspended or archived</small></strong></div>
+    {summary.isPending && <p className="field-hint" role="status">Loading barangay totals…</p>}
+    {summary.error && <ErrorNotice message="Barangay totals could not be loaded. The directory remains available." onRetry={() => void summary.refetch()} retrying={summary.isFetching} />}
+    <div className="platform-directory-summary" aria-label="Filter barangays by status">
+      <button type="button" className={status === 'all' ? 'active' : ''} aria-pressed={status === 'all'} onClick={() => { setStatus('all'); setPage(0) }}><strong>{summary.data?.registered_count ?? '—'}</strong><small>registered</small></button>
+      <button type="button" className={status === 'active' ? 'active' : ''} aria-pressed={status === 'active'} onClick={() => { setStatus('active'); setPage(0) }}><strong>{summary.data?.active_count ?? '—'}</strong><small>active</small></button>
+      <button type="button" className={status === 'needs_attention' ? 'active' : ''} aria-pressed={status === 'needs_attention'} onClick={() => { setStatus('needs_attention'); setPage(0) }}><strong>{summary.data?.needs_attention_count ?? '—'}</strong><small>suspended or archived</small></button>
+    </div>
     <div className="platform-directory-controls">
       <label className="archive-search"><Search size={17} /><input aria-label="Search barangays" placeholder="Search name, municipality, province, or code" value={search} onChange={(event) => { setSearch(event.target.value); setPage(0) }} /></label>
       <label className="archive-folder-select">Status<select value={status} onChange={(event) => { setStatus(event.target.value); setPage(0) }}><option value="all">All</option><option value="needs_attention">Needs attention</option><option value="active">Active</option><option value="suspended">Suspended</option><option value="archived">Archived</option></select></label>
       <span className="field-hint" aria-live="polite">Showing {pageStart}–{pageEnd} of {total} matching barangays</span>
-      <button type="button" className="button outline" disabled={!total || exporting || directory.isFetching} onClick={() => void exportMatchingBarangays()}><Download size={15} />{exporting ? 'Exporting…' : 'Export matching rows'}</button>
+      <button type="button" className="button outline" disabled={!total || exporting || directory.isFetching || debouncedSearch !== search.trim()} onClick={() => void exportMatchingBarangays()}><Download size={15} />{exporting ? 'Exporting…' : 'Export matching rows'}</button>
       <button type="button" className="button outline" disabled={directory.isFetching || summary.isFetching} onClick={() => { void directory.refetch(); void summary.refetch() }}><RefreshCw size={15} />Refresh</button>
     </div>
     {exportError && <div className="ops-error" role="alert">{exportError}</div>}

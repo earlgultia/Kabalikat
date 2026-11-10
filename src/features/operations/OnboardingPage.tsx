@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
 import { Building2, ClipboardCheck } from 'lucide-react'
 import { onboardBarangay } from './data'
@@ -15,11 +16,13 @@ const onboardingSchema = z.object({
 const existingCaptainSchema = z.object({ barangayCode: z.string().trim().min(2).max(40), captainEmail: z.email() })
 
 export function OnboardingPage() {
+  const queryClient = useQueryClient()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [inviteUrl, setInviteUrl] = useState('')
   const [existingCaptainInviteUrl, setExistingCaptainInviteUrl] = useState('')
+  const [existingCaptainInviteExpiresAt, setExistingCaptainInviteExpiresAt] = useState('')
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setError(''); setMessage(''); setInviteUrl('')
@@ -29,6 +32,10 @@ export function OnboardingPage() {
     setBusy(true)
     try {
       const result = await onboardBarangay(parsed.data)
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['platform-barangays'] }),
+        queryClient.invalidateQueries({ queryKey: ['platform-barangay-summary'] }),
+      ])
       const url = new URL('/accept-invitation', window.location.origin)
       url.searchParams.set('token', result.invitation_token)
       setInviteUrl(url.toString())
@@ -44,7 +51,7 @@ export function OnboardingPage() {
   }
 
   async function inviteCaptainToExistingBarangay(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setError(''); setMessage(''); setExistingCaptainInviteUrl('')
+    event.preventDefault(); setError(''); setMessage(''); setExistingCaptainInviteUrl(''); setExistingCaptainInviteExpiresAt('')
     const form = event.currentTarget
     const parsed = existingCaptainSchema.safeParse(Object.fromEntries(new FormData(form).entries()))
     if (!parsed.success) { setError(parsed.error.issues[0]?.message ?? 'Check the barangay code and Captain email.'); return }
@@ -54,6 +61,7 @@ export function OnboardingPage() {
       const url = new URL('/accept-invitation', window.location.origin)
       url.searchParams.set('token', result.invitation_token)
       setExistingCaptainInviteUrl(url.toString())
+      setExistingCaptainInviteExpiresAt(result.expires_at)
       setMessage('Captain invitation created. Send this link to the existing Captain account. The signed-in email must match the invitation email.')
       form.reset()
     } catch (err) { setError(err instanceof Error ? err.message : 'Unable to create the Captain invitation.') }
@@ -75,7 +83,7 @@ export function OnboardingPage() {
         <label>Municipality / city<input name="municipality" required maxLength={120} /></label><label>Province<input name="province" required maxLength={120} /></label>
         <label className="span-two">First Captain email<input type="email" name="captainEmail" required autoComplete="email" /></label></div>
       <div className="ops-form-actions"><span className="field-hint">No email is sent. Deliver the generated invitation through your approved channel.</span><button className="button primary" disabled={busy}>{busy ? 'Creating…' : 'Create barangay'}</button></div>
-      {inviteUrl && <div className="invite-link-box"><label>Captain invitation link<input readOnly value={inviteUrl} /></label><button type="button" className="button outline" onClick={() => void copy()}><ClipboardCheck size={15} />Copy link</button></div>}
+      {inviteUrl && <div className="invite-link-box"><label>Captain invitation link<input readOnly value={inviteUrl} /><span className="field-hint">Valid for seven days from creation.</span></label><button type="button" className="button outline" onClick={() => void copy()}><ClipboardCheck size={15} />Copy link</button></div>}
     </form>
     <section className="ops-panel ops-form existing-captain-invitation" aria-labelledby="existing-captain-invitation-title">
       <div className="ops-panel-heading"><div><h2 id="existing-captain-invitation-title">Invite a Captain to an existing barangay</h2><p>Use this if the workspace and plan already exist but the Captain account has no active membership.</p></div><Building2 size={18} /></div>
@@ -84,7 +92,7 @@ export function OnboardingPage() {
         <label>Captain account email<input type="email" name="captainEmail" required autoComplete="email" /></label>
         <div className="span-two ops-form-actions"><span className="field-hint">The Captain must open the link and accept it while signed in with this same email.</span><button className="button primary" disabled={busy}>{busy ? 'Creating invite…' : 'Create Captain invitation'}</button></div>
       </form>
-      {existingCaptainInviteUrl && <div className="invite-link-box"><label>Existing barangay Captain invitation<input readOnly value={existingCaptainInviteUrl} /></label><button type="button" className="button outline" onClick={() => void copyExistingCaptainInvite()}><ClipboardCheck size={15} />Copy link</button></div>}
+      {existingCaptainInviteUrl && <div className="invite-link-box"><label>Existing barangay Captain invitation<input readOnly value={existingCaptainInviteUrl} /><span className="field-hint">Expires {new Date(existingCaptainInviteExpiresAt).toLocaleString()}</span></label><button type="button" className="button outline" onClick={() => void copyExistingCaptainInvite()}><ClipboardCheck size={15} />Copy link</button></div>}
     </section>
   </section>
 }

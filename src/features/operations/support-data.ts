@@ -22,6 +22,19 @@ export async function listSupportTickets(tenantId?: string, page = 0, status = '
   return (data ?? []) as SupportTicket[]
 }
 
+export async function countOwnOpenSupportTickets(tenantId: string): Promise<number> {
+  const supabaseClient = client()
+  const { data: authData, error: authError } = await supabaseClient.auth.getUser()
+  if (authError || !authData.user) throw new Error('Sign in again to view your support requests.')
+  const { count, error } = await supabaseClient.from('support_tickets')
+    .select('id', { count: 'exact', head: true })
+    .eq('barangay_id', tenantId)
+    .eq('requester_id', authData.user.id)
+    .in('status', ['new', 'in_progress', 'waiting_on_requester'])
+  if (error) throw new Error(error.message)
+  return count ?? 0
+}
+
 export async function getSupportTicketById(ticketId: string): Promise<SupportTicket | null> {
   const { data, error } = await client().from('support_tickets')
     .select('id,barangay_id,requester_id,category,subject,description,status,created_at,updated_at')

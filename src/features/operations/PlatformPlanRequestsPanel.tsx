@@ -13,6 +13,7 @@ export function PlatformPlanRequestsPanel() {
   const [status, setStatus] = useState('pending')
   const [notes, setNotes] = useState<Record<string, string>>({})
   const [activationTarget, setActivationTarget] = useState<PlatformPlanRequest | null>(null)
+  const [declineTarget, setDeclineTarget] = useState<PlatformPlanRequest | null>(null)
   const [busyId, setBusyId] = useState('')
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
@@ -33,12 +34,14 @@ export function PlatformPlanRequestsPanel() {
       else await declinePlanRequest(requestId, note)
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['platform-plan-requests'] }),
+        queryClient.invalidateQueries({ queryKey: ['platform-pending-plan-request-count'] }),
         queryClient.invalidateQueries({ queryKey: ['platform-subscriptions'] }),
         queryClient.invalidateQueries({ queryKey: ['platform-subscription-summary'] }),
         queryClient.invalidateQueries({ queryKey: ['platform-activity'] }),
       ])
       setNotes((existing) => ({ ...existing, [requestId]: '' }))
       setActivationTarget(null)
+      setDeclineTarget(null)
       setStatus(decision === 'activate' ? 'activated' : 'declined')
       setPage(0)
       setMessage(decision === 'activate'
@@ -49,6 +52,16 @@ export function PlatformPlanRequestsPanel() {
     } finally {
       setBusyId('')
     }
+  }
+
+  function prepareDecline(request: PlatformPlanRequest) {
+    const note = notes[request.request_id]?.trim() ?? ''
+    if (note.length < 3 || note.length > 950) {
+      setError('Add a reason of 3 to 950 characters before declining this request.')
+      return
+    }
+    setError('')
+    setDeclineTarget(request)
   }
 
   return <section className="platform-plan-requests" aria-labelledby="platform-plan-requests-title">
@@ -66,10 +79,11 @@ export function PlatformPlanRequestsPanel() {
       {request.admin_note && <p className="platform-plan-request-note"><strong>Admin note:</strong> {request.admin_note}</p>}
       {request.status === 'pending' && <div className="platform-plan-request-review">
         <label>Decline reason<span className="field-hint">Required only when declining. Activation requires no note.</span><textarea maxLength={950} value={notes[request.request_id] ?? ''} onChange={(event) => setNotes((existing) => ({ ...existing, [request.request_id]: event.target.value }))} placeholder="Reason for declining this request" /></label>
-        <div className="finance-review-actions"><button type="button" className="button outline danger-action" disabled={Boolean(busyId)} onClick={() => void review(request.request_id, 'decline')}><XCircle size={15} />Decline request</button><button type="button" className="button primary" disabled={Boolean(busyId)} onClick={() => { setError(''); setActivationTarget(request) }}><BadgeCheck size={15} />Activate plan</button></div>
+        <div className="finance-review-actions"><button type="button" className="button outline danger-action" disabled={Boolean(busyId)} onClick={() => prepareDecline(request)}><XCircle size={15} />Decline request</button><button type="button" className="button primary" disabled={Boolean(busyId)} onClick={() => { setError(''); setActivationTarget(request) }}><BadgeCheck size={15} />Activate plan</button></div>
       </div>}
     </article>)}</div>
     {requests.data && totalPages > 1 && <nav className="directory-pagination" aria-label="Plan request pages"><button type="button" className="button outline" disabled={page === 0 || requests.isFetching} onClick={() => setPage((value) => Math.max(0, value - 1))}><ChevronLeft size={15} />Previous</button><span>Page {page + 1} of {totalPages}</span><button type="button" className="button outline" disabled={page + 1 >= totalPages || requests.isFetching} onClick={() => setPage((value) => value + 1)}>Next<ChevronRight size={15} /></button></nav>}
     {activationTarget && <ActionConfirmationDialog title={`Activate ${activationTarget.plan_name} for ${activationTarget.barangay_name}?`} description="This updates the barangay subscription and records the request as Activated. It will no longer appear in Awaiting review and will remain available in Activated history." confirmLabel={busyId === activationTarget.request_id ? 'Activating…' : 'Activate plan'} busy={busyId === activationTarget.request_id} onCancel={() => setActivationTarget(null)} onConfirm={() => void review(activationTarget.request_id, 'activate')} />}
+    {declineTarget && <ActionConfirmationDialog title={`Decline ${declineTarget.plan_name} request for ${declineTarget.barangay_name}?`} description="This records the request as Declined with the reason you entered. It will leave Awaiting review and remain available in Declined history." confirmLabel="Decline request" busy={busyId === declineTarget.request_id} onCancel={() => setDeclineTarget(null)} onConfirm={() => void review(declineTarget.request_id, 'decline')} />}
   </section>
 }

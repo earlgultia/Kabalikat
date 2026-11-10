@@ -467,9 +467,12 @@ body { color: var(--ink); background: var(--canvas); font-size: 16px; line-heigh
 .captain-review-metrics { margin: 0; }
 .dashboard-metrics-loading { color: #53696a; font-size: 14px; margin: 22px 0; }
 .platform-directory { margin-top: 20px; }
-.platform-directory-summary { display: flex; gap: 22px; margin: 16px 0; }
-.platform-directory-summary > strong { color: #293f40; font-size: 20px; }
-.platform-directory-summary small { color: #53696a; font-size: 12px; font-weight: 500; }
+.platform-directory-summary { align-items: stretch; display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
+.platform-directory-summary > button { appearance: none; background: transparent; border: 1px solid transparent; border-radius: 9px; color: #293f40; cursor: pointer; display: grid; font: inherit; gap: 2px; min-width: 112px; padding: 7px 10px; text-align: left; }
+.platform-directory-summary > button:hover, .platform-directory-summary > button:focus-visible { background: #f4f8f3; border-color: #d8e3db; outline: none; }
+.platform-directory-summary > button.active { background: #eaf3ed; border-color: #c9ddd1; }
+.platform-directory-summary > button > strong { font-size: 20px; }
+.platform-directory-summary > button > small { color: #53696a; font-size: 12px; font-weight: 500; }
 .platform-directory-controls { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
 .platform-directory-controls .archive-search { flex: 1; min-width: 220px; }
 .platform-directory-controls .archive-folder-select { gap: 7px; }

@@ -41,12 +41,19 @@ export function PlatformCaptainAccountsPanel() {
       setPendingRemoval(null)
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['platform-captain-accounts'] }),
+        queryClient.invalidateQueries({ queryKey: ['platform-pending-captain-removal-count'] }),
         queryClient.invalidateQueries({ queryKey: ['platform-barangays'] }),
         queryClient.invalidateQueries({ queryKey: ['platform-barangay-summary'] }),
       ])
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to remove this Captain account.')
-      await queryClient.invalidateQueries({ queryKey: ['platform-captain-accounts'] })
+      // Surface the failure outside the confirmation overlay; the refreshed row
+      // will show whether this needs a retry or completed despite a lost response.
+      setPendingRemoval(null)
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['platform-captain-accounts'] }),
+        queryClient.invalidateQueries({ queryKey: ['platform-pending-captain-removal-count'] }),
+      ])
     } finally {
       setBusy(false)
     }

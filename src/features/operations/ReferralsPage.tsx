@@ -60,14 +60,17 @@ export function ReferralsPage() {
   const tenantId = membership?.barangay_id ?? ''
   const queryClient = useQueryClient()
   const [page, setPage] = useState(0)
+  const [searchInput, setSearchInput] = useState('')
+  const [search, setSearch] = useState('')
+  const [status, setStatus] = useState<'all' | InterbarangayReferral['status']>('all')
   const canCreate = useQuery({ queryKey: ['permission', tenantId, 'referrals.create'], queryFn: () => hasPermission(tenantId, 'referrals.create'), enabled: Boolean(tenantId) })
   const canReview = useQuery({ queryKey: ['permission', tenantId, 'referrals.review'], queryFn: () => hasPermission(tenantId, 'referrals.review'), enabled: Boolean(tenantId) })
-  const referrals = useQuery({ queryKey: ['interbarangay-referrals', tenantId, page], queryFn: () => listInterbarangayReferrals(page), enabled: Boolean(tenantId && (canCreate.data || canReview.data)) })
+  const referrals = useQuery({ queryKey: ['interbarangay-referrals', tenantId, page, search, status], queryFn: () => listInterbarangayReferrals(page, search, status), enabled: Boolean(tenantId && (canCreate.data || canReview.data)) })
   const referralRows = referrals.data?.rows ?? []
   const totalReferrals = referrals.data?.total ?? 0
   const referralPages = Math.max(1, Math.ceil(totalReferrals / REFERRAL_PAGE_SIZE))
   const currentPage = Math.min(page, referralPages - 1)
-  useEffect(() => { setPage(0) }, [tenantId])
+  useEffect(() => { setPage(0); setSearchInput(''); setSearch(''); setStatus('all') }, [tenantId])
   useEffect(() => { if (page !== currentPage) setPage(currentPage) }, [currentPage, page])
   const [showForm, setShowForm] = useState(false)
   const [destinationId, setDestinationId] = useState('')
@@ -147,8 +150,14 @@ export function ReferralsPage() {
       <div className="ops-form-grid"><div className="span-two"><ReferralDestinationPicker originId={tenantId} value={destinationId} onChange={setDestinationId} /></div><label>Referral purpose<input name="purpose" minLength={3} maxLength={180} required placeholder="Why is this referral needed?" /></label><label className="span-two">Disclosure basis / authorization<input name="basis" minLength={3} maxLength={500} required placeholder="State the approved policy or authority for this disclosure" /></label><label className="span-two">Minimum necessary information<textarea name="information" minLength={3} maxLength={2000} required placeholder="Share only details needed by the receiving barangay to act on this referral." /><span className="field-hint">Do not paste full resident records, medical details, or unrelated sensitive information.</span></label><label>Related incident reference (optional)<input name="incident" placeholder="Incident record ID" /><span className="field-hint">Use an incident from this barangay that you are authorized to manage.</span></label><label className="referral-confirm"><input type="checkbox" name="confirmed" value="yes" required /><span>I confirm this disclosure follows our approved policy and contains only necessary information.</span></label></div>
       <div className="ops-form-actions"><button className="button primary" disabled={busy || !destinationId}>Send referral</button></div>
     </form>}
+    {tenantId && canAccess && <form className="referral-filters" onSubmit={(event) => { event.preventDefault(); setPage(0); setSearch(searchInput.trim()) }}>
+      <label>Search referrals<input type="search" maxLength={100} value={searchInput} onChange={(event) => setSearchInput(event.target.value)} placeholder="Purpose or barangay" /></label>
+      <label>Status<select value={status} onChange={(event) => { setPage(0); setStatus(event.target.value as typeof status) }}><option value="all">All statuses</option><option value="submitted">Submitted</option><option value="acknowledged">Acknowledged</option><option value="responded">Responded</option><option value="declined">Declined</option><option value="closed">Closed</option></select></label>
+      <button className="button primary" type="submit">Search</button>
+      <button className="button outline" type="button" disabled={!search && !searchInput && status === 'all'} onClick={() => { setPage(0); setSearchInput(''); setSearch(''); setStatus('all') }}>Clear filters</button>
+    </form>}
     {referrals.isPending && tenantId && canAccess && <LoadingNotice />}{referrals.error && <ErrorNotice message="Unable to load referrals." />}
-    {referrals.data && totalReferrals === 0 && <div className="ops-empty"><ArrowLeftRight size={22} /><strong>No referrals yet</strong><p>Referrals created by or sent to this barangay will appear here.</p></div>}
+    {referrals.data && totalReferrals === 0 && <div className="ops-empty"><ArrowLeftRight size={22} /><strong>{search || status !== 'all' ? 'No referrals match these filters' : 'No referrals yet'}</strong><p>{search || status !== 'all' ? 'Adjust the search or status filter to see more referrals.' : 'Referrals created by or sent to this barangay will appear here.'}</p></div>}
     <div className="referral-list">{referralRows.map((referral) => {
       const receiving = referral.viewer_side === 'receiving'
       return <article className="ops-panel referral-card" key={referral.id}><header><div><StatusPill status={referral.status} /><h2>{referral.purpose}</h2></div><span className="referral-direction">{referral.origin_name} → {referral.receiving_name}</span></header><div className="referral-detail-grid"><div><span>Disclosure basis</span><p>{referral.disclosure_basis}</p></div><div><span>Information shared</span><p>{referral.shared_information}</p></div></div>{referral.incident_id && <p className="referral-reference">Related incident reference: <code>{referral.incident_id}</code></p>}<div className="sk-project-meta"><span>Created {formatDateTime(referral.created_at)}</span>{referral.acknowledged_at && <span>Acknowledged {formatDateTime(referral.acknowledged_at)}</span>}{referral.responded_at && <span>Responded {formatDateTime(referral.responded_at)}</span>}{referral.closed_at && <span>Closed {formatDateTime(referral.closed_at)}</span>}</div>{referral.response && <div className="referral-response"><strong>{referral.status === 'declined' ? 'Decline reason' : 'Receiving barangay response'}</strong><p>{referral.response}</p></div>}

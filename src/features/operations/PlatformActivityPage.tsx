@@ -38,6 +38,7 @@ export function PlatformActivityPage() {
   const [copyError, setCopyError] = useState('')
   const exportController = useRef<AbortController | null>(null)
   const validDateRange = !dateFrom || !dateTo || dateFrom <= dateTo
+  const searchSettled = search === searchInput.trim().slice(0, 100)
   const createdAfter = localDayStart(dateFrom)
   const createdBefore = localDayAfter(dateTo)
   const hasActiveFilters = eventType !== 'all' || Boolean(dateFrom || dateTo || searchInput.trim())
@@ -127,12 +128,13 @@ export function PlatformActivityPage() {
       <label>Action<select value={eventType} onChange={(event) => { setEventType(event.target.value); setPage(0) }}><option value="all">All activity</option><option value="barangay_onboarded">Barangay onboarding</option><option value="subscription_created">Subscription created</option><option value="subscription_updated">Subscription updated</option><option value="subscription_plan_updated">Plan catalog updated</option></select></label>
       <label className="platform-activity-date-filter" htmlFor="platform-activity-from">From<input id="platform-activity-from" type="date" value={dateFrom} max={dateTo || undefined} onChange={(event) => { setDateFrom(event.target.value); setPage(0) }} /></label>
       <label className="platform-activity-date-filter" htmlFor="platform-activity-to">Through<input id="platform-activity-to" type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => { setDateTo(event.target.value); setPage(0) }} /></label>
-      <button type="button" className="button outline" disabled={activity.isFetching || !validDateRange} onClick={() => void activity.refetch()}><RefreshCw size={15} />Refresh</button>
-      <button type="button" className="button outline" disabled={!exporting && (!activity.data?.totalCount || activity.isFetching || !validDateRange)} onClick={() => exporting ? cancelExport() : void exportActivity()}>{exporting ? <><CircleStop size={15} />Cancel export</> : <><Download size={15} />Export matching activity</>}</button>
+      <button type="button" className="button outline" disabled={activity.isFetching || !validDateRange || !searchSettled} onClick={() => void activity.refetch()}><RefreshCw size={15} />Refresh</button>
+      <button type="button" className="button outline" disabled={!exporting && (!activity.data?.totalCount || activity.isFetching || !validDateRange || !searchSettled)} onClick={() => exporting ? cancelExport() : void exportActivity()}>{exporting ? <><CircleStop size={15} />Cancel export</> : <><Download size={15} />Export matching activity</>}</button>
       {hasActiveFilters && <button type="button" className="button outline" onClick={() => { setEventType('all'); setDateFrom(''); setDateTo(''); setSearchInput(''); setSearch(''); setPage(0) }}><RotateCcw size={15} />Clear filters</button>}
     </div>
     {exportError && <ErrorNotice message={exportError} />}
     {copyError && <ErrorNotice message={copyError} />}
+    {!searchSettled && <p className="platform-activity-export-progress" role="status" aria-live="polite">Updating activity search…</p>}
     {(exporting || exportProgress) && <p className="platform-activity-export-progress" role="status" aria-live="polite">{exportProgress}</p>}
     {!validDateRange && <ErrorNotice message="Choose an end date on or after the start date." />}
     {activity.isPending ? <LoadingNotice /> : activity.error ? <ErrorNotice message="Unable to load platform activity." onRetry={() => void activity.refetch()} retrying={activity.isFetching} /> : activity.data?.rows.length ? <>

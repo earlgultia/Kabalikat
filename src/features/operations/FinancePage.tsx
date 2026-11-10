@@ -194,10 +194,37 @@ export function FinancePage() {
       const { transactions: transactionRows, adjustments: adjustmentRows } = await listFinancialReportRows(tenantId, reportFrom, reportTo)
       const byId = new Map(transactionRows.map((item) => [item.id, item]))
       const rowCount = transactionRows.length + adjustmentRows.length
+      const postedRows = transactionRows.filter((item) => item.status === 'posted')
+      const postedExpenseRows = postedRows.filter((item) => item.transaction_type === 'expense')
+      const postedIncomeRows = postedRows.filter((item) => item.transaction_type === 'income')
+      const approvedAdjustments = adjustmentRows.filter((adjustment) => adjustment.status === 'approved')
+      const approvedAdjustmentTotal = (type: 'expense' | 'income') => approvedAdjustments.reduce((total, adjustment) => {
+        return byId.get(adjustment.transaction_id)?.transaction_type === type ? total + Number(adjustment.amount_change) : total
+      }, 0)
+      const expenseAdjustments = approvedAdjustmentTotal('expense')
+      const incomeAdjustments = approvedAdjustmentTotal('income')
+      const postedExpensesBeforeAdjustments = postedExpenseRows.reduce((total, item) => total + Number(item.amount), 0)
+      const postedIncomeBeforeAdjustments = postedIncomeRows.reduce((total, item) => total + Number(item.amount), 0)
+      const reconciledExpenses = postedExpensesBeforeAdjustments + expenseAdjustments
+      const reconciledIncome = postedIncomeBeforeAdjustments + incomeAdjustments
+      const statusCounts = ['posted', 'submitted', 'rejected', 'voided'].map((status) => [status, transactionRows.filter((item) => item.status === status).length])
       await recordFinanceReportExport(tenantId, reportFrom, reportTo, rowCount)
       setExportHistoryPage(0)
       await queryClient.invalidateQueries({ queryKey: ['finance-report-exports', tenantId] })
       const csv = encodeCsv([
+        ['Reconciliation summary'],
+        ['Date range', reportFrom, reportTo],
+        ['Posted expenses before approved adjustments (PHP)', postedExpensesBeforeAdjustments.toFixed(2)],
+        ['Approved expense adjustments (PHP)', expenseAdjustments.toFixed(2)],
+        ['Reconciled posted expenses (PHP)', reconciledExpenses.toFixed(2)],
+        ['Posted income before approved adjustments (PHP)', postedIncomeBeforeAdjustments.toFixed(2)],
+        ['Approved income adjustments (PHP)', incomeAdjustments.toFixed(2)],
+        ['Reconciled posted income (PHP)', reconciledIncome.toFixed(2)],
+        ['Net posted cash flow after approved adjustments (PHP)', (reconciledIncome - reconciledExpenses).toFixed(2)],
+        ['Transactions by status', 'Count'],
+        ...statusCounts,
+        [],
+        ['Transaction and adjustment details'],
         ['Date', 'Budget', 'Type', 'Category', 'Description', 'Amount PHP', 'Status', 'Submitted by', 'Reviewed by', 'Review note', 'Void reason'],
         ...transactionRows.map((item) => [item.transaction_date, item.budget?.name ?? '', item.transaction_type, item.category,
           item.description, Number(item.amount).toFixed(2), item.status, item.submitted_by, item.reviewed_by ?? '',
@@ -217,6 +244,7 @@ export function FinancePage() {
 
   const approvedBudgets = budgetPicker.data?.budgets.filter((budget) => budget.status === 'approved') ?? []
   const postedExpenses = (budgetId: string) => Number(budgetUsage.data?.find((row) => row.budget_id === budgetId)?.posted_expense_total ?? 0)
+  const postedIncome = (budgetId: string) => Number(budgetUsage.data?.find((row) => row.budget_id === budgetId)?.posted_income_total ?? 0)
 
   return <section className="operation-page">
     <PageHeading title="Budgets & finance" description="Submit annual budgets and financial entries with separate review and approval controls.">
@@ -265,7 +293,7 @@ export function FinancePage() {
         return <article className="ops-panel finance-budget" key={budget.id}>
           <div className="finance-budget-head"><div><small>FY {budget.fiscal_year}</small><h3>{budget.name}</h3></div><StatusPill status={budget.status} /></div>
           <div className="finance-budget-amount"><strong>{currency.format(Number(budget.amount))}</strong><span>Approved budget</span></div>
-          {budget.status === 'approved' && <div className="finance-budget-usage"><div><span>Posted expenses</span><strong>{currency.format(spent)}</strong></div><div className="finance-budget-track"><span style={{ width: `${Math.min(100, spent / Number(budget.amount) * 100)}%` }} /></div><small>{currency.format(Math.max(0, Number(budget.amount) - spent))} remaining</small></div>}
+          {budget.status === 'approved' && <div className="finance-budget-usage"><div><span>Posted expenses</span><strong>{currency.format(spent)}</strong></div><div className="finance-budget-track"><span style={{ width: `${Math.max(0, Math.min(100, spent / Number(budget.amount) * 100))}%` }} /></div><small>{currency.format(Math.max(0, Number(budget.amount) - spent))} remaining</small><div><span>Posted income</span><strong>{currency.format(postedIncome(budget.id))}</strong></div></div>}
           {canManage.data && budget.status === 'approved' && !budget.has_pending_amendment && <button className="button outline" disabled={busy} onClick={() => setAmendmentBudget(amendmentBudget === budget.id ? '' : budget.id)}>Request amount change</button>}
           {amendmentBudget === budget.id && <form className="finance-amendment-form" onSubmit={(event) => void submitAmendment(budget.id, event)}><label>Revised amount (PHP)<input name="amount" type="number" min="0.01" max="999999999999.99" step="0.01" defaultValue={budget.amount} required /></label><label>Reason<textarea name="reason" minLength={3} maxLength={1000} required /></label><button className="button primary" disabled={busy}>Submit for approval</button></form>}
           {canApprove.data && budget.status === 'draft' && budget.created_by !== user?.id && <button className="button primary" disabled={busy} onClick={() => void approveBudget(budget.id)}>Approve budget</button>}
@@ -299,7 +327,7 @@ export function FinancePage() {
         {canApprove.data && item.status === 'posted' && item.submitted_by !== user?.id && <div className="finance-review-actions"><button className="button outline danger-action" disabled={busy} onClick={() => void voidTransaction(item.id)}>Void with reason</button></div>}
       </article>)}</div> : <EmptyNotice title="No financial entries" detail="Entries submitted against approved budgets will appear here." />}
       {transactions.data && transactions.data.total > FINANCIAL_TRANSACTION_PAGE_SIZE && <nav className="ops-form-actions" aria-label="Financial entry pages"><button type="button" className="button outline" disabled={transactionPage === 0 || transactions.isFetching} onClick={() => setTransactionPage((current) => Math.max(0, current - 1))}><ChevronLeft size={15} />Previous</button><span className="field-hint">Page {transactionPage + 1} of {Math.ceil(transactions.data.total / FINANCIAL_TRANSACTION_PAGE_SIZE)} · {transactions.data.total.toLocaleString()} entries</span><button type="button" className="button outline" disabled={(transactionPage + 1) * FINANCIAL_TRANSACTION_PAGE_SIZE >= transactions.data.total || transactions.isFetching} onClick={() => setTransactionPage((current) => current + 1)}>Next<ChevronRight size={15} /></button></nav>}
-      <p className="archive-limit-note">Detailed reconciliation reports are a future addition. CSV exports include the selected transaction records and are logged for audit.</p>
+      <p className="archive-limit-note">CSV exports include a posted income and expense reconciliation, approved adjustments, transaction details, and an audit log entry for the selected date range.</p>
     </>}
   </section>
 }
