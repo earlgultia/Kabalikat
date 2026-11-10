@@ -326,9 +326,9 @@ export function requestKagawadAttendanceCorrection(meetingId: string, requestedS
   })
 }
 
-export function listKagawadAttendanceCorrectionRequests(tenantId: string, page: number, filters: { search: string; status: string; requestedAttendance: string; submittedAfter: string; submittedBefore: string }) {
+export function listKagawadAttendanceCorrectionRequests(tenantId: string, page: number, filters: { search: string; status: string; requestedAttendance: string; submittedAfter: string; submittedBefore: string }, pageSize = 10) {
   return rpc<KagawadAttendanceCorrectionRequest[]>('search_kagawad_attendance_correction_requests', {
-    p_barangay_id: tenantId, p_page: page, p_page_size: 10,
+    p_barangay_id: tenantId, p_page: page, p_page_size: pageSize,
     p_search: filters.search.trim() || null,
     p_status: filters.status,
     p_requested_attendance: filters.requestedAttendance,

@@ -160,7 +160,7 @@ export function ProjectsPage({ focusProjectId, focusProjectPage, focusUpdateId, 
     </section>}
     {projects.isPending && tenantId && <LoadingNotice />}
     {projects.error && <ErrorNotice message="Unable to load project records." onRetry={() => void projects.refetch()} retrying={projects.isFetching} />}
-    {projects.data?.totalCount === 0 && <div className="ops-empty"><FolderKanban size={22} /><strong>No barangay projects yet</strong><p>When an authorized official adds a project, its status and progress will appear here.</p></div>}
+    {projects.data?.totalCount === 0 && <div className="ops-empty kagawad-projects-empty"><FolderKanban size={22} /><strong>No barangay projects yet</strong><p>When an authorized official adds a project, its status and progress will appear here.</p></div>}
     <div className="barangay-project-list">{projects.data?.rows.map((project) => {
       return <article className="ops-panel barangay-project-card" key={project.id}>
         <div className="barangay-project-header"><div><StatusPill status={project.status} /><h2>{project.title}</h2><p>{project.description || 'No description provided.'}</p></div><Waypoints size={21} aria-hidden="true" /></div>

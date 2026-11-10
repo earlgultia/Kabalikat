@@ -391,6 +391,25 @@
 .incident-filters { align-items: end; background: #fffefa; border: 1px solid #e1e8e3; border-radius: 10px; display: flex; flex-wrap: wrap; gap: 10px; padding: 12px; }
 .incident-filters label { color: #354f4c; display: grid; flex: 1 1 160px; font-size: 11px; font-weight: 700; gap: 5px; }
 .incident-filters input, .incident-filters select { background: #fff; border: 1px solid #bfcec8; border-radius: 8px; color: #24353b; font: inherit; font-weight: 400; min-height: 40px; padding: 7px 9px; }
+.incident-filters > .archive-search { align-items: center; display: flex; }
+.incident-filters > .archive-search > input { appearance: none; -webkit-appearance: none; background: transparent; border: 0; border-radius: 0; box-shadow: none; flex: 1 1 auto; min-width: 0; outline: 0; }
+.meeting-schedule-filters { display: grid; grid-template-columns: minmax(0, 1.7fr) repeat(3, minmax(0, 1fr)); }
+.meeting-schedule-filters > * { box-sizing: border-box; min-width: 0; max-width: 100%; }
+.meeting-schedule-filters > label:not(.archive-search) > input,
+.meeting-schedule-filters > label:not(.archive-search) > select { box-sizing: border-box; display: block; min-width: 0; max-width: 100%; width: 100%; }
+.meeting-schedule-filters > .archive-search { min-width: 0; width: 100%; }
+.meeting-schedule-filters > .button { justify-self: start; }
+.meeting-schedule-filters ~ .ops-empty { margin-top: 14px; }
+@media (max-width: 900px) {
+  .meeting-schedule-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .meeting-schedule-filters > .archive-search { grid-column: 1 / -1; }
+}
+@media (max-width: 600px) {
+  .meeting-schedule-filters { grid-template-columns: minmax(0, 1fr); width: 100%; }
+  .meeting-schedule-filters > .archive-search { grid-column: 1; }
+  .meeting-schedule-filters > * { width: 100%; }
+  .meeting-schedule-filters > .button { justify-content: center; }
+}
 .incident-export-button { align-items: center; display: inline-flex; gap: 7px; min-height: 40px; }
 .incident-assignment-filters { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; }
 @media(max-width:520px) { .incident-assignment-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 135px), 1fr)); } .incident-assignment-filters .button { justify-content: center; min-width: 0; } }
@@ -930,6 +949,7 @@
 }
 
 .barangay-project-list { display: grid; gap: 14px; }
+.kagawad-projects-empty { margin-top: 14px; }
 .barangay-project-card { display: grid; gap: 15px; }
 .barangay-project-header { align-items: flex-start; display: flex; gap: 16px; justify-content: space-between; }
 .barangay-project-header > div { display: grid; gap: 7px; min-width: 0; }

@@ -13,17 +13,17 @@ cp .env.example .env.local
 npm run dev
 ```
 
-On Windows PowerShell, use `Copy-Item .env.example .env.local` for the copy step. Apply migrations `0001_foundation.sql` through `0189_existing_barangay_captain_invitation.sql` in order to a disposable development Supabase project. The project must have Supabase Auth and Storage enabled. No seed data or privileged credentials are included.
+On Windows PowerShell, use `Copy-Item .env.example .env.local` for the copy step. Apply every SQL migration in `supabase/migrations` in filename order to a disposable development Supabase project. The project must have Supabase Auth and Storage enabled. No seed data or privileged credentials are included.
 
 Without the environment variables the app renders a clear configuration notice and disables sign in. Apply migrations with the Supabase CLI after linking a project, or through the Supabase SQL editor. Do not point early development at a production database.
 
 For password recovery, configure the Supabase Auth email provider and allow the application URLs used in development and deployment, including the `/reset-password` redirect path. The app sends the reset email through Supabase Auth; it does not send email directly. Verify the deployed redirect URL in the Supabase Auth URL configuration before relying on recovery links.
 
-Invitation links are copied and delivered manually by an authorized operator. A recipient can sign in or create an account from the invitation page. Creating an account alone grants no tenant membership; the database requires the valid invitation token and matching account email. Configure Supabase Auth email confirmation and its redirect URL allowlist for `/accept-invitation`. The app does not send invitation email or SMS.
+Invitation links are copied and delivered manually by an authorized operator. A recipient can sign in or create an account from the invitation page. After successful authentication, the page accepts the invitation using its token; the database requires a valid, pending, unexpired token and matching account email before granting membership. If email confirmation is enabled and account creation returns no session, the recipient must confirm and return to the invitation link to sign in. Configure Supabase Auth email confirmation and its redirect URL allowlist for `/accept-invitation`. The app does not send invitation email or SMS.
 
 ## Provision the first platform administrator
 
-The application intentionally has no public Super Admin registration. Provision the first platform administrator through the Supabase Dashboard and SQL Editor after migrations `0001_foundation.sql` through `0189_existing_barangay_captain_invitation.sql` have been applied.
+The application intentionally has no public Super Admin registration. Provision the first platform administrator through the Supabase Dashboard and SQL Editor after all migrations in `supabase/migrations` have been applied.
 
 1. In the Supabase Dashboard for the intended project, open **Authentication → Users** and invite the administrator's individually controlled email address. The administrator should set their own password from the invitation flow. Do not use a shared/default password.
 2. After the account appears in the Auth users list, open **SQL Editor** for the same project and run the following. Replace the sample email with the exact invited account email:
@@ -55,7 +55,7 @@ The platform administrator can then create barangay workspaces and initial Capta
 
 ## Checks
 
-Recent database changes are documented in [DATABASE.md](DATABASE.md) and [PROJECT_TIMELINE.md](PROJECT_TIMELINE.md). Apply the migrations in order through `0189_existing_barangay_captain_invitation.sql`; subscription upgrades are requested by Captains and activated by a platform administrator after manual payment confirmation. The plan catalog's four feature switches control access to module groups.
+Recent database changes are documented in [DATABASE.md](DATABASE.md) and [PROJECT_TIMELINE.md](PROJECT_TIMELINE.md). Apply all migrations in filename order before using the application; subscription upgrades are requested by Captains and activated by a platform administrator after manual payment confirmation. The plan catalog's four feature switches control access to module groups.
 
 ```sh
 npm run typecheck

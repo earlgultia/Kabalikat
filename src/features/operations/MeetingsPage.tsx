@@ -96,6 +96,8 @@ export function MeetingsPage({ focusId, focusPage, focusCorrectionRequestId, foc
   const [rsvpHistoryDraft, setRsvpHistoryDraft] = useState({ search: '', response: 'all', meetingDateAfter: '', meetingDateBefore: '' })
   const [rsvpHistoryFilters, setRsvpHistoryFilters] = useState({ search: '', response: 'all', meetingDateAfter: '', meetingDateBefore: '' })
   const [correctionRequestPage, setCorrectionRequestPage] = useState(0)
+  const [correctionRequestExportBusy, setCorrectionRequestExportBusy] = useState(false)
+  const [correctionRequestExportMessage, setCorrectionRequestExportMessage] = useState('')
   const [correctionRequestDraft, setCorrectionRequestDraft] = useState({ search: '', status: 'all', requestedAttendance: 'all', submittedAfter: '', submittedBefore: '' })
   const [correctionRequestFilters, setCorrectionRequestFilters] = useState({ search: '', status: 'all', requestedAttendance: 'all', submittedAfter: '', submittedBefore: '' })
   const [correctionQueuePage, setCorrectionQueuePage] = useState(0)
@@ -133,6 +135,7 @@ export function MeetingsPage({ focusId, focusPage, focusCorrectionRequestId, foc
     setRsvpHistoryDraft({ search: '', response: 'all', meetingDateAfter: '', meetingDateBefore: '' })
     setRsvpHistoryFilters({ search: '', response: 'all', meetingDateAfter: '', meetingDateBefore: '' })
     setCorrectionRequestPage(0)
+    setCorrectionRequestExportMessage('')
     setCorrectionRequestDraft({ search: '', status: 'all', requestedAttendance: 'all', submittedAfter: '', submittedBefore: '' })
     setCorrectionRequestFilters({ search: '', status: 'all', requestedAttendance: 'all', submittedAfter: '', submittedBefore: '' })
     setCorrectionQueuePage(0)
@@ -498,6 +501,41 @@ export function MeetingsPage({ focusId, focusPage, focusCorrectionRequestId, foc
     }
   }
 
+  async function exportKagawadAttendanceCorrectionHistory() {
+    setCorrectionRequestExportBusy(true)
+    setCorrectionRequestExportMessage('Preparing your matching attendance correction history…')
+    try {
+      const firstPage = await listKagawadAttendanceCorrectionRequests(tenantId, 0, correctionRequestFilters, 50)
+      const totalCount = Number(firstPage[0]?.total_count ?? 0)
+      if (totalCount > 10_000) {
+        throw new Error('There are more than 10,000 matching correction requests. Add a date or search filter and try again.')
+      }
+      const rows = [...firstPage]
+      const pageCount = Math.ceil(totalCount / 50)
+      for (let exportPage = 1; exportPage < pageCount; exportPage += 1) {
+        const result = await listKagawadAttendanceCorrectionRequests(tenantId, exportPage, correctionRequestFilters, 50)
+        rows.push(...result)
+      }
+      const csv = encodeCsv([
+        ['Meeting', 'Meeting date', 'Recorded attendance', 'Requested attendance', 'Reason', 'Review status', 'Review note', 'Submitted at', 'Reviewed at'],
+        ...rows.map((row) => [row.meeting_title, row.meeting_starts_at, row.current_status ?? 'Not recorded', row.requested_status, row.reason, row.status, row.review_note ?? '', row.created_at, row.reviewed_at ?? '']),
+      ])
+      const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `kabalikat-my-attendance-correction-history-${new Date().toISOString().slice(0, 10)}.csv`
+      link.click()
+      window.setTimeout(() => URL.revokeObjectURL(url), 1_000)
+      setCorrectionRequestExportMessage(`Export ready with ${rows.length.toLocaleString()} matching requests.`)
+    } catch (exportError) {
+      setCorrectionRequestExportMessage(exportError instanceof Error && exportError.message.startsWith('There are more than')
+        ? exportError.message
+        : 'Unable to export your attendance correction history. Try again.')
+    } finally {
+      setCorrectionRequestExportBusy(false)
+    }
+  }
+
   function exportMeetingCalendarFile(meeting: { id: string; title: string; location: string; starts_at: string; ends_at: string | null; agenda: string }) {
     const escapeIcsText = (value: string) => value.replaceAll('\\', '\\\\').replace(/\r?\n/g, '\\n').replaceAll(',', '\\,').replaceAll(';', '\\;')
     const formatUtc = (value: Date) => value.toISOString().replaceAll('-', '').replaceAll(':', '').replace(/\.\d{3}Z$/, 'Z')
@@ -645,8 +683,9 @@ export function MeetingsPage({ focusId, focusPage, focusCorrectionRequestId, foc
           <label>Requested attendance<select value={correctionRequestDraft.requestedAttendance} onChange={(event) => setCorrectionRequestDraft((current) => ({ ...current, requestedAttendance: event.target.value }))}><option value="all">All attendance</option><option value="present">Present</option><option value="absent">Absent</option><option value="excused">Excused</option></select></label>
           <label>Submitted on or after<input type="date" value={correctionRequestDraft.submittedAfter} onChange={(event) => setCorrectionRequestDraft((current) => ({ ...current, submittedAfter: event.target.value }))} /></label>
           <label>Submitted on or before<input type="date" value={correctionRequestDraft.submittedBefore} onChange={(event) => setCorrectionRequestDraft((current) => ({ ...current, submittedBefore: event.target.value }))} /></label>
-          <div className="kagawad-correction-history-filter-actions"><button className="button primary" type="submit">Apply filters</button><button className="button outline" type="button" onClick={() => { const empty = { search: '', status: 'all', requestedAttendance: 'all', submittedAfter: '', submittedBefore: '' }; setCorrectionRequestDraft(empty); setCorrectionRequestFilters(empty); setCorrectionRequestPage(0) }}>Clear</button></div>
+          <div className="kagawad-correction-history-filter-actions"><button className="button primary" type="submit">Apply filters</button><button className="button outline" type="button" onClick={() => { const empty = { search: '', status: 'all', requestedAttendance: 'all', submittedAfter: '', submittedBefore: '' }; setCorrectionRequestDraft(empty); setCorrectionRequestFilters(empty); setCorrectionRequestPage(0); setCorrectionRequestExportMessage('') }}>Clear</button><button className="button outline" type="button" onClick={() => void exportKagawadAttendanceCorrectionHistory()} disabled={correctionRequestExportBusy || !Number(correctionRequests.data?.[0]?.total_count ?? 0)}><Download size={15} />{correctionRequestExportBusy ? 'Preparing…' : 'Export CSV'}</button></div>
         </form>
+        {correctionRequestExportMessage && <p className="field-hint" role={correctionRequestExportMessage.startsWith('There are more than') || correctionRequestExportMessage.startsWith('Unable') ? 'alert' : 'status'}>{correctionRequestExportMessage}</p>}
         {correctionRequestDraft.submittedAfter && correctionRequestDraft.submittedBefore && correctionRequestDraft.submittedAfter > correctionRequestDraft.submittedBefore && <p className="field-hint" role="alert">The start date must be on or before the end date.</p>}
         {correctionRequests.isPending ? <LoadingNotice compact /> : correctionRequests.error ? <ErrorNotice message="Your correction requests could not be loaded." onRetry={() => void correctionRequests.refetch()} retrying={correctionRequests.isFetching} /> : correctionRequests.data?.length ? <>
           <ul className="kagawad-invited-meeting-list">{correctionRequests.data.map((request) => <li id={`attendance-correction-${request.id}`} tabIndex={-1} key={request.id}>
@@ -684,7 +723,7 @@ export function MeetingsPage({ focusId, focusPage, focusCorrectionRequestId, foc
       <div className="ops-form-actions"><span className="field-hint">Attendance self-check-in opens 30 minutes before start and closes 30 minutes after end.</span><button className="button primary" disabled={busy}>{busy ? 'Saving…' : 'Create meeting'}</button></div>
     </form>}
     <div className="ops-section-title"><h2>Scheduled meetings</h2><p>Meeting lists and attendance are tenant- and role-scoped.</p></div>
-    {tenantId && <div className="incident-filters"><label className="archive-search"><Search size={16} /><input type="search" aria-label="Search meetings" maxLength={100} placeholder="Search title, location, or agenda" value={meetingSearchInput} onChange={(event) => setMeetingSearchInput(event.target.value)} /></label><label>Meeting status<select value={meetingStatus} onChange={(event) => { setMeetingStatus(event.target.value as typeof meetingStatus); setPage(0) }}><option value="all">All statuses</option><option value="draft">Draft</option><option value="scheduled">Scheduled</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></label><label>Starts on or after<input type="date" value={startsOnOrAfter} max={startsOnOrBefore || undefined} onChange={(event) => { setStartsOnOrAfter(event.target.value); setPage(0) }} /></label><label>Starts on or before<input type="date" value={startsOnOrBefore} min={startsOnOrAfter || undefined} onChange={(event) => { setStartsOnOrBefore(event.target.value); setPage(0) }} /></label>{(startsOnOrAfter || startsOnOrBefore) && <button type="button" className="button outline" onClick={() => { setStartsOnOrAfter(''); setStartsOnOrBefore(''); setPage(0) }}>Clear dates</button>}</div>}
+    {tenantId && <div className="incident-filters meeting-schedule-filters"><label className="archive-search"><Search size={16} /><input type="search" aria-label="Search meetings" maxLength={100} placeholder="Search title, location, or agenda" value={meetingSearchInput} onChange={(event) => setMeetingSearchInput(event.target.value)} /></label><label>Meeting status<select value={meetingStatus} onChange={(event) => { setMeetingStatus(event.target.value as typeof meetingStatus); setPage(0) }}><option value="all">All statuses</option><option value="draft">Draft</option><option value="scheduled">Scheduled</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></label><label>Starts on or after<input type="date" value={startsOnOrAfter} max={startsOnOrBefore || undefined} onChange={(event) => { setStartsOnOrAfter(event.target.value); setPage(0) }} /></label><label>Starts on or before<input type="date" value={startsOnOrBefore} min={startsOnOrAfter || undefined} onChange={(event) => { setStartsOnOrBefore(event.target.value); setPage(0) }} /></label>{(startsOnOrAfter || startsOnOrBefore) && <button type="button" className="button outline" onClick={() => { setStartsOnOrAfter(''); setStartsOnOrBefore(''); setPage(0) }}>Clear dates</button>}</div>}
     {dateRangeInvalid && <p className="account-security-error" role="alert">The end date must be the same day or later than the start date.</p>}
     {scheduleExportError && <p className="account-security-error" role="alert">{scheduleExportError}</p>}
     {(startsOnOrAfter || startsOnOrBefore) && !dateRangeInvalid && <p className="field-hint">Dates use your local timezone. The queue and schedule CSV use this same start-date window.</p>}

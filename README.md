@@ -7,7 +7,7 @@ KABALIKAT is a multi-barangay management platform by ArkByte Technologies. This 
 1. Install Node.js 20.19+ or 22.12+ and npm.
 2. Run `npm install`.
 3. Copy `.env.example` to `.env.local` and set the Supabase project URL and public anon/publishable key.
-4. Apply migrations `0001_foundation.sql` through `0189_existing_barangay_captain_invitation.sql` in order to a **development** Supabase project using the Supabase CLI or SQL editor.
+4. Apply every SQL migration in `supabase/migrations` in filename order to a **development** Supabase project using the Supabase CLI or SQL editor. Do not stop at an older migration number; later migrations contain current feature and security updates.
 5. Run `npm run dev`.
 
 Available commands: `npm run dev`, `npm run typecheck`, `npm run lint`, `npm test`, and `npm run build`.
@@ -18,7 +18,7 @@ Only `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` are read by the browser. T
 
 ## Account bootstrap
 
-General public signup is not included. A user can create an account from an invitation link, but gains no tenant access until the server accepts a valid, unexpired invitation for that account's email. Provision a platform administrator out of band; that administrator can create a barangay and a seven-day, one-time Captain invitation in the platform workspace. Captains can invite officials the same way. Supabase Auth handles account confirmation if enabled in project settings; the app does not send invitation email/SMS. Keep credentials out of SQL migrations and source control. Do not use real resident information during development.
+General public signup is not included. A user can create an account from an invitation link, but gains no tenant access until the server accepts a valid, unexpired invitation for that account's email. The invitation is accepted after successful sign-in or account creation when a session is available; if email confirmation is required, the recipient returns to the invitation link and signs in to complete acceptance. Provision a platform administrator out of band; that administrator can create a barangay and a seven-day, one-time Captain invitation in the platform workspace. Captains can invite officials the same way. Supabase Auth handles account confirmation if enabled in project settings; the app does not send invitation email/SMS. Keep credentials out of SQL migrations and source control. Do not use real resident information during development.
 
 For the secure first platform administrator bootstrap steps, see [Provision the first platform administrator](docs/SETUP.md#provision-the-first-platform-administrator).
 
