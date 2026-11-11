@@ -125,8 +125,8 @@ export function AnnouncementsPage({ focusId, onFocusHandled }: { focusId?: strin
       {canPublish.data && <button className="button primary" onClick={() => setOpen((value) => !value)}><Megaphone size={16} />Create announcement</button>}
     </PageHeading>
     {canPublish.isPending && <LoadingNotice compact />}
-    {canPublish.error && <ErrorNotice message="Announcement publishing access could not be checked. Refresh the page or contact your barangay administrator." />}
-    {audienceRoles.error && <ErrorNotice message="The recipient role list could not be loaded. Role-targeted announcements are unavailable until it can be checked." />}
+    {canPublish.error && <ErrorNotice message="Announcement publishing access could not be checked. Refresh the page or contact your barangay administrator." onRetry={() => void canPublish.refetch()} retrying={canPublish.isFetching} />}
+    {audienceRoles.error && <ErrorNotice message="The recipient role list could not be loaded. Role-targeted announcements are unavailable until it can be checked." onRetry={() => void audienceRoles.refetch()} retrying={audienceRoles.isFetching} />}
     {message && <div className="ops-success"><Bell size={16} />{message}</div>}
     {error && <ErrorNotice message={error} />}
     {focusError && <div className="account-security-error" role="alert">{focusError}</div>}
@@ -149,7 +149,7 @@ export function AnnouncementsPage({ focusId, onFocusHandled }: { focusId?: strin
     </div>}
     {dateRangeInvalid && <p className="account-security-error" role="alert">The end date must be the same day or later than the start date.</p>}
     {(createdFrom || createdThrough) && !dateRangeInvalid && <p className="field-hint">Date filters use your local timezone and the announcement creation date.</p>}
-    {!tenantId ? <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to view local announcements." /> : dateRangeInvalid ? null : announcements.isPending ? <LoadingNotice /> : announcements.error ? <ErrorNotice message={announcements.error.message} /> : announcements.data?.total ? announcements.data.announcements.length ?
+    {!tenantId ? <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to view local announcements." /> : dateRangeInvalid ? null : announcements.isPending ? <LoadingNotice /> : announcements.error ? <ErrorNotice message={announcements.error.message} onRetry={() => void announcements.refetch()} retrying={announcements.isFetching} /> : announcements.data?.total ? announcements.data.announcements.length ?
       <div className="ops-announcement-list">{announcements.data.announcements.map((item) => <article id={`announcement-${item.id}`} tabIndex={-1} className="ops-panel announcement-card" key={item.id}>
         <div className="announcement-top"><div><StatusPill status={item.status} /><span className="audience-label">{item.audience === 'role' ? `Role: ${audienceRoles.data?.find((role) => role.id === item.audience_role_id)?.label ?? 'selected role'}` : item.audience}</span></div>{canPublish.data && item.status !== 'archived' && <button className="text-action" onClick={() => void setStatus(item.id, item.status === 'published' ? 'archived' : 'published')}>{item.status === 'published' ? 'Archive' : 'Publish'}</button>}</div>
         <h2>{item.title}</h2><p>{item.body}</p><small>{item.published_at ? 'Published ' + new Date(item.published_at).toLocaleString() : 'Draft'}{item.expires_at ? ' · Expires ' + new Date(item.expires_at).toLocaleDateString() : ''}</small>

@@ -22,7 +22,7 @@ function ReferralActivityHistory({ referralId }: { referralId: string }) {
   return <details className="sk-event-audit referral-audit" onToggle={(event) => setOpen(event.currentTarget.open)}>
     <summary>Activity history{activity.data ? ` (${activity.data.total})` : ''}</summary>
     {open && activity.isPending && <p className="field-hint" role="status">Loading activity…</p>}
-    {open && activity.error && <p className="account-security-error" role="alert">Activity history could not be loaded.</p>}
+    {open && activity.error && <ErrorNotice message="Activity history could not be loaded." onRetry={() => void activity.refetch()} retrying={activity.isFetching} />}
     {open && activity.data && <>
       {activity.data.rows.length ? <ol>{activity.data.rows.map((entry) => <li key={`${entry.action}-${entry.created_at}`}><span><strong>{entry.action.replaceAll('_', ' ')}</strong><time dateTime={entry.created_at}>{formatDateTime(entry.created_at)}</time></span><small>{entry.actor_name}</small></li>)}</ol> : <p className="field-hint">No activity is recorded for this referral.</p>}
       {pageCount > 1 && <nav className="ops-form-actions" aria-label="Referral activity pages"><button type="button" className="button outline" disabled={currentPage === 0 || activity.isFetching} onClick={() => setPage(currentPage - 1)}><ChevronLeft size={15} />Previous</button><span className="field-hint">Page {currentPage + 1} of {pageCount}</span><button type="button" className="button outline" disabled={currentPage + 1 >= pageCount || activity.isFetching} onClick={() => setPage(currentPage + 1)}>Next<ChevronRight size={15} /></button></nav>}
@@ -46,7 +46,7 @@ function ReferralDestinationPicker({ originId, value, onChange }: { originId: st
     <label htmlFor="referral-destination-search">Search active barangays</label>
     <input id="referral-destination-search" maxLength={100} placeholder="Name, municipality, or code" value={search} onChange={(event) => { setSearch(event.target.value); setPage(0); onChange('') }} />
     {destinations.isPending && <p className="field-hint" role="status">Loading active barangays…</p>}
-    {destinations.error && <p className="ops-error" role="alert">Unable to load destination barangays.</p>}
+    {destinations.error && <ErrorNotice message="Unable to load destination barangays." onRetry={() => void destinations.refetch()} retrying={destinations.isFetching} />}
     {destinations.data && total > 0 && <>
       <fieldset className="referral-destination-options"><legend>Choose a receiving barangay</legend>{rows.map((item) => <label className={value === item.id ? 'selected' : ''} key={item.id}><input type="radio" name="destination-picker" value={item.id} checked={value === item.id} onChange={() => onChange(item.id)} /><span><strong>{item.name}</strong><small>{item.municipality}, {item.province} · {item.code}</small></span></label>)}</fieldset>
       <div className="referral-destination-pagination"><span aria-live="polite">Showing {currentPage * REFERRAL_DESTINATION_PAGE_SIZE + 1}–{Math.min((currentPage + 1) * REFERRAL_DESTINATION_PAGE_SIZE, total)} of {total}</span><div><button type="button" className="button outline" disabled={currentPage === 0 || destinations.isFetching} onClick={() => setPage(currentPage - 1)}><ChevronLeft size={15} />Previous</button><button type="button" className="button outline" disabled={currentPage + 1 >= pageCount || destinations.isFetching} onClick={() => setPage(currentPage + 1)}>Next<ChevronRight size={15} /></button></div></div>
@@ -55,14 +55,14 @@ function ReferralDestinationPicker({ originId, value, onChange }: { originId: st
   </div>
 }
 
-export function ReferralsPage() {
+export function ReferralsPage({ focusNeedsAction, onFocusHandled }: { focusNeedsAction?: boolean; onFocusHandled?: () => void }) {
   const { membership } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
   const queryClient = useQueryClient()
   const [page, setPage] = useState(0)
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
-  const [status, setStatus] = useState<'all' | InterbarangayReferral['status']>('all')
+  const [status, setStatus] = useState<'all' | InterbarangayReferral['status'] | 'needs_action'>('all')
   const canCreate = useQuery({ queryKey: ['permission', tenantId, 'referrals.create'], queryFn: () => hasPermission(tenantId, 'referrals.create'), enabled: Boolean(tenantId) })
   const canReview = useQuery({ queryKey: ['permission', tenantId, 'referrals.review'], queryFn: () => hasPermission(tenantId, 'referrals.review'), enabled: Boolean(tenantId) })
   const referrals = useQuery({ queryKey: ['interbarangay-referrals', tenantId, page, search, status], queryFn: () => listInterbarangayReferrals(page, search, status), enabled: Boolean(tenantId && (canCreate.data || canReview.data)) })
@@ -71,6 +71,11 @@ export function ReferralsPage() {
   const referralPages = Math.max(1, Math.ceil(totalReferrals / REFERRAL_PAGE_SIZE))
   const currentPage = Math.min(page, referralPages - 1)
   useEffect(() => { setPage(0); setSearchInput(''); setSearch(''); setStatus('all') }, [tenantId])
+  useEffect(() => {
+    if (!focusNeedsAction) return
+    setPage(0); setSearchInput(''); setSearch(''); setStatus('needs_action')
+    onFocusHandled?.()
+  }, [focusNeedsAction, onFocusHandled])
   useEffect(() => { if (page !== currentPage) setPage(currentPage) }, [currentPage, page])
   const [showForm, setShowForm] = useState(false)
   const [destinationId, setDestinationId] = useState('')
@@ -142,8 +147,9 @@ export function ReferralsPage() {
     <div className="ops-panel referral-privacy-notice"><ShieldAlert size={18} /><p><strong>Share only what is necessary.</strong> Use this workflow only when your barangay has an approved disclosure basis and policy. Do not include unrelated resident records, medical details, or information about family members. This feature does not contact emergency services.</p></div>
     {!tenantId && <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to review inter-barangay referrals." />}
     {Boolean(tenantId) && (canCreate.isPending || canReview.isPending) && <LoadingNotice compact />}
-    {(canCreate.error || canReview.error) && <ErrorNotice message="Your referral access could not be checked. Refresh the page or contact your barangay administrator." />}
     {message && <div className="ops-success" role="status"><CheckCircle2 size={16} />{message}</div>}{error && <ErrorNotice message={error} />}
+    {canCreate.error && <ErrorNotice message="Referral creation access could not be checked." onRetry={() => void canCreate.refetch()} retrying={canCreate.isFetching} />}
+    {canReview.error && <ErrorNotice message="Referral review access could not be checked." onRetry={() => void canReview.refetch()} retrying={canReview.isFetching} />}
     {Boolean(tenantId) && !canAccess && !canCreate.isPending && !canReview.isPending && !canCreate.error && !canReview.error && <EmptyNotice title="Referral access is restricted" detail="Only designated Captains and Secretaries can create or review inter-barangay referrals. Contact your barangay administrator if you need access." />}
     {showForm && canCreate.data && <form className="ops-panel ops-form" onSubmit={(event) => void create(event)}><div className="ops-panel-heading"><div><h2>Create a referral</h2><p>The receiving barangay will see only the information included in this referral.</p></div><ArrowLeftRight size={19} /></div>
       <input type="hidden" name="destination" value={destinationId} />
@@ -152,11 +158,11 @@ export function ReferralsPage() {
     </form>}
     {tenantId && canAccess && <form className="referral-filters" onSubmit={(event) => { event.preventDefault(); setPage(0); setSearch(searchInput.trim()) }}>
       <label>Search referrals<input type="search" maxLength={100} value={searchInput} onChange={(event) => setSearchInput(event.target.value)} placeholder="Purpose or barangay" /></label>
-      <label>Status<select value={status} onChange={(event) => { setPage(0); setStatus(event.target.value as typeof status) }}><option value="all">All statuses</option><option value="submitted">Submitted</option><option value="acknowledged">Acknowledged</option><option value="responded">Responded</option><option value="declined">Declined</option><option value="closed">Closed</option></select></label>
+      <label>Status<select value={status} onChange={(event) => { setPage(0); setStatus(event.target.value as typeof status) }}><option value="all">All statuses</option><option value="needs_action">Needs action</option><option value="submitted">Submitted</option><option value="acknowledged">Acknowledged</option><option value="responded">Responded</option><option value="declined">Declined</option><option value="closed">Closed</option></select></label>
       <button className="button primary" type="submit">Search</button>
       <button className="button outline" type="button" disabled={!search && !searchInput && status === 'all'} onClick={() => { setPage(0); setSearchInput(''); setSearch(''); setStatus('all') }}>Clear filters</button>
     </form>}
-    {referrals.isPending && tenantId && canAccess && <LoadingNotice />}{referrals.error && <ErrorNotice message="Unable to load referrals." />}
+    {referrals.isPending && tenantId && canAccess && <LoadingNotice />}{referrals.error && <ErrorNotice message="Unable to load referrals." onRetry={() => void referrals.refetch()} retrying={referrals.isFetching} />}
     {referrals.data && totalReferrals === 0 && <div className="ops-empty"><ArrowLeftRight size={22} /><strong>{search || status !== 'all' ? 'No referrals match these filters' : 'No referrals yet'}</strong><p>{search || status !== 'all' ? 'Adjust the search or status filter to see more referrals.' : 'Referrals created by or sent to this barangay will appear here.'}</p></div>}
     <div className="referral-list">{referralRows.map((referral) => {
       const receiving = referral.viewer_side === 'receiving'

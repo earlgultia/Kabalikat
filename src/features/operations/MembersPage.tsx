@@ -190,7 +190,7 @@ export function MembersPage({ onOpenInvitations }: { onOpenInvitations?: () => v
     <div className="ops-panel member-access-guidance"><ShieldCheck size={18} /><p>Captain access cannot be changed here. Changes apply only to this barangay and are recorded in history. Fine-grained controls can remove permissions included in a role, but cannot add access beyond that role.</p></div>
     {!tenantId && <EmptyNotice title="Choose a barangay workspace" detail="Select an active Captain membership to manage staff access." />}
     {accessPermission.isPending && tenantId && <LoadingNotice compact />}
-    {accessPermission.error && <ErrorNotice message="Staff access could not be checked. Refresh the page and try again." />}
+    {accessPermission.error && <ErrorNotice message="Staff access could not be checked. Refresh the page and try again." onRetry={() => void accessPermission.refetch()} retrying={accessPermission.isFetching} />}
     {accessPermission.data === false && <div className="ops-panel"><strong>Staff management is restricted</strong><p>Your current role cannot manage barangay membership access.</p></div>}
     {success && <div className="ops-success" role="status"><CheckCircle2 size={16} />{success}</div>}{error && <ErrorNotice message={error} />}
     {accessPermission.data && <>
@@ -217,7 +217,7 @@ export function MembersPage({ onOpenInvitations }: { onOpenInvitations?: () => v
             <details className="member-revoke-details"><summary>End this membership</summary><p className="field-hint">Revoking permanently disables this membership and cancels pending invitations for this person in this barangay. Existing records and audit history remain. A new invitation is required to restore access.</p><label>Reason for revocation<textarea rows={2} maxLength={500} value={revokeReasons[member.id] ?? ''} onChange={(event) => setRevokeReasons((current) => ({ ...current, [member.id]: event.target.value }))} placeholder="Explain why access is being revoked" /></label><button type="button" className="button outline danger-action" disabled={busyId === member.id || (revokeReasons[member.id]?.trim().length ?? 0) < 3} onClick={() => { setError(''); setRevokeTarget(member) }}>Revoke member access</button></details>
             <details className="member-permission-details">
               <summary>Fine-grained permissions{rolePermissions.length ? ` (${rolePermissions.length})` : ''}</summary>
-              {memberPermissionData.isPending ? <LoadingNotice compact /> : memberPermissionData.error ? <ErrorNotice message="Role permissions could not be loaded." /> : rolePermissions.length ? <>
+              {memberPermissionData.isPending ? <LoadingNotice compact /> : memberPermissionData.error ? <ErrorNotice message="Role permissions could not be loaded." onRetry={() => void memberPermissionData.refetch()} retrying={memberPermissionData.isFetching} /> : rolePermissions.length ? <>
                 <p className="field-hint">Only permissions already included in this role are listed. Turn one off to remove access; turn it on to restore the role’s default. This cannot add privileges beyond the role.</p>
                 <div className="member-permission-list">{rolePermissions.map((assignment) => {
                   const definition = assignment.permission!
@@ -232,7 +232,7 @@ export function MembersPage({ onOpenInvitations }: { onOpenInvitations?: () => v
       })}</div>}
       {members.data && members.data.total > MEMBER_PAGE_SIZE && <nav className="ops-form-actions member-access-pagination" aria-label="Member access pages"><button type="button" className="button outline" disabled={page === 0 || members.isFetching} onClick={() => setPage((current) => Math.max(0, current - 1))}><ChevronLeft size={15} />Previous</button><span className="field-hint">Page {page + 1} of {totalPages}</span><button type="button" className="button outline" disabled={page + 1 >= totalPages || members.isFetching} onClick={() => setPage((current) => current + 1)}>Next<ChevronRight size={15} /></button></nav>}
       <section className="ops-panel member-access-history"><div className="ops-panel-heading"><div><h2>Recent access history</h2><p>Role and status changes recorded in this barangay.</p></div><History size={18} /></div>
-        {events.isPending ? <LoadingNotice compact /> : events.error ? <ErrorNotice message="Access history could not be loaded." /> : events.data?.length ? <ol>{events.data.map((entry) => {
+        {events.isPending ? <LoadingNotice compact /> : events.error ? <ErrorNotice message="Access history could not be loaded." onRetry={() => void events.refetch()} retrying={events.isFetching} /> : events.data?.length ? <ol>{events.data.map((entry) => {
           const target = rows.find((member) => member.id === entry.membership_id)
           const summary = entry.action === 'access_changed'
             ? `Role ${entry.from_role} → ${entry.to_role}; status ${entry.from_status} → ${entry.to_status}`
@@ -241,7 +241,7 @@ export function MembersPage({ onOpenInvitations }: { onOpenInvitations?: () => v
         })}</ol> : <p className="field-hint">No access changes have been recorded.</p>}
       </section>
       <section className="ops-panel member-access-history"><div className="ops-panel-heading"><div><h2>Recent permission changes</h2><p>Overrides narrow or restore the permissions included in each role.</p></div><ShieldCheck size={18} /></div>
-        {permissionEvents.isPending ? <LoadingNotice compact /> : permissionEvents.error ? <ErrorNotice message="Permission history could not be loaded." /> : permissionEvents.data?.length ? <ol>{permissionEvents.data.map((entry) => {
+        {permissionEvents.isPending ? <LoadingNotice compact /> : permissionEvents.error ? <ErrorNotice message="Permission history could not be loaded." onRetry={() => void permissionEvents.refetch()} retrying={permissionEvents.isFetching} /> : permissionEvents.data?.length ? <ol>{permissionEvents.data.map((entry) => {
           const target = rows.find((member) => member.id === entry.membership_id)
           return <li key={entry.id}><div><strong>{entry.new_effect === 'deny' ? 'Removed' : 'Restored'} · {entry.permission_key.replaceAll('.', ' · ')}</strong><span>{target?.profile?.display_name || 'Barangay member'}</span></div><time dateTime={entry.created_at}>{formatEventDate(entry.created_at)}</time></li>
         })}</ol> : <p className="field-hint">No permission overrides have been recorded.</p>}

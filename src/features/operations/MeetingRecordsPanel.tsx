@@ -117,7 +117,7 @@ export function MeetingRecordsPanel({ tenantId, meetingId, meetingTitle, locatio
     <div className="meeting-record-grid">
       <section className="meeting-record-card">
         <div className="meeting-record-title"><FileText size={17} /><h4>Meeting minutes</h4>{minutes.data && <StatusPill status={minutes.data.status} />}</div>
-        {minutes.isPending ? <LoadingNotice compact /> : minutes.error ? <ErrorNotice message={minutes.error.message} /> : <>
+        {minutes.isPending ? <LoadingNotice compact /> : minutes.error ? <ErrorNotice message={minutes.error.message} onRetry={() => void minutes.refetch()} retrying={minutes.isFetching} /> : <>
           {canManage ? <><label className="meeting-record-input">Write or update the minutes<textarea rows={7} maxLength={100000} value={minutesText} onChange={(event) => setMinutesText(event.target.value)} placeholder="Summarize the discussion, decisions, and next steps." /></label>
             <div className="meeting-record-actions"><button className="button outline" disabled={busy} onClick={() => void persistMinutes(false)}>Save draft</button>{minutes.data?.status === 'draft' && minutes.data.drafted_by !== currentUserId && <button className="button primary" disabled={busy || minutesText.trim().length < 3} onClick={() => void persistMinutes(true)}>Mark reviewed</button>}</div>
             {minutes.data?.status === 'draft' && minutes.data.drafted_by === currentUserId && <small className="field-hint">A different authorized meeting manager must review these minutes.</small>}
@@ -134,7 +134,7 @@ export function MeetingRecordsPanel({ tenantId, meetingId, meetingTitle, locatio
           <label>Decision and details<textarea required minLength={3} maxLength={20000} rows={3} value={resolutionText} onChange={(event) => setResolutionText(event.target.value)} /></label>
           <button className="button outline" disabled={busy}><Plus size={15} />Add draft resolution</button>
         </form>}
-        {resolutions.isPending ? <LoadingNotice compact /> : resolutions.error ? <ErrorNotice message={resolutions.error.message} /> : resolutions.data?.rows.length ? <ul className="meeting-resolution-list">{resolutions.data.rows.map((item) => <li key={item.id}>
+        {resolutions.isPending ? <LoadingNotice compact /> : resolutions.error ? <ErrorNotice message={resolutions.error.message} onRetry={() => void resolutions.refetch()} retrying={resolutions.isFetching} /> : resolutions.data?.rows.length ? <ul className="meeting-resolution-list">{resolutions.data.rows.map((item) => <li key={item.id}>
           <div className="meeting-resolution-top"><strong>{item.resolution_number}</strong><StatusPill status={item.status} /></div><h5>{item.title}</h5><p>{item.content}</p>
           <small className="field-hint">Added {formatDateTime(item.created_at)}{item.approved_at ? ` · Approved ${formatDateTime(item.approved_at)}` : ''}</small>
           {canManage && item.status === 'draft' && item.proposed_by !== currentUserId && <button className="text-action" disabled={busy} onClick={() => void approve(item.id)}>Approve resolution</button>}

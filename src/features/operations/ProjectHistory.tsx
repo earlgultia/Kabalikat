@@ -152,7 +152,7 @@ export function SkProjectActivityHistory({ tenantId, projectId }: { tenantId: st
   return <details className="sk-event-audit project-progress-history" onToggle={(event: SyntheticEvent<HTMLDetailsElement>) => setOpen(event.currentTarget.open)}>
     <summary>Project activity history{history.data ? ` (${history.data.totalCount})` : ''}</summary>
     {history.isPending && open && <LoadingNotice compact />}
-    {history.error && <ErrorNotice message="Project activity could not be loaded." />}
+    {history.error && <ErrorNotice message="Project activity could not be loaded." onRetry={() => void history.refetch()} retrying={history.isFetching} />}
     {history.data?.totalCount === 0 && <p className="field-hint">No project activity has been recorded.</p>}
     {history.data?.rows.length ? <ol>{history.data.rows.map((entry) => <li key={`${entry.action}-${entry.created_at}`}>
       <span><strong>{entry.action.replace('project_', '').replaceAll('_', ' ')}</strong><time dateTime={entry.created_at}>{formatDateTime(entry.created_at)}</time></span>

@@ -33,7 +33,7 @@ function HealthCampaignScheduleHistory({ tenantId, campaignId }: { tenantId: str
   return <details className="sk-event-audit" onToggle={(event) => setOpen(event.currentTarget.open)}>
     <summary>Schedule change history</summary>
     {open && history.isPending && <p className="field-hint" role="status">Loading schedule history…</p>}
-    {open && history.error && <p className="account-security-error" role="alert">Schedule history could not be loaded.</p>}
+    {open && history.error && <ErrorNotice message="Schedule history could not be loaded." onRetry={() => void history.refetch()} retrying={history.isFetching} />}
     {open && history.data?.rows.length === 0 && <p className="field-hint">No schedule changes have been recorded.</p>}
     {history.data?.rows.length ? <ol>{history.data.rows.map((change) => <li key={change.id}><span><strong>Updated {formatDateTime(change.created_at)}</strong></span><small>Previously: {change.previous_location} · {formatDateTime(change.previous_starts_at)} to {formatDateTime(change.previous_ends_at)}</small><small>Now: {change.new_location} · {formatDateTime(change.new_starts_at)} to {formatDateTime(change.new_ends_at)}</small><small>Reason: {change.reason}</small></li>)}</ol> : null}
     {open && totalPages > 1 && <div className="finance-review-actions" aria-label="Schedule history pages"><span className="field-hint">Page {page + 1} of {totalPages}</span><button type="button" className="button outline" disabled={page === 0 || history.isFetching} onClick={() => setPage((current) => current - 1)}><ChevronLeft size={15} />Previous</button><button type="button" className="button outline" disabled={page + 1 >= totalPages || history.isFetching} onClick={() => setPage((current) => current + 1)}>Next<ChevronRight size={15} /></button></div>}
@@ -52,7 +52,7 @@ function HealthCampaignNotificationReach({ tenantId, campaignId }: { tenantId: s
   return <details className="sk-event-audit sk-event-reach" onToggle={(event) => setOpen(event.currentTarget.open)}>
     <summary>Notification reach</summary>
     {open && summary.isPending && <p className="field-hint" role="status">Loading notification counts…</p>}
-    {open && summary.error && <p className="account-security-error" role="alert">Notification counts could not be loaded.</p>}
+    {open && summary.error && <ErrorNotice message="Notification counts could not be loaded." onRetry={() => void summary.refetch()} retrying={summary.isFetching} />}
     {open && summary.data && <>
       <div className="sk-event-reach-grid">{rows.map((row) => <div className="sk-event-reach-item" key={row.label}><strong>{row.label}</strong><span>{(row.sent ?? 0).toLocaleString()} notified · {(row.read ?? 0).toLocaleString()} marked read</span></div>)}</div>
       <p className="field-hint">Counts show in-app notice delivery to opted-in accounts and read status only. They do not identify members or indicate attendance.</p>
@@ -265,7 +265,7 @@ export function HealthOutreachPage({ focusId, focusPage, focusStatus, onFocusHan
     <div className="ops-panel referral-privacy-notice"><ShieldAlert size={18} /><p><strong>Scheduling and aggregate counts only.</strong> This page does not store patient records, register participants, provide medical advice, or contact emergency services. Completion records only a total attendance number; do not enter names or personal health information.</p></div>
     {!tenantId && <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to view published outreach schedules." />}
     {Boolean(tenantId) && (canManage.isPending || canReview.isPending) && <LoadingNotice compact />}
-    {(canManage.error || canReview.error) && <ErrorNotice message="Outreach management or review access could not be checked. Published schedules remain available; staff controls are hidden until access can be verified." />}
+    {(canManage.error || canReview.error) && <ErrorNotice message="Outreach management or review access could not be checked. Published schedules remain available; staff controls are hidden until access can be verified." onRetry={() => { void canManage.refetch(); void canReview.refetch() }} retrying={canManage.isFetching || canReview.isFetching} />}
     {message && <div className="ops-success" role="status"><CheckCircle2 size={16} />{message}</div>}{error && <ErrorNotice message={error} />}
     {Boolean(tenantId) && !canAccess && !canManage.isPending && !canReview.isPending && !canManage.error && !canReview.error && <div className="ops-panel archive-access"><CalendarHeart size={20} /><div><strong>Outreach schedule access</strong><p>Residents and other active members can view published schedules. BHWs can propose schedules; Captains review them.</p></div></div>}
     {showForm && canManage.data && <form className="ops-panel ops-form" onSubmit={(event) => void create(event)}><div className="ops-panel-heading"><div><h2>Plan a community outreach event</h2><p>New schedules stay private until reviewed by a Captain.</p></div><CalendarHeart size={19} /></div>

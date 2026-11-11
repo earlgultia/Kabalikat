@@ -30,7 +30,9 @@ export async function listReferralDestinations(originId: string, page: number, s
   return { rows, total: Number(rows[0]?.total_count ?? 0) }
 }
 
-export async function listInterbarangayReferrals(page: number, search = '', status = 'all'): Promise<ReferralPage> {
+export type ReferralStatusFilter = 'all' | InterbarangayReferral['status'] | 'needs_action'
+
+export async function listInterbarangayReferrals(page: number, search = '', status: ReferralStatusFilter = 'all'): Promise<ReferralPage> {
   const { data, error } = await client().rpc('search_interbarangay_referral_page', {
     p_page: page, p_page_size: REFERRAL_PAGE_SIZE, p_search: search.trim() || null, p_status: status,
   })

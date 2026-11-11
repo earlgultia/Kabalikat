@@ -99,11 +99,11 @@ export function BarangaySettingsPage() {
     <PageHeading title="Barangay office settings" description="Maintain public office contacts and the name and title printed for document signatories." />
     {!barangayId && <EmptyNotice title="Choose a barangay workspace" detail="Select an active Captain membership to configure the barangay office." />}
     {permission.isPending && barangayId && <LoadingNotice compact />}
-    {permission.error && <ErrorNotice message="Office settings permission could not be checked. Refresh and try again." />}
+    {permission.error && <ErrorNotice message="Office settings permission could not be checked. Refresh and try again." onRetry={() => void permission.refetch()} retrying={permission.isFetching} />}
     {permission.data === false && <div className="ops-panel"><strong>Office settings are restricted</strong><p>Your current role cannot change barangay office settings.</p></div>}
     {permission.data && <>
       <div className="ops-panel member-access-guidance"><ShieldCheck size={18} /><p>These settings are limited to this barangay. The signatory fields store a printed name and title only; they do not create or store a digital signature.</p></div>
-      {settings.isPending ? <LoadingNotice /> : settings.error ? <ErrorNotice message="Barangay office settings could not be loaded." /> : <form className="ops-panel ops-form barangay-settings-form" onSubmit={(event) => void save(event)}>
+      {settings.isPending ? <LoadingNotice /> : settings.error ? <ErrorNotice message="Barangay office settings could not be loaded." onRetry={() => void settings.refetch()} retrying={settings.isFetching} /> : <form className="ops-panel ops-form barangay-settings-form" onSubmit={(event) => void save(event)}>
         <div className="ops-panel-heading"><div><h2>Office and document details</h2><p>Keep contact information current so residents know when and how to reach the barangay.</p></div><MapPin size={19} /></div>
         <div className="ops-form-grid">
           <label className="span-two">Office address<textarea name="office_address" rows={2} maxLength={300} defaultValue={settings.data?.office_address ?? ''} placeholder="Barangay hall street or location" /></label>
@@ -121,7 +121,7 @@ export function BarangaySettingsPage() {
         <div className="ops-form-actions"><span className="field-hint">Each save records which fields changed.</span><button className="button primary" disabled={busy || settings.isPending}><Save size={15} />{busy ? 'Saving…' : 'Save office settings'}</button></div>
       </form>}
       <section className="ops-panel member-access-history barangay-settings-history"><div className="ops-panel-heading"><div><h2>Recent settings activity</h2><p>Names of changed fields are recorded without storing prior values.</p></div><Clock3 size={18} /></div>
-        {history.isPending ? <LoadingNotice compact /> : history.error ? <ErrorNotice message="Office settings history could not be loaded." /> : history.data?.length ? <ol>{history.data.map((entry) => <li key={entry.id}><div><strong>{entry.changed_fields.map((field) => fieldLabels[field] ?? field).join(', ')}</strong></div><time dateTime={entry.created_at}>{new Date(entry.created_at).toLocaleString()}</time></li>)}</ol> : <p className="field-hint">No settings changes have been recorded.</p>}
+        {history.isPending ? <LoadingNotice compact /> : history.error ? <ErrorNotice message="Office settings history could not be loaded." onRetry={() => void history.refetch()} retrying={history.isFetching} /> : history.data?.length ? <ol>{history.data.map((entry) => <li key={entry.id}><div><strong>{entry.changed_fields.map((field) => fieldLabels[field] ?? field).join(', ')}</strong></div><time dateTime={entry.created_at}>{new Date(entry.created_at).toLocaleString()}</time></li>)}</ol> : <p className="field-hint">No settings changes have been recorded.</p>}
       </section>
     </>}
   </section>

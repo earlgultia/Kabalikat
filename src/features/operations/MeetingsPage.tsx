@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
 import { CalendarDays, CalendarPlus, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Download, History, Pencil, Search, X } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
+import { formatManilaCalendarDate } from './format'
 import {
   createMeeting, decideMeetingAttendanceCorrection, getKagawadInvitedMeetingAgenda, getMeetingInvitationResponseSummary, hasPermission, listAllMeetingSchedule, listAttendance, listKagawadAttendanceCorrectionRequests, listKagawadInvitedMeetings, listKagawadMeetingAttendanceHistory, listKagawadMeetingInvitationResponseHistory, listMeetingAttendanceCorrectionQueue, listMeetingAttendeeMembers, listMeetingAttendees, listMeetingInvitationResponseRoster, listMeetingMemberPage, listMeetingPage, requestKagawadAttendanceCorrection, setKagawadMeetingInvitationResponse, updateMeetingDetails,
   markAttendance, recordAttendance, updateMeetingStatus, MEETING_MEMBER_PAGE_SIZE, MEETING_PAGE_SIZE,
@@ -599,7 +600,7 @@ export function MeetingsPage({ focusId, focusPage, focusCorrectionRequestId, foc
     </PageHeading>
     {!tenantId && <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to view meetings and attendance." />}
     {Boolean(tenantId) && (canManage.isPending || canManageAttendance.isPending || canSelectAttendees.isPending) && <LoadingNotice compact />}
-    {(canManage.error || canManageAttendance.error || canSelectAttendees.error) && <ErrorNotice message="Some meeting permissions could not be checked. Related scheduling, attendance, or invite controls may be unavailable until access can be verified." />}
+    {(canManage.error || canManageAttendance.error || canSelectAttendees.error) && <ErrorNotice message="Some meeting permissions could not be checked. Related scheduling, attendance, or invite controls may be unavailable until access can be verified." onRetry={() => { void canManage.refetch(); void canManageAttendance.refetch(); void canSelectAttendees.refetch() }} retrying={canManage.isFetching || canManageAttendance.isFetching || canSelectAttendees.isFetching} />}
     {message && <div className="ops-success"><CheckCircle2 size={16} />{message}</div>}{error && <ErrorNotice message={error} />}{calendarExportError && <ErrorNotice message={calendarExportError} />}
     {isKagawad && <section className="ops-panel kagawad-invited-meetings" aria-labelledby="kagawad-invited-meetings-title">
       <div className="ops-panel-heading"><div><h2 id="kagawad-invited-meetings-title">My invited meetings</h2><p>Share your plan ahead of time. RSVP does not record attendance; check in when the window opens.</p></div><CalendarDays size={19} /></div>
@@ -669,7 +670,7 @@ export function MeetingsPage({ focusId, focusPage, focusCorrectionRequestId, foc
         <h3>Request an attendance correction</h3>
         <p className="field-hint">Choose a past meeting and explain what should be corrected. An authorized official will review the request.</p>
         <div className="ops-form-grid">
-          <label>Meeting<select required value={correctionMeetingId} onChange={(event) => setCorrectionMeetingId(event.target.value)}><option value="">Choose a past meeting</option>{meetingHistory.data.map((meeting) => <option key={meeting.meeting_id} value={meeting.meeting_id}>{meeting.title} · {new Date(meeting.starts_at).toLocaleDateString()}</option>)}</select></label>
+          <label>Meeting<select required value={correctionMeetingId} onChange={(event) => setCorrectionMeetingId(event.target.value)}><option value="">Choose a past meeting</option>{meetingHistory.data.map((meeting) => <option key={meeting.meeting_id} value={meeting.meeting_id}>{meeting.title} · {formatManilaCalendarDate(meeting.starts_at)}</option>)}</select></label>
           <label>Correct attendance<select value={correctionStatus} onChange={(event) => setCorrectionStatus(event.target.value as typeof correctionStatus)}><option value="present">Present</option><option value="absent">Absent</option><option value="excused">Excused</option></select></label>
           <label className="span-two">Reason<textarea required minLength={3} maxLength={1000} rows={3} value={correctionReason} onChange={(event) => setCorrectionReason(event.target.value)} placeholder="Explain why this attendance record needs correction" /></label>
         </div>
@@ -746,7 +747,7 @@ export function MeetingsPage({ focusId, focusPage, focusCorrectionRequestId, foc
         </form>}
         {selectedMeeting === meeting.id && <div className="attendance-panel">
           {(canManage.data || canManageAttendance.data) && <div className="meeting-attendance-summary" aria-label="Meeting invitation responses">
-            {invitationResponseSummary.isPending ? <span>Loading RSVP totals…</span> : invitationResponseSummary.error ? <span>RSVP totals are unavailable.</span> : invitationResponseSummary.data && <>
+            {invitationResponseSummary.isPending ? <span>Loading RSVP totals…</span> : invitationResponseSummary.error ? <span role="alert">RSVP totals are unavailable. <button type="button" className="text-action" disabled={invitationResponseSummary.isFetching} onClick={() => void invitationResponseSummary.refetch()}>{invitationResponseSummary.isFetching ? 'Retrying…' : 'Try again'}</button></span> : invitationResponseSummary.data && <>
               <span><strong>{invitationResponseSummary.data.invited_count}</strong> Invited</span><span><strong>{invitationResponseSummary.data.attending_count}</strong> Plan to attend</span><span><strong>{invitationResponseSummary.data.unavailable_count}</strong> Unavailable</span><span><strong>{invitationResponseSummary.data.no_response_count}</strong> No response</span>
             </>}
           </div>}

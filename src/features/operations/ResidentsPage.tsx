@@ -16,7 +16,7 @@ const residentSchema = z.object({
   purok: z.string().max(100).optional(),
 }).refine((value) => value.householdId || (value.address?.length ?? 0) >= 3, { message: 'Provide a household address or select an existing household.' })
 
-export function ResidentsPage({ focusId, onFocusHandled }: { focusId?: string; onFocusHandled?: () => void } = {}) {
+export function ResidentsPage({ focusId, focusOwnCorrections, onFocusHandled }: { focusId?: string; focusOwnCorrections?: boolean; onFocusHandled?: () => void } = {}) {
   const { membership, user } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
   const role = membership?.role?.key
@@ -48,6 +48,11 @@ export function ResidentsPage({ focusId, onFocusHandled }: { focusId?: string; o
     }).catch(() => { if (active) { setFocusError('The profile correction request could not be opened.'); onFocusHandled?.() } })
     return () => { active = false }
   }, [focusId, tenantId, role, onFocusHandled])
+  useEffect(() => {
+    if (!focusOwnCorrections || role !== 'resident') return
+    window.requestAnimationFrame(() => document.getElementById('resident-own-correction-history')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+    onFocusHandled?.()
+  }, [focusOwnCorrections, onFocusHandled, role])
   useEffect(() => {
     const timeout = window.setTimeout(() => { setDebouncedSearch(residentSearch); setPage(0) }, 250)
     return () => window.clearTimeout(timeout)
@@ -234,15 +239,16 @@ export function ResidentsPage({ focusId, onFocusHandled }: { focusId?: string; o
     {message && <div className="ops-success"><Check size={16} />{message}</div>}
     {errorMessage && <ErrorNotice message={errorMessage} />}
     {focusError && <p className="account-security-error" role="status">{focusError}</p>}
-    {role === 'resident' && ownResident && <section className="ops-panel resident-correction-panel">
+    {role === 'resident' && ownResident && <section className="ops-panel resident-correction-panel" id="resident-own-correction-history">
       <div className="ops-panel-heading"><div><h2>Request a profile correction</h2><p>Changes are sent to authorized barangay staff. Your official record changes only after approval.</p></div><UserRoundPen size={19} /></div>
-      {ownPendingProfileChanges.isPending ? <LoadingNotice compact /> : ownPendingProfileChanges.error ? <ErrorNotice message="Your pending request status could not be checked. Refresh before submitting another correction." /> : (ownPendingProfileChanges.data?.totalCount ?? 0) > 0 ? <p className="field-hint">You already have a pending request. You can submit another after staff review.</p> : <form className="ops-form" onSubmit={(event) => void submitCorrection(event)}>
+      {ownPendingProfileChanges.isPending ? <LoadingNotice compact /> : ownPendingProfileChanges.error ? <ErrorNotice message="Your pending request status could not be checked. Refresh before submitting another correction." onRetry={() => void ownPendingProfileChanges.refetch()} retrying={ownPendingProfileChanges.isFetching} /> : (ownPendingProfileChanges.data?.totalCount ?? 0) > 0 ? <p className="field-hint">You already have a pending request. You can submit another after staff review.</p> : <form className="ops-form" onSubmit={(event) => void submitCorrection(event)}>
         <div className="ops-form-grid"><label>First name<input name="firstName" maxLength={100} placeholder={`Current: ${ownResident.first_name}`} autoComplete="given-name" /></label>
           <label>Last name<input name="lastName" maxLength={100} placeholder={`Current: ${ownResident.last_name}`} autoComplete="family-name" /></label>
           <label>Phone<input name="phone" type="tel" maxLength={40} placeholder={`Current: ${ownResident.phone || 'Not provided'}`} autoComplete="tel" /></label>
           <label className="span-two">Note for the reviewer <span className="field-hint">Optional</span><textarea name="note" maxLength={500} rows={2} placeholder="Briefly explain the correction" /></label>
         </div><div className="ops-form-actions"><span className="field-hint">Only enter fields that need correction.</span><button className="button primary" disabled={busy}>{busy ? 'Sending…' : 'Send for review'}</button></div>
       </form>}
+      {profileChanges.error && <ErrorNotice message="Your correction request history could not be loaded." onRetry={() => void profileChanges.refetch()} retrying={profileChanges.isFetching} />}
       {correctionRequests.length ? <div className="resident-correction-history"><h3>Your requests</h3><ul>{correctionRequests.map((request) => {
         const proposedChanges = [
           request.proposed_first_name && `First name: ${request.proposed_first_name}`,
@@ -252,6 +258,8 @@ export function ResidentsPage({ focusId, onFocusHandled }: { focusId?: string; o
         return <li id={`resident-correction-${request.id}`} tabIndex={-1} key={request.id}><span><strong>{request.status === 'pending' ? 'Awaiting review' : request.status === 'approved' ? 'Approved' : request.status === 'cancelled' ? 'Withdrawn' : 'Declined'}</strong><small>{new Date(request.created_at).toLocaleDateString()}</small><small className="resident-correction-proposal">{proposedChanges}</small>{request.request_note && <small>Note: {request.request_note}</small>}{request.status === 'rejected' && request.review_reason && <small>Review note: {request.review_reason}</small>}</span><div className="row-actions"><StatusPill status={request.status} />{request.status === 'pending' && <button disabled={busy} onClick={() => void cancelCorrection(request.id)}>Withdraw</button>}</div></li>
       })}</ul>{correctionTotalPages > 1 && <nav className="ops-form-actions" aria-label="Your correction request pages"><span className="field-hint">Page {correctionPage + 1} of {correctionTotalPages}</span><div className="finance-review-actions"><button className="button outline" disabled={correctionPage === 0 || profileChanges.isFetching} onClick={() => setCorrectionPage((current) => current - 1)}><ChevronLeft size={15} />Previous</button><button className="button outline" disabled={correctionPage + 1 >= correctionTotalPages || profileChanges.isFetching} onClick={() => setCorrectionPage((current) => current + 1)}>Next<ChevronRight size={15} /></button></div></nav>}</div> : null}
     </section>}
+    {canReviewChanges.error && role !== 'resident' && <ErrorNotice message="Profile correction review access could not be checked. Review actions are hidden until access can be verified." onRetry={() => void canReviewChanges.refetch()} retrying={canReviewChanges.isFetching} />}
+    {profileChanges.error && role !== 'resident' && <ErrorNotice message="Profile correction requests could not be loaded." onRetry={() => void profileChanges.refetch()} retrying={profileChanges.isFetching} />}
     {canReviewChanges.data && correctionRequests.some((request) => request.status === 'pending') && <section className="ops-panel resident-correction-panel">
       <div className="ops-panel-heading"><div><h2>Profile correction requests</h2><p>Confirm each correction before updating the official resident record.</p></div><UserRoundPen size={19} /></div>
       <div className="ops-table-wrap"><table className="ops-table"><thead><tr><th>Resident</th><th>Requested changes</th><th>Submitted</th><th>Decision</th></tr></thead><tbody>
@@ -271,7 +279,7 @@ export function ResidentsPage({ focusId, onFocusHandled }: { focusId?: string; o
           <input type="hidden" name="householdId" value={selectedHousehold?.id ?? ''} />
           {selectedHousehold ? <div className="resident-household-selected"><span>{selectedHousehold.household_code} · {selectedHousehold.address_line}</span><button type="button" className="button outline" onClick={() => setSelectedHousehold(null)}>Choose another household</button></div> : <>
             <input type="search" aria-label="Search existing households" value={householdSearch} onChange={(event) => setHouseholdSearch(event.target.value)} placeholder="Search household code or address" maxLength={80} />
-            {households.isPending ? <p className="field-hint" role="status">Loading households…</p> : households.error ? <ErrorNotice message="Households could not be loaded. You can still enter an address for a new household." /> : <>
+            {households.isPending ? <p className="field-hint" role="status">Loading households…</p> : households.error ? <ErrorNotice message="Households could not be loaded. You can still enter an address for a new household." onRetry={() => void households.refetch()} retrying={households.isFetching} /> : <>
               <select aria-label="Existing households on this page" value="" onChange={(event) => setSelectedHousehold(households.data?.households.find((household) => household.id === event.target.value) ?? null)}><option value="">Create a new household or choose one below</option>{households.data?.households.map((household) => <option key={household.id} value={household.id}>{household.household_code} · {household.address_line}</option>)}</select>
               {households.data?.totalCount === 0 && <p className="field-hint">No matching households. Enter an address below to create a new household.</p>}
               {householdTotalPages > 1 && <nav className="finance-review-actions" aria-label="Household selection pages"><span className="field-hint">Page {householdPage + 1} of {householdTotalPages} · {households.data?.totalCount} households</span><button type="button" className="button outline" disabled={householdPage === 0 || households.isFetching} onClick={() => setHouseholdPage((current) => current - 1)}><ChevronLeft size={15} />Previous</button><button type="button" className="button outline" disabled={householdPage + 1 >= householdTotalPages || households.isFetching} onClick={() => setHouseholdPage((current) => current + 1)}>Next<ChevronRight size={15} /></button></nav>}
@@ -282,7 +290,9 @@ export function ResidentsPage({ focusId, onFocusHandled }: { focusId?: string; o
       </div>
       <div className="ops-form-actions"><span className="field-hint">A household record is created with residency status set to pending.</span><button className="button primary" disabled={busy}>{busy ? 'Saving…' : 'Save resident'}</button></div>
     </form>}
-    {residents.isPending ? <LoadingNotice /> : residents.error ? <ErrorNotice message={residents.error.message} /> : !residentRows.length && (role === 'resident' || !residents.data?.total) ?
+    {canVerify.error && role !== 'resident' && <ErrorNotice message="Residency verification access could not be checked. Verification actions are hidden until access can be verified." onRetry={() => void canVerify.refetch()} retrying={canVerify.isFetching} />}
+    {canCreate.error && <ErrorNotice message="Resident registration access could not be checked." onRetry={() => void canCreate.refetch()} retrying={canCreate.isFetching} />}
+    {residents.isPending ? <LoadingNotice /> : residents.error ? <ErrorNotice message={residents.error.message} onRetry={() => void residents.refetch()} retrying={residents.isFetching} /> : !residentRows.length && (role === 'resident' || !residents.data?.total) ?
       <div className="ops-empty"><Home size={22} /><strong>{role !== 'resident' && (debouncedSearch || residencyFilter !== 'all') ? 'No matching residents' : 'No resident records available'}</strong><p>{role !== 'resident' && (debouncedSearch || residencyFilter !== 'all') ? 'Try another search or residency status.' : 'Records appear here when they are registered for this barangay.'}</p></div> :
       <>
       {role !== 'resident' && <div className="community-calendar-filters">
@@ -291,7 +301,7 @@ export function ResidentsPage({ focusId, onFocusHandled }: { focusId?: string; o
       </div>}
       {role !== 'resident' && <p className="field-hint" aria-live="polite">Showing {filteredResidents.length} resident {filteredResidents.length === 1 ? 'record' : 'records'} on this page. {residents.data?.total ?? 0} records match these filters.</p>}
       {filteredResidents.length ? <div className="ops-table-wrap"><table className="ops-table"><thead><tr><th>Resident</th><th>Household</th><th>Contact</th><th>Residency</th><th>Record</th></tr></thead><tbody>
-        {filteredResidents.map((resident) => { const ownRecord = residentAuthors.data?.has(resident.id) ?? false; return <tr key={resident.id}><td><strong>{resident.first_name} {resident.last_name}</strong><small>{resident.birth_date ? new Date(resident.birth_date + 'T00:00:00').toLocaleDateString() : 'Birth date not recorded'}</small></td><td>{resident.household?.household_code ?? '—'}<small>{resident.household?.purok ?? resident.household?.address_line ?? 'Address unavailable'}</small></td><td>{resident.phone ?? '—'}</td><td><StatusPill status={latestVerificationByResident.get(resident.id) ?? 'pending'} />{canVerify.data && (residentAuthors.isPending ? <small>Checking reviewer eligibility…</small> : residentAuthors.error ? <small>Reviewer eligibility unavailable. Refresh before making a decision.</small> : ownRecord ? <small>Another authorized reviewer must verify this record.</small> : <div className="row-actions"><button onClick={() => void verify(resident.id, 'verified')}>Verify</button><button onClick={() => void verify(resident.id, 'rejected')}>Reject</button></div>)}</td><td><StatusPill status={resident.record_status} /></td></tr>})}
+        {filteredResidents.map((resident) => { const ownRecord = residentAuthors.data?.has(resident.id) ?? false; return <tr key={resident.id}><td><strong>{resident.first_name} {resident.last_name}</strong><small>{resident.birth_date ? new Date(resident.birth_date + 'T00:00:00').toLocaleDateString() : 'Birth date not recorded'}</small></td><td>{resident.household?.household_code ?? '—'}<small>{resident.household?.purok ?? resident.household?.address_line ?? 'Address unavailable'}</small></td><td>{resident.phone ?? '—'}</td><td><StatusPill status={latestVerificationByResident.get(resident.id) ?? 'pending'} />{canVerify.data && (residentAuthors.isPending ? <small>Checking reviewer eligibility…</small> : residentAuthors.error ? <><small>Reviewer eligibility unavailable. Refresh before making a decision.</small><button type="button" className="text-action" disabled={residentAuthors.isFetching} onClick={() => void residentAuthors.refetch()}>{residentAuthors.isFetching ? 'Checking…' : 'Retry check'}</button></> : ownRecord ? <small>Another authorized reviewer must verify this record.</small> : <div className="row-actions"><button onClick={() => void verify(resident.id, 'verified')}>Verify</button><button onClick={() => void verify(resident.id, 'rejected')}>Reject</button></div>)}</td><td><StatusPill status={resident.record_status} /></td></tr>})}
       </tbody></table></div> : <div className="ops-empty"><Search size={22} /><strong>No residents on this page match that status</strong><p>Choose another status or move to another page.</p></div>}
       {role !== 'resident' && (residents.data?.total ?? 0) > RESIDENT_PAGE_SIZE && <nav className="ops-form-actions" aria-label="Resident directory pages">
         <button className="button outline" disabled={page === 0 || residents.isFetching} onClick={() => setPage((current) => Math.max(0, current - 1))}>Previous</button>

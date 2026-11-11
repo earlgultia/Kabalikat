@@ -5,6 +5,7 @@ import { Bell, Eye, EyeOff, KeyRound, ShieldCheck, UserRound, X } from 'lucide-r
 import { supabase } from '../../lib/supabase'
 import { useModalFocus } from '../../lib/useModalFocus'
 import { listCommunityNotificationPreferences, saveCommunityNotificationPreference } from './notifications-data'
+import { ErrorNotice } from './shared'
 
 const passwordSchema = z.object({
   password: z.string().min(12, 'Use at least 12 characters.').max(128)
@@ -98,7 +99,7 @@ export function AccountSecurityDialog({ email, userId, tenantId, onClose }: { em
           <input id="account-display-name" name="display_name" value={displayName} maxLength={100} minLength={2} placeholder="How colleagues should address you" required disabled={profile.isPending || profile.isError || profileBusy} onChange={(event) => { setDisplayName(event.target.value); setProfileError(''); setProfileMessage('') }} />
           <p className="field-hint">This does not change your official resident record.</p>
           {profile.isPending && <p className="field-hint" role="status">Loading profile…</p>}
-          {profile.isError && <p className="account-security-error" role="alert">Your profile name could not be loaded.</p>}
+          {profile.isError && <ErrorNotice message="Your profile name could not be loaded." onRetry={() => void profile.refetch()} retrying={profile.isFetching} />}
           {profileError && <p className="account-security-error" role="alert">{profileError}</p>}
           {profileMessage && <p className="account-security-success" role="status"><ShieldCheck size={16} />{profileMessage}</p>}
           <div className="account-security-actions"><button type="submit" className="button primary" disabled={profileBusy || profile.isPending || profile.isError}>{profileBusy ? 'Saving…' : 'Save display name'}</button></div>
@@ -108,7 +109,7 @@ export function AccountSecurityDialog({ email, userId, tenantId, onClose }: { em
         <div className="notification-preferences-heading"><Bell size={17} /><div><h3 id="notification-preferences-title">In-app notifications</h3><p>Choose which new updates appear in your inbox for this barangay.</p></div></div>
         {!tenantId && <p className="field-hint">Join an active barangay workspace to manage notification preferences.</p>}
         {tenantId && preferences.isPending && <p className="field-hint" role="status">Loading preferences…</p>}
-        {tenantId && preferences.error && <p className="account-security-error" role="alert">Notification preferences could not be loaded.</p>}
+        {tenantId && preferences.error && <ErrorNotice message="Notification preferences could not be loaded." onRetry={() => void preferences.refetch()} retrying={preferences.isFetching} />}
         {tenantId && preferences.data && <div className="notification-preference-list">
           {([
             ['announcement', 'Community announcements', 'New announcements visible to your role.'],

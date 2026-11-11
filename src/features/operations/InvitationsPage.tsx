@@ -68,7 +68,7 @@ export function InvitationsPage() {
     <PageHeading title="Official invitations" description="Invite people into this barangay with a role-limited, expiring access link." />
     {!tenantId && <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to manage official invitations." />}
     {Boolean(tenantId) && canInvite.isPending && <LoadingNotice compact />}
-    {canInvite.error && <ErrorNotice message="Invitation permission could not be checked. Refresh the page or contact your barangay administrator." />}
+    {canInvite.error && <ErrorNotice message="Invitation permission could not be checked. Refresh the page or contact your barangay administrator." onRetry={() => void canInvite.refetch()} retrying={canInvite.isFetching} />}
     {Boolean(tenantId) && !canInvite.isPending && !canInvite.error && !canInvite.data && <div className="ops-panel"><strong>Invitation access is restricted</strong><p>Your current role cannot invite members to this barangay.</p></div>}
     {canInvite.data && <form className="ops-panel ops-form" onSubmit={(event) => void submit(event)}>
       <div className="ops-panel-heading"><div><h2>Create an invitation</h2><p>No email is sent by this app. Deliver the generated link through your approved channel.</p></div><UserPlus size={18} /></div>
@@ -80,7 +80,7 @@ export function InvitationsPage() {
     </form>}
     {error && !canInvite.data && <ErrorNotice message={error} />}
     <div className="ops-section-title"><h2>Recent invitations</h2><p>Invitation tokens are never listed or shown again after creation.</p></div>
-    {!tenantId ? null : invitations.isPending ? <LoadingNotice /> : invitations.error ? <ErrorNotice message={invitations.error.message} /> : invitations.data?.total ? invitations.data.invitations.length ?
+    {!tenantId ? null : invitations.isPending ? <LoadingNotice /> : invitations.error ? <ErrorNotice message={invitations.error.message} onRetry={() => void invitations.refetch()} retrying={invitations.isFetching} /> : invitations.data?.total ? invitations.data.invitations.length ?
       <div className="ops-table-wrap"><table className="ops-table"><thead><tr><th>Email</th><th>Status</th><th>Expires</th><th>Actions</th></tr></thead><tbody>
         {invitations.data.invitations.map((invite) => {
           const expired = invite.status === 'pending' && new Date(invite.expires_at).getTime() <= Date.now()

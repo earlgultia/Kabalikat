@@ -22,7 +22,7 @@ function IncidentHistory({ tenantId, incidentId, ownStatusOnly }: { tenantId: st
   return <details className="incident-history" onToggle={(event: SyntheticEvent<HTMLDetailsElement>) => setOpen(event.currentTarget.open)}>
     <summary>Report history{history.data ? ` (${history.data.totalCount})` : ''}</summary>
     {history.isPending && open && <LoadingNotice compact />}
-    {history.error && <ErrorNotice message="Unable to load this report history." />}
+    {history.error && <ErrorNotice message="Unable to load this report history." onRetry={() => void history.refetch()} retrying={history.isFetching} />}
     {history.data?.totalCount === 0 && <p>No history entries yet.</p>}
     {history.data?.rows.length ? <ol>{history.data.rows.map((item) => <li key={item.id}><strong>{item.action === 'response_update' ? 'Response update' : item.action.replace('_', ' ')}</strong><span>{formatDateTime(item.created_at)}</span>{item.note && <p>{item.note}</p>}</li>)}</ol> : null}
     {totalPages > 1 && <div className="ops-form-actions"><span className="muted">Page {page + 1} of {totalPages}</span><div className="finance-review-actions">
@@ -32,7 +32,7 @@ function IncidentHistory({ tenantId, incidentId, ownStatusOnly }: { tenantId: st
   </details>
 }
 
-export function IncidentsPage({ focusId, onFocusHandled }: { focusId?: string; onFocusHandled?: () => void }) {
+export function IncidentsPage({ focusId, focusAssignedActive, onFocusHandled }: { focusId?: string; focusAssignedActive?: boolean; onFocusHandled?: () => void }) {
   const { membership, user } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
   const queryClient = useQueryClient()
@@ -95,6 +95,12 @@ export function IncidentsPage({ focusId, onFocusHandled }: { focusId?: string; o
     }).catch(() => { if (!cancelled) onFocusHandled?.() })
     return () => { cancelled = true }
   }, [enabled, focusId, onFocusHandled, tenantId])
+  useEffect(() => {
+    if (!focusAssignedActive || !tenantId || !enabled) return
+    setPage(0); setSearch(''); setDebouncedSearch(''); setStatusFilter('all'); setCategoryFilter('all'); setSeverityFilter('all'); setAssignmentFilter('mine'); setActiveOnly(true); setCreatedAfter(''); setCreatedBefore('')
+    window.requestAnimationFrame(() => document.getElementById('incident-list')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+    onFocusHandled?.()
+  }, [enabled, focusAssignedActive, onFocusHandled, tenantId])
 
   useEffect(() => {
     if (!focusId || focusReadyId !== focusId || !incidents.data?.rows.some((incident) => incident.id === focusId)) return
@@ -234,10 +240,10 @@ export function IncidentsPage({ focusId, onFocusHandled }: { focusId?: string; o
     <div className="ops-panel incident-guidance"><AlertTriangle size={19} /><p><strong>Immediate danger?</strong> Contact the appropriate emergency services directly. Submitting a report here does not contact responders. Avoid entering names, medical details, or other unnecessary personal information.</p></div>
     {!tenantId && <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to view or submit incident reports." />}
     {Boolean(tenantId) && (canCreate.isPending || canReport.isPending || canManage.isPending) && <LoadingNotice compact />}
-    {(canCreate.error || canReport.error || canManage.error) && <ErrorNotice message="Your incident workspace access could not be checked. Refresh the page or contact your barangay administrator." />}
+    {(canCreate.error || canReport.error || canManage.error) && <ErrorNotice message="Your incident workspace access could not be checked. Refresh the page or contact your barangay administrator." onRetry={() => { void canCreate.refetch(); void canReport.refetch(); void canManage.refetch() }} retrying={canCreate.isFetching || canReport.isFetching || canManage.isFetching} />}
     {Boolean(tenantId) && !canCreate.isPending && !canReport.isPending && !canManage.isPending && !canCreate.error && !canReport.error && !canManage.error && !enabled && <EmptyNotice title="Incident workspace access is not enabled" detail="Ask your barangay administrator for incident reporting or management access if you need this workspace." />}
     {message && <div className="ops-success"><CheckCircle2 size={16} />{message}</div>}{error && <ErrorNotice message={error} />}
-    {summary.error && <ErrorNotice message="Incident reports are available, but the workload summary could not be loaded." />}
+    {summary.error && <ErrorNotice message="Incident reports are available, but the workload summary could not be loaded." onRetry={() => void summary.refetch()} retrying={summary.isFetching} />}
     {summary.data && <div className="incident-summary" aria-label="Incident workload summary"><div><strong>{summary.data.openCount}</strong><span>Open reports</span></div><div><strong>{summary.data.urgentOpenCount}</strong><span>High or urgent</span></div><div><strong>{canReport.data && !canCreate.data ? summary.data.myOpenCount : summary.data.assignedToMeCount}</strong><span>{canReport.data && !canCreate.data ? 'Your open reports' : 'Assigned to you'}</span></div></div>}
     {canManage.data && breakdown.data && <section className="ops-panel incident-breakdown" aria-label="Incident queue overview"><div><h2>Queue overview</h2><p>Counts follow the selected report date range. Select a status or category to filter the queue.</p></div><button type="button" className="incident-unassigned-summary" aria-label="Show active reports without an assignee" aria-pressed={assignmentFilter === 'unassigned' && activeOnly} onClick={() => { const selected = assignmentFilter === 'unassigned' && activeOnly; setAssignmentFilter(selected ? 'all' : 'unassigned'); setActiveOnly(!selected); setStatusFilter('all'); setPage(0) }}><span>Active reports without an assignee</span><strong>{breakdown.data.find((item) => item.metric_type === 'assignment' && item.metric_value === 'unassigned_active')?.report_count ?? 0}</strong><small>Submitted, acknowledged, or in progress · Select to review</small></button><div className="incident-breakdown-groups"><div><h3>By status</h3><ul>{breakdown.data.filter((item) => item.metric_type === 'status').map((item) => <li key={item.metric_value}><button type="button" className="incident-status-shortcut" aria-pressed={statusFilter === item.metric_value && !activeOnly} onClick={() => { setStatusFilter((current) => current === item.metric_value && !activeOnly ? 'all' : item.metric_value); setActiveOnly(false); setPage(0) }}><span>{statusLabels[item.metric_value] ?? item.metric_value}</span><strong>{item.report_count}</strong></button></li>)}</ul></div><div><h3>By category</h3><ul>{breakdown.data.filter((item) => item.metric_type === 'category').map((item) => <li key={item.metric_value}><button type="button" className="incident-status-shortcut" aria-pressed={categoryFilter === item.metric_value} onClick={() => { setCategoryFilter((current) => current === item.metric_value ? 'all' : item.metric_value); setPage(0) }}><span>{item.metric_value}</span><strong>{item.report_count}</strong></button></li>)}</ul></div></div></section>}
     {showForm && canSubmit && <form className="ops-panel ops-form" onSubmit={(event) => void create(event)}><div className="ops-panel-heading"><div><h2>New incident report</h2><p>Share only the minimum details needed to respond. Do not include names or medical information.</p></div><Siren size={19} /></div><div className="ops-form-grid">
@@ -247,7 +253,7 @@ export function IncidentsPage({ focusId, onFocusHandled }: { focusId?: string; o
       <label className="span-two">Short summary<input name="summary" minLength={3} maxLength={180} required /></label>
       <label className="span-two">Details<textarea name="details" maxLength={3000} rows={4} /></label>
     </div><div className="ops-form-actions"><button className="button primary" disabled={busy}>Submit report</button></div></form>}
-    {incidents.isPending && enabled && validDateRange && <LoadingNotice />}{incidents.error && <ErrorNotice message={incidents.error.message} />}
+    {incidents.isPending && enabled && validDateRange && <LoadingNotice />}{incidents.error && <ErrorNotice message={incidents.error.message} onRetry={() => void incidents.refetch()} retrying={incidents.isFetching} />}
     {enabled && <div className="incident-filters"><label>Search<input aria-label="Search incident reports" placeholder="Summary, location, or details" value={search} onChange={(event) => setSearch(event.target.value)} /></label><label>Status<select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setActiveOnly(false); setPage(0) }}><option value="all">All statuses</option>{Object.entries(statusLabels).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Category<select value={categoryFilter} onChange={(event) => { setCategoryFilter(event.target.value); setPage(0) }}><option value="all">All categories</option>{['safety','hazard','disturbance','property','disaster','other'].map((category) => <option key={category} value={category}>{category}</option>)}</select></label><label>Severity<select value={severityFilter} onChange={(event) => { setSeverityFilter(event.target.value); setPage(0) }}><option value="all">All severities</option>{['urgent','high','moderate','low'].map((severity) => <option key={severity} value={severity}>{severity[0].toUpperCase() + severity.slice(1)}</option>)}</select></label><label>Reported on or after<input type="date" value={createdAfter} max={createdBefore || undefined} onChange={(event) => { setCreatedAfter(event.target.value); setPage(0) }} /></label><label>Reported on or before<input type="date" value={createdBefore} min={createdAfter || undefined} onChange={(event) => { setCreatedBefore(event.target.value); setPage(0) }} /></label>{(createdAfter || createdBefore) && <button type="button" className="button outline" onClick={() => { setCreatedAfter(''); setCreatedBefore(''); setPage(0) }}>Clear dates</button>}{canManage.data && <button type="button" className="button outline incident-export-button" disabled={exportBusy || !validDateRange} onClick={() => void exportIncidents()}><FileDown size={16} />{exportBusy ? 'Preparing export…' : 'Export filtered queue'}</button>}</div>}
     {enabled && (canCreate.data || canManage.data) && <div className="incident-assignment-filters" role="group" aria-label="Filter incident assignment">
       <button type="button" className={`button ${assignmentFilter === 'all' ? 'primary' : 'outline'}`} aria-pressed={assignmentFilter === 'all'} onClick={() => { setAssignmentFilter('all'); setPage(0) }}>All reports</button>
@@ -257,7 +263,7 @@ export function IncidentsPage({ focusId, onFocusHandled }: { focusId?: string; o
     </div>}
     {!validDateRange && <p className="muted" role="alert">The start date must be on or before the end date.</p>}
     {incidents.data?.totalCount === 0 && <div className="ops-empty"><Siren size={22} /><strong>{hasFilters ? 'No matching reports' : 'No incident reports'}</strong><p>{hasFilters ? 'Adjust the search or filters to see other reports.' : 'Reports you submit or are authorized to manage appear here.'}</p></div>}
-    <div className="incident-list">{visibleIncidents.map((incident) => <article id={`incident-card-${incident.id}`} tabIndex={-1} className="ops-panel incident-card" key={incident.id}>
+    <div className="incident-list" id="incident-list">{visibleIncidents.map((incident) => <article id={`incident-card-${incident.id}`} tabIndex={-1} className="ops-panel incident-card" key={incident.id}>
       <header><div><StatusPill status={incident.status} /><h2>{incident.summary}</h2></div><span className={`incident-severity severity-${incident.severity}`}>{incident.severity}</span></header>
       <div className="incident-meta"><span>{incident.category}</span><span>{incident.location}</span><span>{formatDateTime(incident.created_at)}</span></div>
       {incident.details && <details className="incident-report-details"><summary>View report details</summary><p className="incident-details">{incident.details}</p></details>}

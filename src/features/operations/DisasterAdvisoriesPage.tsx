@@ -24,7 +24,7 @@ function ResourceActivityHistory({ tenantId, resourceId, enabled }: { tenantId: 
   const total = history.data?.[0]?.total_count ?? 0
   const pages = Math.ceil(total / DISASTER_RESOURCE_HISTORY_PAGE_SIZE)
   if (history.isPending) return <p className="field-hint" role="status">Loading change history…</p>
-  if (history.error) return <p className="account-security-error" role="alert">Change history could not be loaded.</p>
+  if (history.error) return <ErrorNotice message="Change history could not be loaded." onRetry={() => void history.refetch()} retrying={history.isFetching} />
   return <>
     {history.data?.length ? <ol>{history.data.map((entry) => <li key={`${entry.resource_id}-${entry.action}-${entry.created_at}`}><strong>{entry.action}</strong><span>{formatDateTime(entry.created_at)} · {entry.actor_name}</span>{entry.note && <p>{entry.note}</p>}</li>)}</ol> : <p className="field-hint">No changes have been recorded for this resource.</p>}
     {history.data?.length ? <p className="field-hint">{total} total entries</p> : null}
@@ -52,7 +52,7 @@ function AdvisoryHistory({ tenantId, advisoryId }: { tenantId: string; advisoryI
   return <details className="incident-history" onToggle={(event) => setOpen(event.currentTarget.open)}>
     <summary>Advisory history{history.data ? ` (${history.data.total})` : ''}</summary>
     {history.isPending && open && <p className="field-hint" role="status">Loading advisory history…</p>}
-    {history.error && <p className="account-security-error" role="alert">Advisory history could not be loaded.</p>}
+    {history.error && <ErrorNotice message="Advisory history could not be loaded." onRetry={() => void history.refetch()} retrying={history.isFetching} />}
     {history.data?.events.length ? <ol>{history.data.events.map((item) => <li key={item.id}><strong>{item.action}</strong><span>{formatDateTime(item.created_at)}</span>{item.note && <p>{item.note}</p>}</li>)}</ol> : null}
     {history.data?.total === 0 && <p className="field-hint">No history has been recorded for this advisory.</p>}
     {pageCount > 1 && <div className="finance-review-actions"><span className="field-hint">Page {page + 1} of {pageCount} · {history.data?.total} entries</span><button type="button" className="button outline" disabled={page === 0 || history.isFetching} onClick={() => setPage((current) => current - 1)}>Previous</button><button type="button" className="button outline" disabled={page + 1 >= pageCount || history.isFetching} onClick={() => setPage((current) => current + 1)}>Next</button></div>}
@@ -228,7 +228,7 @@ export function DisasterAdvisoriesPage({ focusId, onFocusHandled }: { focusId?: 
     </PageHeading>
     <div className="ops-panel incident-guidance"><AlertTriangle size={19} /><p><strong>Immediate danger?</strong> Contact appropriate emergency services directly. This advisory board does not send alerts or contact responders.</p></div>
     {(canManage.isPending || canRead.isPending) && <LoadingNotice compact />}
-    {(canManage.error || canRead.error) && <ErrorNotice message="Your disaster workspace access could not be checked. Refresh the page or contact your barangay administrator." />}
+    {(canManage.error || canRead.error) && <ErrorNotice message="Your disaster workspace access could not be checked. Refresh the page or contact your barangay administrator." onRetry={() => { void canManage.refetch(); void canRead.refetch() }} retrying={canManage.isFetching || canRead.isFetching} />}
     {!canManage.isPending && !canRead.isPending && !canManage.error && !canRead.error && !enabled && <EmptyNotice title="Disaster workspace access is not enabled" detail="Ask your barangay administrator for disaster read or management access if you need to view local advisories and emergency resources." />}
     {message && <div className="ops-success"><CheckCircle2 size={16} />{message}</div>}{error && <ErrorNotice message={error} />}
     {focusError && <div className="account-security-error" role="alert">{focusError}</div>}
@@ -244,7 +244,7 @@ export function DisasterAdvisoriesPage({ focusId, onFocusHandled }: { focusId?: 
         <label>Address <span className="field-hint">Required for an evacuation center</span><input name="address" maxLength={250} defaultValue={editingResource?.address ?? ''} /></label>
         <label className="span-two">Additional public details <span className="field-hint">Optional; do not include private personal information</span><textarea name="details" rows={3} maxLength={1000} defaultValue={editingResource?.details ?? ''} /></label>
       </div><div className="ops-form-actions"><span className="field-hint">{editingResource ? 'This draft remains private until published.' : 'New entries remain private drafts until published.'}</span><button type="button" className="button outline" onClick={() => { setEditingResource(null); setShowResourceForm(false) }}>Cancel</button><button className="button primary" disabled={busy}>{busy ? 'Saving…' : editingResource ? 'Save changes' : 'Save draft'}</button></div></form>}
-      {resources.isPending && enabled && <LoadingNotice compact />}{resources.error && <ErrorNotice message={resources.error.message} />}
+      {resources.isPending && enabled && <LoadingNotice compact />}{resources.error && <ErrorNotice message={resources.error.message} onRetry={() => void resources.refetch()} retrying={resources.isFetching} />}
       {!resources.isPending && !resources.error && resources.data?.total === 0 && <p className="field-hint">No emergency resources match these filters. Change the search, type, or status.</p>}
       {!resources.isPending && !resources.error && (resources.data?.total ?? 0) > 0 && visibleResources.length === 0 && <p className="field-hint">No resources are available on this page. Return to the previous page.</p>}
       <div className="emergency-resource-list">{visibleResources.map((resource) => {
@@ -267,7 +267,7 @@ export function DisasterAdvisoriesPage({ focusId, onFocusHandled }: { focusId?: 
       <label className="span-two">Verified instructions<textarea name="instructions" maxLength={4000} minLength={3} rows={5} required placeholder="Include verified guidance and where residents can get help." /></label>
       <label>Expires (optional)<input name="expiry" type="datetime-local" /></label>
     </div><div className="ops-form-actions"><button className="button primary" disabled={busy}>Save draft</button></div></form>}
-    {advisories.isPending && enabled && <LoadingNotice />}{advisories.error && <ErrorNotice message={advisories.error.message} />}
+    {advisories.isPending && enabled && <LoadingNotice />}{advisories.error && <ErrorNotice message={advisories.error.message} onRetry={() => void advisories.refetch()} retrying={advisories.isFetching} />}
     {enabled && <div className="advisory-filters"><label>Search advisories<input value={advisorySearch} onChange={(event) => setAdvisorySearch(event.target.value)} placeholder="Title, affected area, or instructions" /></label><label>Severity<select value={advisorySeverityFilter} onChange={(event) => { setAdvisorySeverityFilter(event.target.value as typeof advisorySeverityFilter); setPage(0) }}><option value="all">All severities</option><option value="information">Information</option><option value="watch">Watch</option><option value="warning">Warning</option><option value="emergency">Emergency</option></select></label>{canManage.data && <label>Status<select value={advisoryStatusFilter} onChange={(event) => { setAdvisoryStatusFilter(event.target.value as typeof advisoryStatusFilter); setPage(0) }}><option value="all">All statuses</option><option value="draft">Draft</option><option value="published">Published</option><option value="resolved">Resolved</option></select></label>}</div>}
     {advisories.data?.total === 0 && (debouncedAdvisorySearch || advisorySeverityFilter !== 'all' || advisoryStatusFilter !== 'all') && <p className="field-hint">No advisories match these filters. Change the search, severity, or status.</p>}
     {advisories.data?.total === 0 && !debouncedAdvisorySearch && advisorySeverityFilter === 'all' && advisoryStatusFilter === 'all' && <div className="ops-empty"><Megaphone size={22} /><strong>No advisories available</strong><p>Published disaster advisories will appear here.</p></div>}

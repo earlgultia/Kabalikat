@@ -1148,15 +1148,25 @@ export async function listFinancialAdjustmentsForTransactions(tenantId: string, 
 
 export async function listFinancialReceiptsForTransactions(tenantId: string, transactionIds: string[]): Promise<FinancialReceiptRow[]> {
   if (!transactionIds.length) return []
-  const { data, error } = await client().from('financial_receipts')
-    .select('id,transaction_id,file_name,mime_type,file_size,storage_path,created_at')
-    .eq('barangay_id', tenantId).in('transaction_id', transactionIds).order('created_at', { ascending: false })
-  if (error) throw new Error(error.message)
-  return (data ?? []) as FinancialReceiptRow[]
+  const pageSize = 500
+  const result: FinancialReceiptRow[] = []
+  for (let page = 0; ; page += 1) {
+    const { data, error } = await client().from('financial_receipts')
+      .select('id,transaction_id,file_name,mime_type,file_size,storage_path,created_at')
+      .eq('barangay_id', tenantId).in('transaction_id', transactionIds)
+      .order('created_at', { ascending: false }).order('id', { ascending: false })
+      .range(page * pageSize, (page + 1) * pageSize - 1)
+    if (error) throw new Error(error.message)
+    const batch = (data ?? []) as FinancialReceiptRow[]
+    result.push(...batch)
+    if (batch.length < pageSize) break
+  }
+  return result
 }
 
 export async function listFinancialReportRows(tenantId: string, dateFrom: string, dateTo: string) {
   const batchSize = 500
+  const maxExportRows = 100_000
   const transactions: FinancialTransactionRow[] = []
   for (let page = 0; ; page += 1) {
     const from = page * batchSize
@@ -1168,11 +1178,17 @@ export async function listFinancialReportRows(tenantId: string, dateFrom: string
     if (error) throw new Error(error.message)
     const batch = (data ?? []) as unknown as FinancialTransactionRow[]
     transactions.push(...batch)
+    if (transactions.length > maxExportRows) {
+      throw new Error('This report is limited to 100,000 rows. Narrow the date range and export again.')
+    }
     if (batch.length < batchSize) break
   }
   const adjustments: FinancialAdjustmentRow[] = []
   for (let offset = 0; offset < transactions.length; offset += 200) {
     adjustments.push(...await listFinancialAdjustmentsForTransactions(tenantId, transactions.slice(offset, offset + 200).map((item) => item.id)))
+    if (transactions.length + adjustments.length > maxExportRows) {
+      throw new Error('This report is limited to 100,000 rows. Narrow the date range and export again.')
+    }
   }
   return { transactions, adjustments }
 }
@@ -1232,16 +1248,52 @@ export async function uploadFinancialReceipt(transactionId: string, file: File) 
   const safeName = file.name.replaceAll('\\', '_').replaceAll('/', '_')
     .split('').map((character) => character.charCodeAt(0) < 32 ? '_' : character).join('').trim()
   if (!safeName || safeName === '.' || safeName === '..' || safeName.length > 180) throw new Error('The receipt file name is invalid or too long.')
+  try { await cleanupExpiredFinancialReceiptUploads() }
+  catch { /* Expired uploads must not block a new receipt upload. */ }
   const receiptId = window.crypto.randomUUID()
   const path = await rpc<string>('create_financial_receipt_upload_intent', {
     p_transaction_id: transactionId, p_receipt_id: receiptId, p_file_name: safeName,
     p_mime_type: file.type, p_file_size: file.size,
   })
-  const { error } = await client().storage.from('financial-receipts').upload(path, file, {
-    cacheControl: '3600', contentType: file.type, upsert: false,
-  })
-  if (error) throw new Error(error.message)
-  await rpc<string>('register_financial_receipt', { p_receipt_id: receiptId })
+  try {
+    const { error } = await client().storage.from('financial-receipts').upload(path, file, {
+      cacheControl: '3600', contentType: file.type, upsert: false,
+    })
+    if (error) throw new Error(error.message)
+    await rpc<string>('register_financial_receipt', { p_receipt_id: receiptId })
+  } catch (error) {
+    try {
+      const { error: cleanupError } = await client().storage.from('financial-receipts').remove([path])
+      if (!cleanupError) {
+        await rpc<boolean>('discard_financial_receipt_upload_intent', { p_receipt_id: receiptId })
+      }
+    } catch {
+      // Preserve the primary upload error if cleanup is also unavailable.
+    }
+    throw error
+  }
+}
+
+export async function cleanupExpiredFinancialReceiptUploads() {
+  const expiredPaths = await rpc<string[]>('list_expired_financial_receipt_upload_paths', {})
+  let removed = 0
+  let failed = 0
+  for (const expiredPath of expiredPaths) {
+    const { error } = await client().storage.from('financial-receipts').remove([expiredPath])
+    if (error) { failed += 1; continue }
+    const receiptIdFromPath = expiredPath.split('/')[2]
+    if (!receiptIdFromPath) { failed += 1; continue }
+    try {
+      if (await rpc<boolean>('discard_financial_receipt_upload_intent', { p_receipt_id: receiptIdFromPath })) removed += 1
+      else failed += 1
+    } catch { failed += 1 }
+  }
+  try { removed += await rpc<number>('cleanup_expired_financial_receipt_uploads', {}) }
+  catch (error) {
+    if (!expiredPaths.length) throw error
+    failed += 1
+  }
+  return { removed, failed }
 }
 
 export async function createFinancialReceiptDownloadUrl(path: string) {

@@ -240,11 +240,14 @@ export function DocumentsPage({ focusId, onFocusHandled }: { focusId?: string; o
     </PageHeading>
     {message && <div className="ops-success"><FileText size={16} />{message}</div>}
     {error && <ErrorNotice message={error} />}
-    {(canReadRequests.error || canReview.error || canIssue.error || canManageTypes.error) && <ErrorNotice message="Some document service permissions could not be checked. Related staff controls remain hidden until access can be verified; refresh the page or contact your barangay administrator." />}
+    {canReadRequests.error && <ErrorNotice message="Document request access could not be checked." onRetry={() => void canReadRequests.refetch()} retrying={canReadRequests.isFetching} />}
+    {canReview.error && <ErrorNotice message="Document review access could not be checked." onRetry={() => void canReview.refetch()} retrying={canReview.isFetching} />}
+    {canIssue.error && <ErrorNotice message="Document issuance access could not be checked." onRetry={() => void canIssue.refetch()} retrying={canIssue.isFetching} />}
+    {canManageTypes.error && <ErrorNotice message="Document type management access could not be checked." onRetry={() => void canManageTypes.refetch()} retrying={canManageTypes.isFetching} />}
     {residents.error && <ErrorNotice message="Resident records for document requests could not be loaded." onRetry={() => void residents.refetch()} retrying={residents.isFetching} />}
     {isResident && <section className="ops-panel document-type-management" aria-labelledby="resident-document-catalog-title">
       <div className="ops-panel-heading"><div><h2 id="resident-document-catalog-title">Documents you can request</h2><p>Review the purpose and what to bring before starting an application.</p></div><ListChecks size={19} /></div>
-      {types.isPending ? <LoadingNotice compact /> : types.error ? <ErrorNotice message={types.error.message} /> : enabledTypes.length ? <div className="document-type-list">{enabledTypes.map((type) => <article key={type.id}>
+      {types.isPending ? <LoadingNotice compact /> : types.error ? <ErrorNotice message={types.error.message} onRetry={() => void types.refetch()} retrying={types.isFetching} /> : enabledTypes.length ? <div className="document-type-list">{enabledTypes.map((type) => <article key={type.id}>
         <div><strong>{type.name}</strong>{type.description && <p>{type.description}</p>}{type.requirements.length > 0 ? <><small>Bring these items to the barangay office:</small><ul>{type.requirements.map((requirement) => <li key={requirement}>{requirement}</li>)}</ul></> : <small>Check with the barangay office about any supporting items.</small>}</div>
       </article>)}</div> : <EmptyNotice title="Online requests are not available yet" detail="Please contact your barangay office for current document services." />}
       {enabledTypes.length > 0 && <p className="field-hint">This page does not collect supporting files. The barangay office will explain any in-person steps.</p>}
@@ -263,13 +266,13 @@ export function DocumentsPage({ focusId, onFocusHandled }: { focusId?: string; o
       {!createTypeOpen && !editTypeId && <button className="button outline" onClick={() => setCreateTypeOpen(true)}>Add document type</button>}
       {createTypeOpen && <DocumentTypeEditor key="new-document-type" busy={busy} onSave={saveDocumentType} onCancel={() => setCreateTypeOpen(false)} />}
       <details className="document-type-audit" onToggle={(event: SyntheticEvent<HTMLDetailsElement>) => setTypeActivityOpen(event.currentTarget.open)}><summary>Configuration change history{typeActivity.data ? ` (${typeActivity.data.totalCount})` : ''}</summary>
-        {typeActivity.isPending ? <LoadingNotice compact /> : typeActivity.error ? <ErrorNotice message={typeActivity.error.message} /> : typeActivity.data?.rows.length ? <ol>{typeActivity.data.rows.map((entry) => <li key={entry.activity_id}>
+        {typeActivity.isPending ? <LoadingNotice compact /> : typeActivity.error ? <ErrorNotice message={typeActivity.error.message} onRetry={() => void typeActivity.refetch()} retrying={typeActivity.isFetching} /> : typeActivity.data?.rows.length ? <ol>{typeActivity.data.rows.map((entry) => <li key={entry.activity_id}>
           <div><strong>{entry.document_type_name} · {entry.action}</strong><small>{entry.actor_name} · {new Date(entry.created_at).toLocaleString()}</small></div>
           <details><summary>View recorded values</summary><div className="document-type-audit-values">{entry.previous_values && <div><strong>Before</strong><pre>{JSON.stringify(entry.previous_values, null, 2)}</pre></div>}<div><strong>After</strong><pre>{JSON.stringify(entry.new_values, null, 2)}</pre></div></div></details>
         </li>)}</ol> : <p className="field-hint">No document type changes have been recorded yet.</p>}
         {typeActivityTotalPages > 1 && <nav className="ops-form-actions" aria-label="Document type history pages"><span className="field-hint">Page {typeActivityPage + 1} of {typeActivityTotalPages} · {typeActivity.data?.totalCount.toLocaleString()} changes</span><div className="finance-review-actions"><button type="button" className="button outline" disabled={typeActivityPage === 0 || typeActivity.isFetching} onClick={() => setTypeActivityPage((current) => current - 1)}><ChevronLeft size={15} />Previous</button><button type="button" className="button outline" disabled={typeActivityPage + 1 >= typeActivityTotalPages || typeActivity.isFetching} onClick={() => setTypeActivityPage((current) => current + 1)}>Next<ChevronRight size={15} /></button></div></nav>}
       </details>
-      {types.error && <ErrorNotice message={types.error.message} />}
+      {types.error && <ErrorNotice message={types.error.message} onRetry={() => void types.refetch()} retrying={types.isFetching} />}
       {types.isPending ? <LoadingNotice compact /> : <div className="document-type-list">{(types.data ?? []).map((type) => <article key={type.id}>
         {editTypeId === type.id ? <DocumentTypeEditor key={type.id} item={type} busy={busy} onSave={saveDocumentType} onCancel={() => setEditTypeId(null)} /> : <>
           <div><strong>{type.name}</strong><small>{type.code} · {type.public_request_enabled ? 'Available to residents' : 'Not available online'}</small>{type.description && <p>{type.description}</p>}{type.requirements.length > 0 && <ul>{type.requirements.map((requirement) => <li key={requirement}>{requirement}</li>)}</ul>}</div>
@@ -277,11 +280,11 @@ export function DocumentsPage({ focusId, onFocusHandled }: { focusId?: string; o
         </>}
       </article>)}</div>}
     </section>}
-    {types.error && <ErrorNotice message={types.error.message} />}
+    {types.error && <ErrorNotice message={types.error.message} onRetry={() => void types.refetch()} retrying={types.isFetching} />}
     <div className="ops-section-title"><h2>Requests</h2><p>Residents see only their own private requests; authorized staff see their tenant queue.</p></div>
     {focusError && <p className="account-security-error" role="status">{focusError}</p>}
     {tenantId && <div className="incident-filters"><label>Search requests<input type="search" value={requestSearch} onChange={(event) => setRequestSearch(event.target.value)} placeholder="Reference, resident, purpose, or document" /></label><label>Filter requests by status<select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setRequestPage(0) }}><option value="all">All requests</option>{['pending', 'under_review', 'awaiting_approval', 'approved', 'rejected', 'issued', 'released', 'cancelled'].map((status) => <option value={status} key={status}>{status.replaceAll('_', ' ')}</option>)}</select></label></div>}
-    {!tenantId ? <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to view document services and requests." /> : requests.isPending ? <LoadingNotice /> : requests.error ? <ErrorNotice message={requests.error.message} /> : requests.data?.total ? visibleRequests.length ?
+    {!tenantId ? <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to view document services and requests." /> : requests.isPending ? <LoadingNotice /> : requests.error ? <ErrorNotice message={requests.error.message} onRetry={() => void requests.refetch()} retrying={requests.isFetching} /> : requests.data?.total ? visibleRequests.length ?
       <div className="ops-request-list">{visibleRequests.map((request) => {
         const isStaff = Boolean(canReview.data || canIssue.data)
         const requestEvents = activity.data?.filter((entry) => entry.request_id === request.id) ?? []

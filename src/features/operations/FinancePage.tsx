@@ -1,12 +1,12 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
-import { CheckCircle2, ChevronLeft, ChevronRight, CircleDollarSign, Download, ReceiptText, ShieldCheck } from 'lucide-react'
+import { CheckCircle2, ChevronLeft, ChevronRight, CircleDollarSign, Download, ReceiptText, ShieldCheck, Trash2 } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import {
   approveFinanceBudget, createFinanceBudget, createFinancialTransaction, createFinancialReceiptDownloadUrl, hasPermission,
   FINANCE_BUDGET_AMENDMENT_PAGE_SIZE, FINANCE_BUDGET_PAGE_SIZE, FINANCE_REPORT_EXPORT_PAGE_SIZE, FINANCIAL_TRANSACTION_PAGE_SIZE, listFinanceBudgetAmendmentPage, listFinanceBudgetPage, listFinanceBudgetUsageForPage, listFinanceReportExportPage, listFinancialAdjustmentsForTransactions, listFinancialReceiptsForTransactions, listFinancialReportRows, listFinancialTransactionPage, reviewFinanceBudgetAmendment, reviewFinancialAdjustment, reviewFinancialTransaction,
-  recordFinanceReportExport, requestFinanceBudgetAmendment, requestFinancialAdjustment, uploadFinancialReceipt, voidFinancialTransaction,
+  cleanupExpiredFinancialReceiptUploads, recordFinanceReportExport, requestFinanceBudgetAmendment, requestFinancialAdjustment, uploadFinancialReceipt, voidFinancialTransaction,
 } from './data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 import { formatDateTime } from './format'
@@ -15,11 +15,23 @@ import { encodeCsv } from './csv'
 const budgetSchema = z.object({ fiscalYear: z.coerce.number().int().min(2000).max(2200), name: z.string().trim().min(3).max(120), amount: z.coerce.number().positive().finite().max(999999999999.99) })
 const transactionSchema = z.object({ budgetId: z.string().uuid(), type: z.enum(['income', 'expense']), category: z.string().trim().min(2).max(80), description: z.string().trim().min(3).max(1000), amount: z.coerce.number().positive().finite().max(999999999999.99), date: z.string().date() })
 const currency = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' })
+const toCents = (amount: number | string) => {
+  const match = String(amount).trim().match(/^([+-]?)(\d+)(?:\.(\d*))?$/)
+  if (!match) throw new Error('A financial amount is not in a valid decimal format.')
+  const [, sign, whole, decimal = ''] = match
+  const cents = BigInt(whole) * 100n + BigInt((decimal + '00').slice(0, 2))
+  return sign === '-' ? -cents : cents
+}
+const centsToDecimal = (amount: bigint) => {
+  const sign = amount < 0n ? '-' : ''
+  const absolute = amount < 0n ? -amount : amount
+  return `${sign}${absolute / 100n}.${String(absolute % 100n).padStart(2, '0')}`
+}
 const allowedReceiptTypes = new Set(['application/pdf', 'image/jpeg', 'image/png'])
 const receiptLimitBytes = 10 * 1024 * 1024
 const localDate = (() => { const today = new Date(); return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}` })()
 
-export function FinancePage() {
+export function FinancePage({ focusQueue, onFocusHandled }: { focusQueue?: 'budgets' | 'transactions' | 'budget_changes' | 'transaction_changes'; onFocusHandled?: () => void }) {
   const { membership, user } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
   const queryClient = useQueryClient()
@@ -52,6 +64,22 @@ export function FinancePage() {
   const [reportFrom, setReportFrom] = useState(`${thisYear}-01-01`)
   const [reportTo, setReportTo] = useState(`${thisYear}-12-31`)
 
+  useEffect(() => {
+    if (!focusQueue) return
+    const target = focusQueue === 'budgets'
+      ? 'finance-annual-budgets'
+      : focusQueue === 'budget_changes'
+        ? 'finance-budget-amendment-reviews'
+        : focusQueue === 'transaction_changes'
+          ? 'finance-transaction-changes'
+          : 'finance-transactions'
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById(target)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      onFocusHandled?.()
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [focusQueue, onFocusHandled])
+
   async function refresh() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['finance-budgets', tenantId] }),
@@ -62,6 +90,17 @@ export function FinancePage() {
       queryClient.invalidateQueries({ queryKey: ['financial-adjustments', tenantId] }),
       queryClient.invalidateQueries({ queryKey: ['financial-receipts', tenantId] }),
     ])
+  }
+
+  async function cleanupExpiredReceipts() {
+    setBusy(true); setError(''); setMessage('')
+    try {
+      const result = await cleanupExpiredFinancialReceiptUploads()
+      setMessage(result.failed
+        ? `${result.removed} expired upload${result.removed === 1 ? '' : 's'} cleaned up. ${result.failed} could not be cleaned up; try again later.`
+        : `${result.removed} expired upload${result.removed === 1 ? '' : 's'} cleaned up.`)
+    } catch (err) { setError(err instanceof Error ? err.message : 'Unable to clean up expired receipt uploads.') }
+    finally { setBusy(false) }
   }
 
   async function submitBudget(event: FormEvent<HTMLFormElement>) {
@@ -167,7 +206,7 @@ export function FinancePage() {
     const form = event.currentTarget
     const file = (form.elements.namedItem('receipt') as HTMLInputElement | null)?.files?.[0]
     if (!file || !allowedReceiptTypes.has(file.type) || file.size < 1 || file.size > receiptLimitBytes) {
-      setError('Choose a PDF, JPEG, or PNG receipt smaller than 10 MB.')
+      setError('Choose a PDF, JPEG, or PNG receipt up to 10 MB.')
       return
     }
     setBusy(true); setError(''); setMessage('')
@@ -180,11 +219,19 @@ export function FinancePage() {
 
   async function openReceipt(path: string) {
     setError('')
+    const receiptWindow = window.open('about:blank', '_blank')
+    if (!receiptWindow) {
+      setError('Allow pop-ups for this site to open the private receipt.')
+      return
+    }
+    receiptWindow.opener = null
     try {
       const url = await createFinancialReceiptDownloadUrl(path)
-      const link = document.createElement('a')
-      link.href = url; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.click()
-    } catch (err) { setError(err instanceof Error ? err.message : 'Unable to open this receipt.') }
+      receiptWindow.location.replace(url)
+    } catch (err) {
+      receiptWindow.close()
+      setError(err instanceof Error ? err.message : 'Unable to open this receipt.')
+    }
   }
 
   async function exportFinanceReport() {
@@ -199,28 +246,25 @@ export function FinancePage() {
       const postedIncomeRows = postedRows.filter((item) => item.transaction_type === 'income')
       const approvedAdjustments = adjustmentRows.filter((adjustment) => adjustment.status === 'approved')
       const approvedAdjustmentTotal = (type: 'expense' | 'income') => approvedAdjustments.reduce((total, adjustment) => {
-        return byId.get(adjustment.transaction_id)?.transaction_type === type ? total + Number(adjustment.amount_change) : total
-      }, 0)
+        return byId.get(adjustment.transaction_id)?.transaction_type === type ? total + toCents(adjustment.amount_change) : total
+      }, 0n)
       const expenseAdjustments = approvedAdjustmentTotal('expense')
       const incomeAdjustments = approvedAdjustmentTotal('income')
-      const postedExpensesBeforeAdjustments = postedExpenseRows.reduce((total, item) => total + Number(item.amount), 0)
-      const postedIncomeBeforeAdjustments = postedIncomeRows.reduce((total, item) => total + Number(item.amount), 0)
+      const postedExpensesBeforeAdjustments = postedExpenseRows.reduce((total, item) => total + toCents(item.amount), 0n)
+      const postedIncomeBeforeAdjustments = postedIncomeRows.reduce((total, item) => total + toCents(item.amount), 0n)
       const reconciledExpenses = postedExpensesBeforeAdjustments + expenseAdjustments
       const reconciledIncome = postedIncomeBeforeAdjustments + incomeAdjustments
       const statusCounts = ['posted', 'submitted', 'rejected', 'voided'].map((status) => [status, transactionRows.filter((item) => item.status === status).length])
-      await recordFinanceReportExport(tenantId, reportFrom, reportTo, rowCount)
-      setExportHistoryPage(0)
-      await queryClient.invalidateQueries({ queryKey: ['finance-report-exports', tenantId] })
       const csv = encodeCsv([
         ['Reconciliation summary'],
         ['Date range', reportFrom, reportTo],
-        ['Posted expenses before approved adjustments (PHP)', postedExpensesBeforeAdjustments.toFixed(2)],
-        ['Approved expense adjustments (PHP)', expenseAdjustments.toFixed(2)],
-        ['Reconciled posted expenses (PHP)', reconciledExpenses.toFixed(2)],
-        ['Posted income before approved adjustments (PHP)', postedIncomeBeforeAdjustments.toFixed(2)],
-        ['Approved income adjustments (PHP)', incomeAdjustments.toFixed(2)],
-        ['Reconciled posted income (PHP)', reconciledIncome.toFixed(2)],
-        ['Net posted cash flow after approved adjustments (PHP)', (reconciledIncome - reconciledExpenses).toFixed(2)],
+        ['Posted expenses before approved adjustments (PHP)', centsToDecimal(postedExpensesBeforeAdjustments)],
+        ['Approved expense adjustments (PHP)', centsToDecimal(expenseAdjustments)],
+        ['Reconciled posted expenses (PHP)', centsToDecimal(reconciledExpenses)],
+        ['Posted income before approved adjustments (PHP)', centsToDecimal(postedIncomeBeforeAdjustments)],
+        ['Approved income adjustments (PHP)', centsToDecimal(incomeAdjustments)],
+        ['Reconciled posted income (PHP)', centsToDecimal(reconciledIncome)],
+        ['Net posted cash flow after approved adjustments (PHP)', centsToDecimal(reconciledIncome - reconciledExpenses)],
         ['Transactions by status', 'Count'],
         ...statusCounts,
         [],
@@ -234,6 +278,9 @@ export function FinancePage() {
           Number(adjustment.amount_change).toFixed(2), adjustment.status, adjustment.requested_by, adjustment.reviewed_by ?? '',
           adjustment.review_note ?? '', ''] }),
       ])
+      await recordFinanceReportExport(tenantId, reportFrom, reportTo, rowCount)
+      setExportHistoryPage(0)
+      await queryClient.invalidateQueries({ queryKey: ['finance-report-exports', tenantId] })
       const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
       const link = document.createElement('a'); link.href = url; link.download = `kabalikat-finance-${reportFrom}-to-${reportTo}.csv`; link.click()
       window.setTimeout(() => URL.revokeObjectURL(url), 1000)
@@ -248,13 +295,14 @@ export function FinancePage() {
 
   return <section className="operation-page">
     <PageHeading title="Budgets & finance" description="Submit annual budgets and financial entries with separate review and approval controls.">
-      {canManage.data && <><button className="button outline" onClick={() => setBudgetForm((open) => !open)}>New budget</button><button className="button primary" disabled={!budgets.data?.total} onClick={() => setTransactionForm((open) => !open)}><ReceiptText size={16} />Add transaction</button></>}
+      {canManage.data && <><button className="button outline" disabled={busy} onClick={() => void cleanupExpiredReceipts()}><Trash2 size={16} />Clean expired uploads</button><button className="button outline" onClick={() => setBudgetForm((open) => !open)}>New budget</button><button className="button primary" disabled={!budgets.data?.total} onClick={() => setTransactionForm((open) => !open)}><ReceiptText size={16} />Add transaction</button></>}
     </PageHeading>
     {message && <div className="ops-success"><CheckCircle2 size={16} />{message}</div>}{error && <ErrorNotice message={error} />}
     {!tenantId && <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to view budgets and financial records." />}
     {Boolean(tenantId) && canRead.isPending && <LoadingNotice compact />}
-    {canRead.error && <ErrorNotice message="Your finance access could not be checked. Refresh the page or contact your barangay administrator." />}
-    {(canManage.error || canApprove.error) && <ErrorNotice message="Budget management or approval permissions could not be checked. Related financial controls are unavailable until access can be verified." />}
+    {canRead.error && <ErrorNotice message="Your finance access could not be checked. Refresh the page or contact your barangay administrator." onRetry={() => void canRead.refetch()} retrying={canRead.isFetching} />}
+    {canManage.error && <ErrorNotice message="Budget management access could not be checked. Management controls are unavailable until access can be verified." onRetry={() => void canManage.refetch()} retrying={canManage.isFetching} />}
+    {canApprove.error && <ErrorNotice message="Budget approval access could not be checked. Approval controls are unavailable until access can be verified." onRetry={() => void canApprove.refetch()} retrying={canApprove.isFetching} />}
     {Boolean(tenantId) && !canRead.isPending && !canRead.error && !canRead.data && <div className="ops-panel archive-access"><ShieldCheck size={20} /><div><strong>Financial records are restricted</strong><p>Your current role cannot read this barangay’s budgets or transactions. Contact your barangay administrator if you need access.</p></div></div>}
     {canRead.data && <>
       <section className="ops-panel finance-report" aria-labelledby="finance-report-title">
@@ -286,9 +334,9 @@ export function FinancePage() {
         </>}
         <div className="ops-form-actions"><button className="button primary" disabled={busy}>{busy ? 'Submitting…' : 'Submit for review'}</button></div>
       </form>}
-      <div className="ops-section-title"><h2>Annual budgets</h2><p>Expenses are capped at the approved amount. Posted transactions remain in the audit history.</p></div>
+      <div className="ops-section-title" id="finance-annual-budgets"><h2>Annual budgets</h2><p>Expenses are capped at the approved amount. Posted transactions remain in the audit history.</p></div>
       {budgetUsage.error && <ErrorNotice message="Posted expense totals could not be loaded. Budget remaining amounts may be unavailable until this is resolved." onRetry={() => void budgetUsage.refetch()} retrying={budgetUsage.isFetching} />}
-      {budgets.isPending ? <LoadingNotice /> : budgets.error ? <ErrorNotice message={budgets.error.message} /> : budgets.data?.budgets.length ? <div className="finance-budget-list">{budgets.data.budgets.map((budget) => {
+      {budgets.isPending ? <LoadingNotice /> : budgets.error ? <ErrorNotice message={budgets.error.message} onRetry={() => void budgets.refetch()} retrying={budgets.isFetching} /> : budgets.data?.budgets.length ? <div className="finance-budget-list">{budgets.data.budgets.map((budget) => {
         const spent = postedExpenses(budget.id)
         return <article className="ops-panel finance-budget" key={budget.id}>
           <div className="finance-budget-head"><div><small>FY {budget.fiscal_year}</small><h3>{budget.name}</h3></div><StatusPill status={budget.status} /></div>
@@ -301,23 +349,24 @@ export function FinancePage() {
         </article>
       })}</div> : <EmptyNotice title="No budgets submitted" detail="Annual budgets submitted by your Treasurer will appear here." />}
       {budgets.data && budgets.data.total > FINANCE_BUDGET_PAGE_SIZE && <nav className="ops-form-actions" aria-label="Annual budget pages"><button type="button" className="button outline" disabled={budgetPage === 0 || budgets.isFetching} onClick={() => setBudgetPage((current) => Math.max(0, current - 1))}><ChevronLeft size={15} />Previous</button><span className="field-hint">Page {budgetPage + 1} of {Math.ceil(budgets.data.total / FINANCE_BUDGET_PAGE_SIZE)} · {budgets.data.total.toLocaleString()} budgets</span><button type="button" className="button outline" disabled={(budgetPage + 1) * FINANCE_BUDGET_PAGE_SIZE >= budgets.data.total || budgets.isFetching} onClick={() => setBudgetPage((current) => current + 1)}>Next<ChevronRight size={15} /></button></nav>}
-      <section className="ops-panel finance-export-history" aria-labelledby="finance-amendment-history-title">
+      <section className="ops-panel finance-export-history" id="finance-budget-amendment-reviews" aria-labelledby="finance-amendment-history-title">
         <div className="ops-panel-heading"><div><h2 id="finance-amendment-history-title">Budget amendment reviews</h2><p>Recent amount change requests, shown 25 at a time.</p></div><ShieldCheck size={18} /></div>
         {amendments.isPending && <LoadingNotice compact />}
         {amendments.error && <ErrorNotice message="Budget amendment history could not be loaded." onRetry={() => void amendments.refetch()} retrying={amendments.isFetching} />}
         {amendments.data?.amendments.length ? <ol className="finance-export-history-list">{amendments.data.amendments.map((amendment) => <li key={amendment.id}><div><strong>FY {amendment.fiscal_year} · {amendment.budget_name}</strong><time dateTime={amendment.created_at}>{formatDateTime(amendment.created_at)}</time></div><span><StatusPill status={amendment.status} /> Requested amount: {currency.format(Number(amendment.requested_amount))}<br />{amendment.reason}</span>{amendment.review_note && <small>Review: {amendment.review_note}</small>}{canApprove.data && amendment.status === 'pending' && amendment.requested_by !== user?.id && <div className="finance-review-actions"><button className="button outline" disabled={busy} onClick={() => void reviewAmendment(amendment.id, false)}>Reject</button><button className="button primary" disabled={busy} onClick={() => void reviewAmendment(amendment.id, true)}>Approve change</button></div>}</li>)}</ol> : !amendments.isPending && !amendments.error && <p className="field-hint">No budget amendments have been submitted.</p>}
         {amendments.data && amendments.data.total > FINANCE_BUDGET_AMENDMENT_PAGE_SIZE && <nav className="ops-form-actions" aria-label="Budget amendment pages"><button type="button" className="button outline" disabled={amendmentPage === 0 || amendments.isFetching} onClick={() => setAmendmentPage((current) => Math.max(0, current - 1))}><ChevronLeft size={15} />Previous</button><span className="field-hint">Page {amendmentPage + 1} of {Math.ceil(amendments.data.total / FINANCE_BUDGET_AMENDMENT_PAGE_SIZE)} · {amendments.data.total.toLocaleString()} requests</span><button type="button" className="button outline" disabled={(amendmentPage + 1) * FINANCE_BUDGET_AMENDMENT_PAGE_SIZE >= amendments.data.total || amendments.isFetching} onClick={() => setAmendmentPage((current) => current + 1)}>Next<ChevronRight size={15} /></button></nav>}
       </section>
-      <div className="ops-section-title"><h2>Financial entries</h2><p>Only approved transactions count toward posted expenses.</p></div>
-      {transactions.isPending ? <LoadingNotice /> : transactions.error ? <ErrorNotice message={transactions.error.message} /> : transactions.data?.transactions.length ? <div className="ops-panel finance-transaction-list">{transactions.data.transactions.map((item) => <article className="finance-transaction" key={item.id}>
+      <div className="ops-section-title" id="finance-transactions"><h2>Financial entries</h2><p>Only approved transactions count toward posted expenses.</p></div>
+      {transactionIds.length > 0 && (adjustments.isPending || receipts.isPending) && <p className="field-hint" role="status">{adjustments.isPending && receipts.isPending ? 'Loading adjustments and receipt attachments...' : adjustments.isPending ? 'Loading adjustments...' : 'Loading receipt attachments...'}</p>}
+      {adjustments.error && <ErrorNotice message={adjustments.error.message} onRetry={() => void adjustments.refetch()} retrying={adjustments.isFetching} />}
+      {receipts.error && <ErrorNotice message={receipts.error.message} onRetry={() => void receipts.refetch()} retrying={receipts.isFetching} />}
+      {transactions.isPending ? <LoadingNotice /> : transactions.error ? <ErrorNotice message={transactions.error.message} onRetry={() => void transactions.refetch()} retrying={transactions.isFetching} /> : transactions.data?.transactions.length ? <div className="ops-panel finance-transaction-list" id="finance-transaction-changes">{transactions.data.transactions.map((item) => <article className="finance-transaction" key={item.id}>
         <div className="finance-transaction-main"><div><strong>{item.description}</strong><p>{item.category} · {item.budget?.name ?? 'Budget'} · {new Date(`${item.transaction_date}T00:00:00`).toLocaleDateString()}</p></div><div className="finance-transaction-amount"><strong className={item.transaction_type === 'income' ? 'finance-income' : ''}>{item.transaction_type === 'expense' ? '−' : '+'}{currency.format(Number(item.amount))}</strong><StatusPill status={item.status} /></div></div>
         {item.review_note && <p className="finance-review-note">Review note: {item.review_note}</p>}
         {item.void_reason && <p className="finance-review-note">Voided {item.voided_at ? formatDateTime(item.voided_at) : ''}: {item.void_reason}</p>}
-        {adjustments.error && <ErrorNotice message={adjustments.error.message} />}
         {adjustments.data?.filter((adjustment) => adjustment.transaction_id === item.id).map((adjustment) => <div className="finance-adjustment" key={adjustment.id}><div><StatusPill status={adjustment.status} /><strong>{Number(adjustment.amount_change) > 0 ? '+' : '−'}{currency.format(Math.abs(Number(adjustment.amount_change)))}</strong></div><p>{adjustment.reason}</p>{adjustment.review_note && <small>Review: {adjustment.review_note}</small>}{canApprove.data && adjustment.status === 'pending' && adjustment.requested_by !== user?.id && <div className="finance-review-actions"><button className="button outline" disabled={busy} onClick={() => void reviewAdjustment(adjustment.id, false)}>Reject adjustment</button><button className="button primary" disabled={busy} onClick={() => void reviewAdjustment(adjustment.id, true)}>Approve adjustment</button></div>}</div>)}
         {canManage.data && item.status === 'posted' && !adjustments.data?.some((adjustment) => adjustment.transaction_id === item.id && adjustment.status === 'pending') && <button className="button outline finance-adjustment-toggle" disabled={busy} onClick={() => setAdjustmentTransaction(adjustmentTransaction === item.id ? '' : item.id)}>Request correction</button>}
         {adjustmentTransaction === item.id && <form className="finance-amendment-form" onSubmit={(event) => void submitAdjustment(item.id, event)}><label>Amount change (PHP)<input name="amountChange" type="number" min="-999999999999.99" max="999999999999.99" step="0.01" required /><span className="field-hint">Positive increases the entry; negative reduces it.</span></label><label>Reason<textarea name="reason" minLength={3} maxLength={1000} required /></label><button className="button primary" disabled={busy}>Submit correction for approval</button></form>}
-        {receipts.error && <ErrorNotice message={receipts.error.message} />}
         {receipts.data?.filter((receipt) => receipt.transaction_id === item.id).map((receipt) => <button className="finance-receipt-link" key={receipt.id} onClick={() => void openReceipt(receipt.storage_path)}><ReceiptText size={14} />{receipt.file_name}<small>{(Number(receipt.file_size) / 1024).toFixed(0)} KB</small></button>)}
         {canManage.data && ['submitted', 'posted'].includes(item.status) && <form className="finance-receipt-upload" onSubmit={(event) => void attachReceipt(item.id, event)}>
           <label>Attach receipt <span className="field-hint">Optional · PDF, JPEG, PNG up to 10 MB</span><input name="receipt" type="file" accept="application/pdf,image/jpeg,image/png" required /></label>

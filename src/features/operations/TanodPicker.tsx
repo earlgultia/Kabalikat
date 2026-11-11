@@ -46,7 +46,7 @@ export function TanodPicker({ tenantId, permission, name, selectedId, onChange, 
       {query.data?.rows.map((person) => <option key={person.user_id} value={person.user_id}>{person.display_name}{person.user_id === selectedId ? ' (currently selected)' : ''}</option>)}
     </select></label>
     {query.isPending && <span className="muted" aria-live="polite">Loading Tanods…</span>}
-    {query.error && <span className="tanod-picker-error" role="alert">Could not load the Tanod list.</span>}
+    {query.error && <span className="tanod-picker-error" role="alert">Could not load the Tanod list. <button type="button" className="text-action" disabled={query.isFetching} onClick={() => void query.refetch()}>{query.isFetching ? 'Retrying…' : 'Try again'}</button></span>}
     {!query.isPending && !query.error && query.data?.totalCount === 0 && <span className="muted">{debouncedSearch ? 'No Tanods match that search.' : 'No active Tanods are available.'}</span>}
     {totalPages > 1 && <div className="tanod-picker-pages"><span className="muted">Page {page + 1} of {totalPages} · {query.data?.totalCount} Tanods</span><div>
       <button type="button" className="button outline" aria-label="Previous Tanod page" disabled={page === 0 || query.isFetching} onClick={() => setPage((current) => current - 1)}><ChevronLeft size={16} /><span>Previous</span></button>

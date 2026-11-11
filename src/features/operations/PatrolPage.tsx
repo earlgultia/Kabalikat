@@ -40,7 +40,7 @@ function PatrolLogHistory({ tenantId, shiftId }: { tenantId: string; shiftId: st
       <label>To<input type="date" value={to} min={from || undefined} onChange={(event) => { setTo(event.target.value); setPage(0) }} /></label>
     </div>
     {logs.isPending && open && <LoadingNotice compact />}
-    {logs.error && <ErrorNotice message="Unable to load this shift history." />}
+    {logs.error && <ErrorNotice message="Unable to load this shift history." onRetry={() => void logs.refetch()} retrying={logs.isFetching} />}
     {logs.data?.totalCount === 0 && <p>No log entries match these filters.</p>}
     {logs.data?.rows.length ? <ol>{logs.data.rows.map((log) => <li key={log.id}><strong>{log.entry_type.replace('_', ' ')}</strong><span>{formatDateTime(log.created_at)}{log.location_note ? ` · ${log.location_note}` : ''}</span>{log.details && <p>{log.details}</p>}</li>)}</ol> : null}
     {totalPages > 1 && <div className="ops-form-actions"><span className="muted">Page {page + 1} of {totalPages}</span><div className="finance-review-actions">
@@ -50,7 +50,7 @@ function PatrolLogHistory({ tenantId, shiftId }: { tenantId: string; shiftId: st
   </details>
 }
 
-export function PatrolPage({ focusId, onFocusHandled }: { focusId?: string; onFocusHandled?: () => void }) {
+export function PatrolPage({ focusId, focusStatus, onFocusHandled }: { focusId?: string; focusStatus?: 'scheduled' | 'active'; onFocusHandled?: () => void }) {
   const { membership, user } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
   const queryClient = useQueryClient()
@@ -69,6 +69,12 @@ export function PatrolPage({ focusId, onFocusHandled }: { focusId?: string; onFo
   const [focusReadyId, setFocusReadyId] = useState('')
   const [reschedulingId, setReschedulingId] = useState('')
   useEffect(() => { setPage(0); setSearchInput(''); setSearch(''); setStatusFilter('all') }, [tenantId])
+  useEffect(() => {
+    if (!focusStatus || !enabled) return
+    setPage(0); setSearchInput(''); setSearch(''); setStatusFilter(focusStatus)
+    window.requestAnimationFrame(() => document.getElementById('patrol-shift-list')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+    onFocusHandled?.()
+  }, [enabled, focusStatus, onFocusHandled])
   useEffect(() => {
     const timeout = window.setTimeout(() => { setSearch(searchInput.trim()); setPage(0) }, 250)
     return () => window.clearTimeout(timeout)
@@ -207,7 +213,7 @@ export function PatrolPage({ focusId, onFocusHandled }: { focusId?: string; onFo
     <div className="ops-panel incident-guidance"><MapPinned size={18} /><p><strong>Manual logs only.</strong> Record a checkpoint or observation as a short note. This workspace does not track live location or contact emergency services.</p></div>
     {!tenantId && <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to view patrol shifts and logs." />}
     {Boolean(tenantId) && (canManage.isPending || canAccess.isPending) && <LoadingNotice compact />}
-    {(canManage.error || canAccess.error) && <ErrorNotice message="Your patrol workspace access could not be checked. Refresh the page or contact your barangay administrator." />}
+    {(canManage.error || canAccess.error) && <ErrorNotice message="Your patrol workspace access could not be checked. Refresh the page or contact your barangay administrator." onRetry={() => { void canManage.refetch(); void canAccess.refetch() }} retrying={canManage.isFetching || canAccess.isFetching} />}
     {message && <div className="ops-success"><CheckCircle2 size={16} />{message}</div>}{error && <ErrorNotice message={error} />}
     {Boolean(tenantId) && !canManage.data && !canAccess.data && !canManage.isPending && !canAccess.isPending && !canManage.error && !canAccess.error && <EmptyNotice title="Patrol access is restricted" detail="Only authorized Captains and Tanods can access patrol shifts. Contact your barangay administrator if you need access." />}
     {showForm && canManage.data && <form className="ops-panel ops-form" onSubmit={(event) => void schedule(event)}><div className="ops-panel-heading"><div><h2>Schedule a patrol shift</h2><p>Assign an active Tanod from this barangay.</p></div><ClipboardList size={19} /></div><div className="ops-form-grid">
@@ -239,7 +245,7 @@ export function PatrolPage({ focusId, onFocusHandled }: { focusId?: string; onFo
     </section>}
     {shifts.isPending && enabled && <LoadingNotice />}{shifts.error && <ErrorNotice message={shifts.error.message} onRetry={() => void shifts.refetch()} retrying={shifts.isFetching} />}
     {shifts.data?.totalCount === 0 && <div className="ops-empty"><Route size={22} /><strong>{search || statusFilter !== 'all' ? 'No matching patrol shifts' : 'No patrol shifts'}</strong><p>{search || statusFilter !== 'all' ? 'Try another search or status.' : 'Scheduled shifts and your assigned patrols appear here.'}</p></div>}
-    <div className="patrol-list">{shifts.data?.rows.map((shift) => {
+    <div className="patrol-list" id="patrol-shift-list">{shifts.data?.rows.map((shift) => {
       const isAssigned = shift.assigned_to === user?.id
       return <article id={`patrol-shift-${shift.id}`} tabIndex={-1} className="ops-panel patrol-card" key={shift.id}>
         <header><div><StatusPill status={shift.status} /><h2>{shift.title}</h2></div><strong>{assigneeName(shift.assigned_to)}</strong></header>

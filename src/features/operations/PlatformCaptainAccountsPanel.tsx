@@ -67,7 +67,7 @@ export function PlatformCaptainAccountsPanel() {
     <label className="archive-search platform-captain-search"><Search size={16} /><input type="search" maxLength={100} aria-label="Search Captain accounts" placeholder="Search Captain, email, or barangay" value={search} onChange={(event) => { setSearch(event.target.value); setPage(0) }} /></label>
     {accounts.isPending ? <LoadingNotice compact /> : accounts.error ? <div className="platform-captain-error">
       <ErrorNotice message="Captain accounts could not be loaded." onRetry={() => void accounts.refetch()} retrying={accounts.isFetching} />
-      <details open><summary>Directory query details</summary><p>{accounts.error instanceof Error ? accounts.error.message : String(accounts.error)}</p><p>Apply migration 0196 to your Supabase project, then retry the directory search.</p></details>
+      <details open><summary>Directory query details</summary><p>{accounts.error instanceof Error ? accounts.error.message : String(accounts.error)}</p><p>If this keeps happening, confirm the latest database migrations have been applied to the connected Supabase project.</p></details>
     </div> : accounts.data?.rows.length ? <div className="platform-captain-list">
       {accounts.data.rows.map((account) => {
         const removalPending = Boolean(account.removal_started_at && !account.removal_completed_at)

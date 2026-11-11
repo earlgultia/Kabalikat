@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Award, ChevronLeft, ChevronRight, Download, ShieldAlert } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
@@ -8,7 +8,7 @@ import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from
 import { formatDateTime } from './format'
 import { encodeCsv } from './csv'
 
-export function SkTransparencyPage() {
+export function SkTransparencyPage({ focusReviewQueue, onFocusHandled }: { focusReviewQueue?: boolean; onFocusHandled?: () => void }) {
   const { membership, user } = useAuth()
   const queryClient = useQueryClient()
   const tenantId = membership?.barangay_id ?? ''
@@ -38,6 +38,19 @@ export function SkTransparencyPage() {
   const reviewQueue = reviewItems.data?.rows ?? []
   const publishedPages = Math.ceil((items.data?.totalCount ?? 0) / SK_ACCOMPLISHMENT_PAGE_SIZE)
   const reviewPages = Math.ceil((reviewItems.data?.totalCount ?? 0) / SK_ACCOMPLISHMENT_PAGE_SIZE)
+
+  useEffect(() => {
+    if (!focusReviewQueue || canManage.isPending || canReview.isPending) return
+    if (canManage.error || canReview.error || !(canManage.data || canReview.data)) {
+      onFocusHandled?.()
+      return
+    }
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById('sk-accomplishment-review-queue')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      onFocusHandled?.()
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [canManage.data, canManage.error, canManage.isPending, canReview.data, canReview.error, canReview.isPending, focusReviewQueue, onFocusHandled])
 
   async function review(itemId: string, publish: boolean) {
     const note = publish ? null : window.prompt('Why is this summary being returned? (3–1000 characters):')?.trim() ?? ''
@@ -82,14 +95,14 @@ export function SkTransparencyPage() {
     <div className="ops-panel referral-privacy-notice"><ShieldAlert size={18} /><p><strong>Reviewed before publication.</strong> Only the submitted title and summary are shown here. Do not include personal details, participant names, or private financial information.</p></div>
     {!tenantId && <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to view published SK accomplishments." />}
     {Boolean(tenantId) && (canManage.isPending || canReview.isPending) && <LoadingNotice compact />}
-    {(canManage.error || canReview.error) && <ErrorNotice message="SK review access could not be checked. Published summaries remain available; internal review items are hidden until access can be verified." />}
-    {items.isPending && tenantId && <LoadingNotice />}{items.error && <ErrorNotice message="Unable to load SK accomplishment summaries." />}
+    {(canManage.error || canReview.error) && <ErrorNotice message="SK review access could not be checked. Published summaries remain available; internal review items are hidden until access can be verified." onRetry={() => { void canManage.refetch(); void canReview.refetch() }} retrying={canManage.isFetching || canReview.isFetching} />}
+    {items.isPending && tenantId && <LoadingNotice />}{items.error && <ErrorNotice message="Unable to load SK accomplishment summaries." onRetry={() => void items.refetch()} retrying={items.isFetching} />}
     {exportError && <ErrorNotice message={exportError} />}
     {tenantId && <div className="ops-filter-row"><label>Publication year<select aria-label="Filter accomplishments by publication year" value={year} onChange={(event) => { setYear(event.target.value); setPublishedPage(0) }}><option value="all">All years</option>{(years.data ?? []).map((itemYear) => <option key={itemYear} value={itemYear}>{itemYear}</option>)}</select></label><span className="field-hint">CSV export includes all published summaries matching this year, fetched in pages.</span></div>}
-    {years.error && <ErrorNotice message="Publication years could not be loaded; you can still browse all years." />}
+    {years.error && <ErrorNotice message="Publication years could not be loaded; you can still browse all years." onRetry={() => void years.refetch()} retrying={years.isFetching} />}
     {items.data?.totalCount === 0 && !items.isPending && <div className="ops-empty"><Award size={22} /><strong>No published accomplishments for this period</strong><p>Approved summaries will appear here after independent Captain review.</p></div>}
     <div className="sk-project-list">{published.map((item) => <article className="ops-panel sk-project-card" key={item.id}><div className="sk-project-header sk-accomplishment-header"><div><StatusPill status={item.status} /><h2>{item.title}</h2><p>{item.summary}</p></div><Award size={22} /></div><div className="sk-project-meta"><span>{item.published_at ? `Published ${formatDateTime(item.published_at)}` : ''}</span></div></article>)}</div>
     {publishedPages > 1 && <nav className="ops-panel ops-form-actions" aria-label="Published SK accomplishment pages"><span className="field-hint">Page {publishedPage + 1} of {publishedPages} · {items.data?.totalCount.toLocaleString()} summaries</span><div className="finance-review-actions"><button className="button outline" disabled={publishedPage === 0 || items.isFetching} onClick={() => setPublishedPage((page) => page - 1)}><ChevronLeft size={16} />Previous</button><button className="button outline" disabled={publishedPage + 1 >= publishedPages || items.isFetching} onClick={() => setPublishedPage((page) => page + 1)}>Next<ChevronRight size={16} /></button></div></nav>}
-    {(canManage.data || canReview.data) && <section className="sk-project-list"><h2>Internal review queue</h2>{reviewMessage && <div className="ops-success" role="status">{reviewMessage}</div>}{reviewError && <ErrorNotice message={reviewError} />}{reviewItems.isPending && <LoadingNotice compact />}{reviewItems.error && <ErrorNotice message="Unable to load the accomplishment review queue." />}{reviewItems.data?.totalCount === 0 && !reviewItems.isPending && <p className="field-hint">No accomplishments are waiting for review.</p>}{reviewQueue.map((item) => <article className="ops-panel sk-project-card" key={item.id}><div className="sk-project-header"><div><StatusPill status={item.status} /><h3>{item.title}</h3><p>{item.summary}</p></div></div><div className="sk-project-meta"><span>Submitted {formatDateTime(item.created_at)}</span></div>{item.review_note && <p className="finance-review-note">Captain’s note: {item.review_note}</p>}{canReview.data && item.status === 'submitted' && item.created_by !== user?.id && <div className="finance-review-actions"><button className="button outline danger-action" disabled={reviewBusy} onClick={() => void review(item.id, false)}>Return with reason</button><button className="button primary" disabled={reviewBusy} onClick={() => void review(item.id, true)}>Publish summary</button></div>}</article>)}{reviewPages > 1 && <nav className="ops-panel ops-form-actions" aria-label="Accomplishment review pages"><span className="field-hint">Page {reviewPage + 1} of {reviewPages} · {reviewItems.data?.totalCount.toLocaleString()} items</span><div className="finance-review-actions"><button className="button outline" disabled={reviewPage === 0 || reviewItems.isFetching} onClick={() => setReviewPage((page) => page - 1)}><ChevronLeft size={16} />Previous</button><button className="button outline" disabled={reviewPage + 1 >= reviewPages || reviewItems.isFetching} onClick={() => setReviewPage((page) => page + 1)}>Next<ChevronRight size={16} /></button></div></nav>}</section>}
+    {(canManage.data || canReview.data) && <section className="sk-project-list" id="sk-accomplishment-review-queue"><h2>Internal review queue</h2>{reviewMessage && <div className="ops-success" role="status">{reviewMessage}</div>}{reviewError && <ErrorNotice message={reviewError} />}{reviewItems.isPending && <LoadingNotice compact />}{reviewItems.error && <ErrorNotice message="Unable to load the accomplishment review queue." onRetry={() => void reviewItems.refetch()} retrying={reviewItems.isFetching} />}{reviewItems.data?.totalCount === 0 && !reviewItems.isPending && <p className="field-hint">No accomplishments are waiting for review.</p>}{reviewQueue.map((item) => <article className="ops-panel sk-project-card" key={item.id}><div className="sk-project-header"><div><StatusPill status={item.status} /><h3>{item.title}</h3><p>{item.summary}</p></div></div><div className="sk-project-meta"><span>Submitted {formatDateTime(item.created_at)}</span></div>{item.review_note && <p className="finance-review-note">Captain’s note: {item.review_note}</p>}{canReview.data && item.status === 'submitted' && item.created_by !== user?.id && <div className="finance-review-actions"><button className="button outline danger-action" disabled={reviewBusy} onClick={() => void review(item.id, false)}>Return with reason</button><button className="button primary" disabled={reviewBusy} onClick={() => void review(item.id, true)}>Publish summary</button></div>}</article>)}{reviewPages > 1 && <nav className="ops-panel ops-form-actions" aria-label="Accomplishment review pages"><span className="field-hint">Page {reviewPage + 1} of {reviewPages} · {reviewItems.data?.totalCount.toLocaleString()} items</span><div className="finance-review-actions"><button className="button outline" disabled={reviewPage === 0 || reviewItems.isFetching} onClick={() => setReviewPage((page) => page - 1)}><ChevronLeft size={16} />Previous</button><button className="button outline" disabled={reviewPage + 1 >= reviewPages || reviewItems.isFetching} onClick={() => setReviewPage((page) => page + 1)}>Next<ChevronRight size={16} /></button></div></nav>}</section>}
   </section>
 }
