@@ -128,7 +128,7 @@ function CommitteeDueDateRequestCard({ request, busy, onDecide }: { request: Com
   </article>
 }
 
-function CommitteeDueDateReviewQueue({ tenantId }: { tenantId: string }) {
+function CommitteeDueDateReviewQueue({ tenantId, focused = false, onFocusHandled }: { tenantId: string; focused?: boolean; onFocusHandled?: () => void }) {
   const queryClient = useQueryClient()
   const [page, setPage] = useState(0)
   const [busyRequest, setBusyRequest] = useState('')
@@ -140,6 +140,14 @@ function CommitteeDueDateReviewQueue({ tenantId }: { tenantId: string }) {
   const totalPages = Math.max(1, Math.ceil((requests.data?.totalCount ?? 0) / 20))
   const currentPage = Math.min(page, totalPages - 1)
   useEffect(() => { if (page !== currentPage) setPage(currentPage) }, [currentPage, page])
+  useEffect(() => {
+    if (!focused) return
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById('committee-due-date-review-queue')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      onFocusHandled?.()
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [focused, onFocusHandled])
   function applyFilters(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (filterDraft.createdAfter && filterDraft.createdBefore && filterDraft.createdAfter > filterDraft.createdBefore) {
@@ -168,7 +176,7 @@ function CommitteeDueDateReviewQueue({ tenantId }: { tenantId: string }) {
     } catch (err) { setError(err instanceof Error ? err.message : 'Unable to review the due-date request.') }
     finally { setBusyRequest('') }
   }
-  return <details className="ops-panel committee-due-date-review-queue" open>
+  return <details id="committee-due-date-review-queue" className="ops-panel committee-due-date-review-queue" open>
     <summary><div><h2>Due-date requests <span>{requests.data?.totalCount ?? 0}</span></h2><p>Review schedule changes requested by assigned Kagawads.</p></div><History size={18} /></summary>
     <form className="committee-due-date-filters" onSubmit={applyFilters}>
       <label>Search requests<input type="search" maxLength={100} placeholder="Task, committee, requester, or reason" value={filterDraft.search} onChange={(event) => setFilterDraft((current) => ({ ...current, search: event.target.value }))} /></label>
@@ -470,7 +478,7 @@ function CommitteeWorkspaceCard({
   </article>
 }
 
-export function CommitteesPage({ focusId, focusDueDateRequestStatus, focusTaskFilter, onFocusHandled }: { focusId?: string; focusDueDateRequestStatus?: 'pending' | 'reviewed'; focusTaskFilter?: 'open' | 'in_progress' | 'blocked' | 'overdue' | 'due_soon' | 'completed_work'; onFocusHandled?: () => void }) {
+export function CommitteesPage({ focusId, focusDueDateRequestStatus, focusDueDateReviewQueue, focusTaskFilter, onFocusHandled }: { focusId?: string; focusDueDateRequestStatus?: 'pending' | 'reviewed'; focusDueDateReviewQueue?: boolean; focusTaskFilter?: 'open' | 'in_progress' | 'blocked' | 'overdue' | 'due_soon' | 'completed_work'; onFocusHandled?: () => void }) {
   const { membership, user } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
   const queryClient = useQueryClient()
@@ -770,7 +778,7 @@ export function CommitteesPage({ focusId, focusDueDateRequestStatus, focusTaskFi
     {canManage.error && <ErrorNotice message="Committee management access could not be checked. Existing assignments can still be viewed; management controls are unavailable until access can be verified." onRetry={() => void canManage.refetch()} retrying={canManage.isFetching} />}
     {message && <div className="ops-success"><CheckCircle2 size={16} />{message}</div>}{error && <ErrorNotice message={error} />}
     {focusedTaskId && <FocusedCommitteeTask tenantId={tenantId} taskId={focusedTaskId} onClose={() => setFocusedTaskId('')} />}
-    {canManage.data && tenantId && <><CommitteeDueDateReviewQueue tenantId={tenantId} /><CommitteeDueDateRequestHistory tenantId={tenantId} /></>}
+    {canManage.data && tenantId && <><CommitteeDueDateReviewQueue tenantId={tenantId} focused={focusDueDateReviewQueue} onFocusHandled={onFocusHandled} /><CommitteeDueDateRequestHistory tenantId={tenantId} /></>}
     {Boolean(tenantId) && !canManage.isPending && !canManage.error && !canManage.data && <div className="ops-panel archive-access"><UsersRound size={20} /><div><strong>Committee access is assignment-based</strong><p>You will see committees after an authorized administrator assigns you to one.</p></div></div>}
     {isKagawad && <section id="kagawad-due-date-history" className="ops-panel kagawad-due-date-history" aria-labelledby="kagawad-due-date-history-title">
       <div className="ops-panel-heading"><div><h2 id="kagawad-due-date-history-title">My due-date requests</h2><p>Search your submitted requests and see the manager’s decision and reviewer.</p></div><History size={19} /></div>

@@ -393,6 +393,9 @@
 .incident-filters { align-items: end; background: #fffefa; border: 1px solid #e1e8e3; border-radius: 10px; display: flex; flex-wrap: wrap; gap: 10px; padding: 12px; }
 .incident-filters label { color: #354f4c; display: grid; flex: 1 1 160px; font-size: 11px; font-weight: 700; gap: 5px; }
 .incident-filters input, .incident-filters select { background: #fff; border: 1px solid #bfcec8; border-radius: 8px; color: #24353b; font: inherit; font-weight: 400; min-height: 40px; padding: 7px 9px; }
+.incident-filters .incident-date-filter { display: grid; flex: 1 1 160px; gap: 5px; min-width: 0; }
+.incident-filters .incident-date-filter > label { display: block; }
+.incident-filters .incident-date-filter > input { box-sizing: border-box; display: block; max-width: 100%; min-width: 0; width: 100%; }
 .incident-filters > .archive-search { align-items: center; display: flex; }
 .incident-filters > .archive-search > input { appearance: none; -webkit-appearance: none; background: transparent; border: 0; border-radius: 0; box-shadow: none; flex: 1 1 auto; min-width: 0; outline: 0; }
 .meeting-schedule-filters { display: grid; grid-template-columns: minmax(0, 1.7fr) repeat(3, minmax(0, 1fr)); }
