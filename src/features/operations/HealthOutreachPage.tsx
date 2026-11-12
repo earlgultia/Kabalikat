@@ -89,7 +89,9 @@ export function HealthOutreachPage({ focusId, focusPage, focusStatus, onFocusHan
   useEffect(() => { setPage(0); setSearchInput(''); setSearch(''); setStatusFilter('all'); setStartsFrom(''); setStartsThrough('') }, [tenantId])
   useEffect(() => {
     if (!focusId && !focusStatus) return
-    setPage(focusPage ?? 0); setSearchInput(''); setSearch(''); setStatusFilter(focusStatus ?? 'cancelled'); setStartsFrom(''); setStartsThrough('')
+    const today = new Date()
+    const todayLocal = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+    setPage(focusPage ?? 0); setSearchInput(''); setSearch(''); setStatusFilter(focusStatus ?? 'cancelled'); setStartsFrom(!focusId && focusStatus === 'published' ? todayLocal : ''); setStartsThrough('')
     if (!focusId) onFocusHandled?.()
   }, [focusId, focusPage, focusStatus, onFocusHandled])
   useEffect(() => {

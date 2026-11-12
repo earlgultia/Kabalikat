@@ -14,7 +14,8 @@ function client() {
 export async function listSupportTickets(tenantId?: string, page = 0, status = 'all', search = ''): Promise<SupportTicket[]> {
   let query = client().from('support_tickets').select('id,barangay_id,requester_id,category,subject,description,status,created_at,updated_at').order('updated_at', { ascending: false })
   if (tenantId) query = query.eq('barangay_id', tenantId)
-  if (status !== 'all') query = query.eq('status', status)
+  if (status === 'open') query = query.in('status', ['new', 'in_progress', 'waiting_on_requester'])
+  else if (status !== 'all') query = query.eq('status', status)
   const term = search.trim()
   if (term) query = query.ilike('subject', `%${term.replace(/[\\%_]/g, '\\$&')}%`)
   const { data, error } = await query.range(page * 50, (page + 1) * 50 - 1)

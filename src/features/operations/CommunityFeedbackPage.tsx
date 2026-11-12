@@ -13,12 +13,12 @@ const feedbackSchema = z.object({
   message: z.string().trim().min(10).max(3000),
 })
 
-export function CommunityFeedbackPage({ focusId, onFocusHandled }: { focusId?: string; onFocusHandled?: () => void } = {}) {
+export function CommunityFeedbackPage({ focusId, focusAwaitingResponse, onFocusHandled }: { focusId?: string; focusAwaitingResponse?: boolean; onFocusHandled?: () => void } = {}) {
   const { membership } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
   const isResident = membership?.role?.key === 'resident'
   const queryClient = useQueryClient()
-  const [statusFilter,setStatusFilter] = useState<CommunityFeedbackStatus | 'all'>('all')
+  const [statusFilter,setStatusFilter] = useState<CommunityFeedbackStatus | 'all' | 'awaiting_response'>('all')
   const [searchInput,setSearchInput] = useState('')
   const [search,setSearch] = useState('')
   const canManage = useQuery({ queryKey: ['permission',tenantId,'community.feedback.manage'], queryFn: () => hasPermission(tenantId,'community.feedback.manage'), enabled: Boolean(tenantId) })
@@ -39,6 +39,12 @@ export function CommunityFeedbackPage({ focusId, onFocusHandled }: { focusId?: s
   const [message,setMessage] = useState('')
   const [focusPage,setFocusPage] = useState<number | null>(null)
   const [focusError,setFocusError] = useState('')
+  useEffect(() => {
+    if (!focusAwaitingResponse || !isResident) return
+    setStatusFilter('awaiting_response')
+    setSearch('')
+    setSearchInput('')
+  }, [focusAwaitingResponse, isResident])
   useEffect(() => {
     setFocusPage(null)
     if (!focusId || !tenantId) return
@@ -101,8 +107,8 @@ export function CommunityFeedbackPage({ focusId, onFocusHandled }: { focusId?: s
     await changeStatus(id,'responded',parsed.data)
   }
 
-  const emptyTitle = search ? 'No matching feedback' : statusFilter === 'all' ? (isResident ? 'No feedback submitted yet' : 'No resident feedback') : 'No feedback in this status'
-  const emptyDetail = search ? 'Try another subject or full feedback reference.' : statusFilter === 'all' ? (isResident ? 'Use Share feedback to send a private message to your barangay office.' : 'Resident submissions will appear here for authorized staff review.') : 'Choose another status to see more feedback.'
+  const emptyTitle = search ? 'No matching feedback' : statusFilter === 'all' ? (isResident ? 'No feedback submitted yet' : 'No resident feedback') : statusFilter === 'awaiting_response' ? 'No feedback awaiting a response' : 'No feedback in this status'
+  const emptyDetail = search ? 'Try another subject or full feedback reference.' : statusFilter === 'all' ? (isResident ? 'Use Share feedback to send a private message to your barangay office.' : 'Resident submissions will appear here for authorized staff review.') : statusFilter === 'awaiting_response' ? 'Feedback that is submitted or in review will appear here until the barangay office responds.' : 'Choose another status to see more feedback.'
 
   return <section className="operation-page">
     <PageHeading title="Community feedback" description={isResident ? 'Send private feedback to your barangay office and follow its response.' : 'Review resident feedback and send a private response.'}>
@@ -124,7 +130,7 @@ export function CommunityFeedbackPage({ focusId, onFocusHandled }: { focusId?: s
       <label htmlFor="feedback-search">Search subject or full reference</label><input id="feedback-search" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} maxLength={160} placeholder="Enter a subject or feedback reference" />
       <button className="button outline" type="submit">Search</button>{search && <button className="text-action" type="button" onClick={() => { setSearch(''); setSearchInput('') }}>Clear search</button>}
     </form>
-    <div className="community-feedback-filter"><label htmlFor="feedback-status-filter">Show feedback</label><select id="feedback-status-filter" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as CommunityFeedbackStatus | 'all')}><option value="all">All statuses</option><option value="submitted">Submitted</option><option value="in_review">In review</option><option value="responded">Responded</option><option value="closed">Closed</option></select></div>
+    <div className="community-feedback-filter"><label htmlFor="feedback-status-filter">Show feedback</label><select id="feedback-status-filter" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as CommunityFeedbackStatus | 'all' | 'awaiting_response')}><option value="all">All statuses</option>{isResident && <option value="awaiting_response">Awaiting a response</option>}<option value="submitted">Submitted</option><option value="in_review">In review</option><option value="responded">Responded</option><option value="closed">Closed</option></select></div>
     {!tenantId ? null : feedback.isPending ? <LoadingNotice /> : feedback.error ? <ErrorNotice message={feedback.error.message} onRetry={() => void feedback.refetch()} retrying={feedback.isFetching} /> : feedbackItems.length ? <><div className="community-feedback-list">{feedbackItems.map((item) => <article className="ops-panel community-feedback-card" id={`community-feedback-${item.id}`} tabIndex={-1} key={item.id}>
       <header><div><StatusPill status={item.status} /><span>{item.category.replaceAll('_',' ')}</span></div><time dateTime={item.created_at}>{new Date(item.created_at).toLocaleString()}</time></header>
       <small className="community-feedback-reference">Feedback ref {item.id.toUpperCase()}</small><h2>{item.subject}</h2><p className="community-feedback-message">{item.message}</p>

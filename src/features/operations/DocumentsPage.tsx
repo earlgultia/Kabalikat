@@ -59,7 +59,7 @@ function DocumentTypeEditor({ item, busy, onSave, onCancel }: {
   </form>
 }
 
-export function DocumentsPage({ focusId, onFocusHandled }: { focusId?: string; onFocusHandled?: () => void } = {}) {
+export function DocumentsPage({ focusId, focusReviewQueue, focusActiveRequests, onFocusHandled }: { focusId?: string; focusReviewQueue?: boolean; focusActiveRequests?: boolean; onFocusHandled?: () => void } = {}) {
   const { membership, user } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
   const isResident = membership?.role?.key === 'resident'
@@ -95,6 +95,20 @@ export function DocumentsPage({ focusId, onFocusHandled }: { focusId?: string; o
     return () => { active = false }
   }, [focusId, tenantId, onFocusHandled])
   useEffect(() => {
+    if (!focusReviewQueue) return
+    setRequestSearch('')
+    setDebouncedRequestSearch('')
+    setStatusFilter('pending')
+    setRequestPage(0)
+  }, [focusReviewQueue])
+  useEffect(() => {
+    if (!focusActiveRequests || !isResident) return
+    setRequestSearch('')
+    setDebouncedRequestSearch('')
+    setStatusFilter('in_progress')
+    setRequestPage(0)
+  }, [focusActiveRequests, isResident])
+  useEffect(() => {
     const timeout = window.setTimeout(() => { setDebouncedRequestSearch(requestSearch); setRequestPage(0) }, 250)
     return () => window.clearTimeout(timeout)
   }, [requestSearch])
@@ -103,6 +117,22 @@ export function DocumentsPage({ focusId, onFocusHandled }: { focusId?: string; o
     queryFn: () => listDocumentRequestsPage(tenantId, requestPage, debouncedRequestSearch, statusFilter),
     enabled: Boolean(tenantId),
   })
+  useEffect(() => {
+    if (!focusReviewQueue || requests.isPending || requests.isError || statusFilter !== 'pending') return
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById('document-request-review-queue')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      onFocusHandled?.()
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [focusReviewQueue, onFocusHandled, requests.isError, requests.isPending, statusFilter])
+  useEffect(() => {
+    if (!focusActiveRequests || !isResident || requests.isPending || requests.isError || statusFilter !== 'in_progress') return
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById('document-request-review-queue')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      onFocusHandled?.()
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [focusActiveRequests, isResident, onFocusHandled, requests.isError, requests.isPending, statusFilter])
   useEffect(() => {
     if (!focusId || requests.isPending) return
     const target = document.getElementById(`document-request-${focusId}`)
@@ -281,9 +311,9 @@ export function DocumentsPage({ focusId, onFocusHandled }: { focusId?: string; o
       </article>)}</div>}
     </section>}
     {types.error && <ErrorNotice message={types.error.message} onRetry={() => void types.refetch()} retrying={types.isFetching} />}
-    <div className="ops-section-title"><h2>Requests</h2><p>Residents see only their own private requests; authorized staff see their tenant queue.</p></div>
+    <div id="document-request-review-queue" className="ops-section-title"><h2>Requests</h2><p>Residents see only their own private requests; authorized staff see their tenant queue.</p></div>
     {focusError && <p className="account-security-error" role="status">{focusError}</p>}
-    {tenantId && <div className="incident-filters"><label>Search requests<input type="search" value={requestSearch} onChange={(event) => setRequestSearch(event.target.value)} placeholder="Reference, resident, purpose, or document" /></label><label>Filter requests by status<select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setRequestPage(0) }}><option value="all">All requests</option>{['pending', 'under_review', 'awaiting_approval', 'approved', 'rejected', 'issued', 'released', 'cancelled'].map((status) => <option value={status} key={status}>{status.replaceAll('_', ' ')}</option>)}</select></label></div>}
+    {tenantId && <div className="incident-filters"><label>Search requests<input type="search" value={requestSearch} onChange={(event) => setRequestSearch(event.target.value)} placeholder="Reference, resident, purpose, or document" /></label><label>Filter requests by status<select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setRequestPage(0) }}><option value="all">All requests</option>{isResident && <option value="in_progress">In progress</option>}{['pending', 'under_review', 'awaiting_approval', 'approved', 'rejected', 'issued', 'released', 'cancelled'].map((status) => <option value={status} key={status}>{status.replaceAll('_', ' ')}</option>)}</select></label></div>}
     {!tenantId ? <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to view document services and requests." /> : requests.isPending ? <LoadingNotice /> : requests.error ? <ErrorNotice message={requests.error.message} onRetry={() => void requests.refetch()} retrying={requests.isFetching} /> : requests.data?.total ? visibleRequests.length ?
       <div className="ops-request-list">{visibleRequests.map((request) => {
         const isStaff = Boolean(canReview.data || canIssue.data)

@@ -15,11 +15,12 @@ function client() {
   return supabase
 }
 
-export async function listCommunityFeedback(tenantId: string, page: number, status: CommunityFeedbackStatus | 'all', search = ''): Promise<CommunityFeedback[]> {
+export async function listCommunityFeedback(tenantId: string, page: number, status: CommunityFeedbackStatus | 'all' | 'awaiting_response', search = ''): Promise<CommunityFeedback[]> {
   let query = client().from('community_feedback')
     .select('id,category,subject,message,status,staff_response,responded_at,created_at,updated_at')
     .eq('barangay_id', tenantId)
-  if (status !== 'all') query = query.eq('status', status)
+  if (status === 'awaiting_response') query = query.in('status', ['submitted', 'in_review'])
+  else if (status !== 'all') query = query.eq('status', status)
   const term = search.trim()
   if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(term)) query = query.eq('id', term)
   else if (term) query = query.ilike('subject', `%${term.replace(/[\\%_]/g, '\\$&')}%`)

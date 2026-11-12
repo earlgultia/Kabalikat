@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
 import { Check, ChevronLeft, ChevronRight, Download, Home, Search, UserPlus, UserRoundPen } from 'lucide-react'
@@ -16,7 +16,7 @@ const residentSchema = z.object({
   purok: z.string().max(100).optional(),
 }).refine((value) => value.householdId || (value.address?.length ?? 0) >= 3, { message: 'Provide a household address or select an existing household.' })
 
-export function ResidentsPage({ focusId, focusOwnCorrections, onFocusHandled }: { focusId?: string; focusOwnCorrections?: boolean; onFocusHandled?: () => void } = {}) {
+export function ResidentsPage({ focusId, focusOwnCorrections, focusResidentProfile, focusReviewQueue, onFocusHandled }: { focusId?: string; focusOwnCorrections?: boolean; focusResidentProfile?: boolean; focusReviewQueue?: 'residency' | 'profile-corrections'; onFocusHandled?: () => void } = {}) {
   const { membership, user } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
   const role = membership?.role?.key
@@ -49,10 +49,10 @@ export function ResidentsPage({ focusId, focusOwnCorrections, onFocusHandled }: 
     return () => { active = false }
   }, [focusId, tenantId, role, onFocusHandled])
   useEffect(() => {
-    if (!focusOwnCorrections || role !== 'resident') return
-    window.requestAnimationFrame(() => document.getElementById('resident-own-correction-history')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
-    onFocusHandled?.()
-  }, [focusOwnCorrections, onFocusHandled, role])
+    if (focusReviewQueue !== 'residency') return
+    setResidencyFilter('pending')
+    setPage(0)
+  }, [focusReviewQueue])
   useEffect(() => {
     const timeout = window.setTimeout(() => { setDebouncedSearch(residentSearch); setPage(0) }, 250)
     return () => window.clearTimeout(timeout)
@@ -76,7 +76,22 @@ export function ResidentsPage({ focusId, focusOwnCorrections, onFocusHandled }: 
     },
     enabled: Boolean(tenantId),
   })
-  const residentRows = residents.data?.rows ?? []
+  const residentRows = useMemo(() => residents.data?.rows ?? [], [residents.data?.rows])
+  useEffect(() => {
+    if (!focusResidentProfile || role !== 'resident' || residents.isPending || residents.isError) return
+    if (!residentRows.length) setFormOpen(true)
+  }, [focusResidentProfile, residents.isError, residents.isPending, residentRows.length, role])
+  useEffect(() => {
+    if (!focusResidentProfile || role !== 'resident' || residents.isPending || residents.isError || (!residentRows.length && !formOpen)) return
+    const targetId = residentRows.length ? `resident-record-${residentRows[0].id}` : 'resident-registration-form'
+    const frame = window.requestAnimationFrame(() => {
+      const target = document.getElementById(targetId)
+      target?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      target?.focus({ preventScroll: true })
+      onFocusHandled?.()
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [focusResidentProfile, formOpen, onFocusHandled, residentRows, residents.isError, residents.isPending, role])
   const verifications = useQuery({
     queryKey: ['residency-verifications', tenantId, residentRows.map((resident) => resident.id)],
     queryFn: () => listResidencyVerifications(tenantId, residentRows.map((resident) => resident.id)),
@@ -114,6 +129,50 @@ export function ResidentsPage({ focusId, focusOwnCorrections, onFocusHandled }: 
     if (correctionTotalPages > 0 && correctionPage >= correctionTotalPages) setCorrectionPage(correctionTotalPages - 1)
   }, [correctionPage, correctionTotalPages])
   const correctionRequests = profileChanges.data?.requests ?? []
+  const [focusedOwnCorrectionId, setFocusedOwnCorrectionId] = useState('')
+  useEffect(() => {
+    if (!focusOwnCorrections || role !== 'resident' || ownPendingProfileChanges.isPending || ownPendingProfileChanges.isError) return
+    const pendingRequest = ownPendingProfileChanges.data?.requests[0]
+    if (!pendingRequest) {
+      const frame = window.requestAnimationFrame(() => {
+        document.getElementById('resident-own-correction-history')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        onFocusHandled?.()
+      })
+      return () => window.cancelAnimationFrame(frame)
+    }
+    let active = true
+    void findResidentProfileChangePage(tenantId, pendingRequest.id).then((targetPage) => {
+      if (!active) return
+      if (targetPage === null) { onFocusHandled?.(); return }
+      setFocusedOwnCorrectionId(pendingRequest.id)
+      setCorrectionPage(targetPage)
+    }).catch(() => { if (active) onFocusHandled?.() })
+    return () => { active = false }
+  }, [focusOwnCorrections, onFocusHandled, ownPendingProfileChanges.data, ownPendingProfileChanges.isError, ownPendingProfileChanges.isPending, role, tenantId])
+  useEffect(() => {
+    if (!focusOwnCorrections || !focusedOwnCorrectionId || role !== 'resident' || profileChanges.isPending || profileChanges.isError) return
+    const target = document.getElementById(`resident-correction-${focusedOwnCorrectionId}`)
+    if (!target) return
+    target.focus({ preventScroll: true })
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    onFocusHandled?.()
+  }, [focusOwnCorrections, focusedOwnCorrectionId, onFocusHandled, profileChanges.data, profileChanges.isError, profileChanges.isPending, role])
+  useEffect(() => {
+    if (focusReviewQueue !== 'residency' || residents.isPending || residents.isError || residencyFilter !== 'pending') return
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById('resident-directory-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      onFocusHandled?.()
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [focusReviewQueue, onFocusHandled, residents.isError, residents.isPending, residencyFilter])
+  useEffect(() => {
+    if (focusReviewQueue !== 'profile-corrections' || !canReviewChanges.data || profileChanges.isPending || profileChanges.isError) return
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById('resident-profile-corrections-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      onFocusHandled?.()
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [canReviewChanges.data, focusReviewQueue, onFocusHandled, profileChanges.isError, profileChanges.isPending])
   useEffect(() => {
     if (!focusId || profileChanges.isPending) return
     const target = document.getElementById(`resident-correction-${focusId}`)
@@ -260,7 +319,7 @@ export function ResidentsPage({ focusId, focusOwnCorrections, onFocusHandled }: 
     </section>}
     {canReviewChanges.error && role !== 'resident' && <ErrorNotice message="Profile correction review access could not be checked. Review actions are hidden until access can be verified." onRetry={() => void canReviewChanges.refetch()} retrying={canReviewChanges.isFetching} />}
     {profileChanges.error && role !== 'resident' && <ErrorNotice message="Profile correction requests could not be loaded." onRetry={() => void profileChanges.refetch()} retrying={profileChanges.isFetching} />}
-    {canReviewChanges.data && correctionRequests.some((request) => request.status === 'pending') && <section className="ops-panel resident-correction-panel">
+    {canReviewChanges.data && correctionRequests.some((request) => request.status === 'pending') && <section id="resident-profile-corrections-section" className="ops-panel resident-correction-panel">
       <div className="ops-panel-heading"><div><h2>Profile correction requests</h2><p>Confirm each correction before updating the official resident record.</p></div><UserRoundPen size={19} /></div>
       <div className="ops-table-wrap"><table className="ops-table"><thead><tr><th>Resident</th><th>Requested changes</th><th>Submitted</th><th>Decision</th></tr></thead><tbody>
         {correctionRequests.filter((request) => request.status === 'pending').map((request) => <tr key={request.id}>
@@ -271,7 +330,7 @@ export function ResidentsPage({ focusId, focusOwnCorrections, onFocusHandled }: 
       </tbody></table></div>
       {correctionTotalPages > 1 && <nav className="ops-form-actions" aria-label="Pending correction request pages"><span className="field-hint">Page {correctionPage + 1} of {correctionTotalPages} · {profileChanges.data?.totalCount ?? 0} requests</span><div className="finance-review-actions"><button className="button outline" disabled={correctionPage === 0 || profileChanges.isFetching} onClick={() => setCorrectionPage((current) => current - 1)}><ChevronLeft size={15} />Previous</button><button className="button outline" disabled={correctionPage + 1 >= correctionTotalPages || profileChanges.isFetching} onClick={() => setCorrectionPage((current) => current + 1)}>Next<ChevronRight size={15} /></button></div></nav>}
     </section>}
-    {formOpen && <form className="ops-panel ops-form" onSubmit={(event) => void submit(event)}>
+    {formOpen && <form id="resident-registration-form" tabIndex={-1} className="ops-panel ops-form" onSubmit={(event) => void submit(event)}>
       <div className="ops-panel-heading"><div><h2>{canSelfRegister ? 'Your resident profile' : 'New resident record'}</h2><p>Details are visible only to authorized barangay staff and the linked resident.</p></div><Home size={18} /></div>
       <div className="ops-form-grid"><label>First name<input name="firstName" required maxLength={100} /></label><label>Last name<input name="lastName" required maxLength={100} /></label>
         <label>Date of birth <span className="field-hint">Optional</span><input name="birthDate" type="date" max={new Date().toISOString().slice(0, 10)} /></label><label>Phone <span className="field-hint">Optional</span><input name="phone" type="tel" maxLength={40} autoComplete="tel" /></label>
@@ -295,13 +354,13 @@ export function ResidentsPage({ focusId, focusOwnCorrections, onFocusHandled }: 
     {residents.isPending ? <LoadingNotice /> : residents.error ? <ErrorNotice message={residents.error.message} onRetry={() => void residents.refetch()} retrying={residents.isFetching} /> : !residentRows.length && (role === 'resident' || !residents.data?.total) ?
       <div className="ops-empty"><Home size={22} /><strong>{role !== 'resident' && (debouncedSearch || residencyFilter !== 'all') ? 'No matching residents' : 'No resident records available'}</strong><p>{role !== 'resident' && (debouncedSearch || residencyFilter !== 'all') ? 'Try another search or residency status.' : 'Records appear here when they are registered for this barangay.'}</p></div> :
       <>
-      {role !== 'resident' && <div className="community-calendar-filters">
+      {role !== 'resident' && <div id="resident-directory-section" className="community-calendar-filters">
         <label className="community-calendar-search"><Search size={16} /><input type="search" aria-label="Search resident records" value={residentSearch} onChange={(event) => setResidentSearch(event.target.value)} placeholder="Search name, phone, household, or address" /></label>
         <label>Residency status<select value={residencyFilter} onChange={(event) => { setResidencyFilter(event.target.value); setPage(0) }}><option value="all">All statuses</option><option value="pending">Pending</option><option value="verified">Verified</option><option value="rejected">Rejected</option></select></label>
       </div>}
       {role !== 'resident' && <p className="field-hint" aria-live="polite">Showing {filteredResidents.length} resident {filteredResidents.length === 1 ? 'record' : 'records'} on this page. {residents.data?.total ?? 0} records match these filters.</p>}
       {filteredResidents.length ? <div className="ops-table-wrap"><table className="ops-table"><thead><tr><th>Resident</th><th>Household</th><th>Contact</th><th>Residency</th><th>Record</th></tr></thead><tbody>
-        {filteredResidents.map((resident) => { const ownRecord = residentAuthors.data?.has(resident.id) ?? false; return <tr key={resident.id}><td><strong>{resident.first_name} {resident.last_name}</strong><small>{resident.birth_date ? new Date(resident.birth_date + 'T00:00:00').toLocaleDateString() : 'Birth date not recorded'}</small></td><td>{resident.household?.household_code ?? '—'}<small>{resident.household?.purok ?? resident.household?.address_line ?? 'Address unavailable'}</small></td><td>{resident.phone ?? '—'}</td><td><StatusPill status={latestVerificationByResident.get(resident.id) ?? 'pending'} />{canVerify.data && (residentAuthors.isPending ? <small>Checking reviewer eligibility…</small> : residentAuthors.error ? <><small>Reviewer eligibility unavailable. Refresh before making a decision.</small><button type="button" className="text-action" disabled={residentAuthors.isFetching} onClick={() => void residentAuthors.refetch()}>{residentAuthors.isFetching ? 'Checking…' : 'Retry check'}</button></> : ownRecord ? <small>Another authorized reviewer must verify this record.</small> : <div className="row-actions"><button onClick={() => void verify(resident.id, 'verified')}>Verify</button><button onClick={() => void verify(resident.id, 'rejected')}>Reject</button></div>)}</td><td><StatusPill status={resident.record_status} /></td></tr>})}
+        {filteredResidents.map((resident) => { const ownRecord = residentAuthors.data?.has(resident.id) ?? false; return <tr id={`resident-record-${resident.id}`} tabIndex={role === 'resident' ? -1 : undefined} key={resident.id}><td><strong>{resident.first_name} {resident.last_name}</strong><small>{resident.birth_date ? new Date(resident.birth_date + 'T00:00:00').toLocaleDateString() : 'Birth date not recorded'}</small></td><td>{resident.household?.household_code ?? '—'}<small>{resident.household?.purok ?? resident.household?.address_line ?? 'Address unavailable'}</small></td><td>{resident.phone ?? '—'}</td><td><StatusPill status={latestVerificationByResident.get(resident.id) ?? 'pending'} />{canVerify.data && (residentAuthors.isPending ? <small>Checking reviewer eligibility…</small> : residentAuthors.error ? <><small>Reviewer eligibility unavailable. Refresh before making a decision.</small><button type="button" className="text-action" disabled={residentAuthors.isFetching} onClick={() => void residentAuthors.refetch()}>{residentAuthors.isFetching ? 'Checking…' : 'Retry check'}</button></> : ownRecord ? <small>Another authorized reviewer must verify this record.</small> : <div className="row-actions"><button onClick={() => void verify(resident.id, 'verified')}>Verify</button><button onClick={() => void verify(resident.id, 'rejected')}>Reject</button></div>)}</td><td><StatusPill status={resident.record_status} /></td></tr>})}
       </tbody></table></div> : <div className="ops-empty"><Search size={22} /><strong>No residents on this page match that status</strong><p>Choose another status or move to another page.</p></div>}
       {role !== 'resident' && (residents.data?.total ?? 0) > RESIDENT_PAGE_SIZE && <nav className="ops-form-actions" aria-label="Resident directory pages">
         <button className="button outline" disabled={page === 0 || residents.isFetching} onClick={() => setPage((current) => Math.max(0, current - 1))}>Previous</button>

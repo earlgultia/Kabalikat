@@ -5,7 +5,7 @@ import { CalendarDays, CalendarPlus, CheckCircle2, ChevronLeft, ChevronRight, Cl
 import { useAuth } from '../../auth/AuthProvider'
 import { formatManilaCalendarDate } from './format'
 import {
-  createMeeting, decideMeetingAttendanceCorrection, getKagawadInvitedMeetingAgenda, getMeetingInvitationResponseSummary, hasPermission, listAllMeetingSchedule, listAttendance, listKagawadAttendanceCorrectionRequests, listKagawadInvitedMeetings, listKagawadMeetingAttendanceHistory, listKagawadMeetingInvitationResponseHistory, listMeetingAttendanceCorrectionQueue, listMeetingAttendeeMembers, listMeetingAttendees, listMeetingInvitationResponseRoster, listMeetingMemberPage, listMeetingPage, requestKagawadAttendanceCorrection, setKagawadMeetingInvitationResponse, updateMeetingDetails,
+  createMeeting, decideMeetingAttendanceCorrection, getKagawadInvitedMeetingAgenda, getMeetingInvitationResponseSummary, getMeetingRecordReviewTarget, hasPermission, listAllMeetingSchedule, listAttendance, listKagawadAttendanceCorrectionRequests, listKagawadInvitedMeetings, listKagawadMeetingAttendanceHistory, listKagawadMeetingInvitationResponseHistory, listMeetingAttendanceCorrectionQueue, listMeetingAttendeeMembers, listMeetingAttendees, listMeetingInvitationResponseRoster, listMeetingMemberPage, listMeetingPage, requestKagawadAttendanceCorrection, setKagawadMeetingInvitationResponse, updateMeetingDetails,
   markAttendance, recordAttendance, updateMeetingStatus, MEETING_MEMBER_PAGE_SIZE, MEETING_PAGE_SIZE,
   type KagawadInvitedMeeting,
 } from './data'
@@ -79,7 +79,7 @@ function KagawadMeetingAgenda({ meetingId }: { meetingId: string }) {
   </details>
 }
 
-export function MeetingsPage({ focusId, focusPage, focusCorrectionRequestId, focusCorrectionPage, focusCorrectionQueue, onFocusHandled }: { focusId?: string; focusPage?: number; focusCorrectionRequestId?: string; focusCorrectionPage?: number; focusCorrectionQueue?: boolean; onFocusHandled?: () => void }) {
+export function MeetingsPage({ focusId, focusPage, focusCorrectionRequestId, focusCorrectionPage, focusCorrectionQueue, focusMeetingRecords, focusRsvpNeeded, onFocusHandled }: { focusId?: string; focusPage?: number; focusCorrectionRequestId?: string; focusCorrectionPage?: number; focusCorrectionQueue?: boolean; focusMeetingRecords?: 'minutes' | 'resolutions'; focusRsvpNeeded?: boolean; onFocusHandled?: () => void }) {
   const { membership, user } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
   const isKagawad = membership?.role?.key === 'kagawad'
@@ -188,6 +188,50 @@ export function MeetingsPage({ focusId, focusPage, focusCorrectionRequestId, foc
     target.focus({ preventScroll: true }); target.scrollIntoView({ behavior: 'smooth', block: 'center' })
     onFocusHandled?.()
   }, [focusId, meetings.data, onFocusHandled])
+  useEffect(() => {
+    if (!focusMeetingRecords || !tenantId) return
+    let active = true
+    setError('')
+    if (meetingSearchInput) skipNextMeetingSearchReset.current = true
+    setMeetingSearchInput('')
+    setMeetingSearch('')
+    setMeetingStatus('all')
+    setStartsOnOrAfter('')
+    setStartsOnOrBefore('')
+    void getMeetingRecordReviewTarget(tenantId, focusMeetingRecords).then((target) => {
+      if (!active) return
+      if (!target) { onFocusHandled?.(); return }
+      setPage(target.page_number)
+      setSelectedMeeting(target.meeting_id)
+    }).catch((reason: unknown) => {
+      if (!active) return
+      setError(reason instanceof Error ? reason.message : 'Meeting review items could not be opened.')
+      onFocusHandled?.()
+    })
+    return () => { active = false }
+  }, [focusMeetingRecords, meetingSearchInput, tenantId, onFocusHandled])
+  useEffect(() => {
+    if (!focusMeetingRecords || !selectedMeeting || !meetings.data?.meetings.some((meeting) => meeting.id === selectedMeeting)) return
+    const frame = window.requestAnimationFrame(() => {
+      const target = document.getElementById(`meeting-card-${selectedMeeting}`)
+      target?.focus({ preventScroll: true })
+      target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      onFocusHandled?.()
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [focusMeetingRecords, meetings.data, onFocusHandled, selectedMeeting])
+  useEffect(() => {
+    if (!focusRsvpNeeded || !isKagawad) return
+    const nextFilters = { search: '', response: 'no_response', meetingDateAfter: '', meetingDateBefore: '' }
+    setInvitedMeetingDraft(nextFilters)
+    setInvitedMeetingFilters(nextFilters)
+    setInvitedMeetingPage(0)
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById('kagawad-invited-meetings-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      onFocusHandled?.()
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [focusRsvpNeeded, isKagawad, onFocusHandled])
   useEffect(() => {
     if (!meetings.isPending && !meetings.isError && page > 0 && meetings.data?.meetings.length === 0) setPage((current) => Math.max(0, current - 1))
   }, [meetings.data?.meetings.length, meetings.isError, meetings.isPending, page])
@@ -602,7 +646,7 @@ export function MeetingsPage({ focusId, focusPage, focusCorrectionRequestId, foc
     {Boolean(tenantId) && (canManage.isPending || canManageAttendance.isPending || canSelectAttendees.isPending) && <LoadingNotice compact />}
     {(canManage.error || canManageAttendance.error || canSelectAttendees.error) && <ErrorNotice message="Some meeting permissions could not be checked. Related scheduling, attendance, or invite controls may be unavailable until access can be verified." onRetry={() => { void canManage.refetch(); void canManageAttendance.refetch(); void canSelectAttendees.refetch() }} retrying={canManage.isFetching || canManageAttendance.isFetching || canSelectAttendees.isFetching} />}
     {message && <div className="ops-success"><CheckCircle2 size={16} />{message}</div>}{error && <ErrorNotice message={error} />}{calendarExportError && <ErrorNotice message={calendarExportError} />}
-    {isKagawad && <section className="ops-panel kagawad-invited-meetings" aria-labelledby="kagawad-invited-meetings-title">
+    {isKagawad && <section id="kagawad-invited-meetings-section" className="ops-panel kagawad-invited-meetings" aria-labelledby="kagawad-invited-meetings-title">
       <div className="ops-panel-heading"><div><h2 id="kagawad-invited-meetings-title">My invited meetings</h2><p>Share your plan ahead of time. RSVP does not record attendance; check in when the window opens.</p></div><CalendarDays size={19} /></div>
       <form className="kagawad-invited-meeting-filters" onSubmit={(event) => { event.preventDefault(); if (invitedMeetingDraft.meetingDateAfter && invitedMeetingDraft.meetingDateBefore && invitedMeetingDraft.meetingDateAfter > invitedMeetingDraft.meetingDateBefore) return; setInvitedMeetingPage(0); setInvitedMeetingFilters({ ...invitedMeetingDraft, search: invitedMeetingDraft.search.trim() }) }}>
         <label>Search meetings<input type="search" maxLength={100} placeholder="Meeting title or location" value={invitedMeetingDraft.search} onChange={(event) => setInvitedMeetingDraft((current) => ({ ...current, search: event.target.value }))} /></label>
@@ -723,7 +767,7 @@ export function MeetingsPage({ focusId, focusPage, focusCorrectionRequestId, foc
       </div>}
       <div className="ops-form-actions"><span className="field-hint">Attendance self-check-in opens 30 minutes before start and closes 30 minutes after end.</span><button className="button primary" disabled={busy}>{busy ? 'Saving…' : 'Create meeting'}</button></div>
     </form>}
-    <div className="ops-section-title"><h2>Scheduled meetings</h2><p>Meeting lists and attendance are tenant- and role-scoped.</p></div>
+    <div className="ops-section-title" id="meeting-schedule-section"><h2>Scheduled meetings</h2><p>Meeting lists and attendance are tenant- and role-scoped.</p></div>
     {tenantId && <div className="incident-filters meeting-schedule-filters"><label className="archive-search"><Search size={16} /><input type="search" aria-label="Search meetings" maxLength={100} placeholder="Search title, location, or agenda" value={meetingSearchInput} onChange={(event) => setMeetingSearchInput(event.target.value)} /></label><label>Meeting status<select value={meetingStatus} onChange={(event) => { setMeetingStatus(event.target.value as typeof meetingStatus); setPage(0) }}><option value="all">All statuses</option><option value="draft">Draft</option><option value="scheduled">Scheduled</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></label><label>Starts on or after<input type="date" value={startsOnOrAfter} max={startsOnOrBefore || undefined} onChange={(event) => { setStartsOnOrAfter(event.target.value); setPage(0) }} /></label><label>Starts on or before<input type="date" value={startsOnOrBefore} min={startsOnOrAfter || undefined} onChange={(event) => { setStartsOnOrBefore(event.target.value); setPage(0) }} /></label>{(startsOnOrAfter || startsOnOrBefore) && <button type="button" className="button outline" onClick={() => { setStartsOnOrAfter(''); setStartsOnOrBefore(''); setPage(0) }}>Clear dates</button>}</div>}
     {dateRangeInvalid && <p className="account-security-error" role="alert">The end date must be the same day or later than the start date.</p>}
     {scheduleExportError && <p className="account-security-error" role="alert">{scheduleExportError}</p>}

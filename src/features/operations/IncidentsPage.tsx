@@ -32,7 +32,7 @@ function IncidentHistory({ tenantId, incidentId, ownStatusOnly }: { tenantId: st
   </details>
 }
 
-export function IncidentsPage({ focusId, focusAssignedActive, onFocusHandled }: { focusId?: string; focusAssignedActive?: boolean; onFocusHandled?: () => void }) {
+export function IncidentsPage({ focusId, focusAssignedActive, focusOpenReports, onFocusHandled }: { focusId?: string; focusAssignedActive?: boolean; focusOpenReports?: boolean; onFocusHandled?: () => void }) {
   const { membership, user } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
   const queryClient = useQueryClient()
@@ -101,6 +101,15 @@ export function IncidentsPage({ focusId, focusAssignedActive, onFocusHandled }: 
     window.requestAnimationFrame(() => document.getElementById('incident-list')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
     onFocusHandled?.()
   }, [enabled, focusAssignedActive, onFocusHandled, tenantId])
+  useEffect(() => {
+    if (!focusOpenReports || !tenantId || !enabled || canManage.data) return
+    setPage(0); setSearch(''); setDebouncedSearch(''); setStatusFilter('all'); setCategoryFilter('all'); setSeverityFilter('all'); setAssignmentFilter('all'); setActiveOnly(true); setCreatedAfter(''); setCreatedBefore('')
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById('incident-list')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      onFocusHandled?.()
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [canManage.data, enabled, focusOpenReports, onFocusHandled, tenantId])
 
   useEffect(() => {
     if (!focusId || focusReadyId !== focusId || !incidents.data?.rows.some((incident) => incident.id === focusId)) return

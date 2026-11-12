@@ -40,6 +40,12 @@ export async function listSkProjects(tenantId: string, page: number, status: SkP
   return { rows: (data ?? []) as SkProjectRow[], totalCount: count ?? 0 }
 }
 
+export async function getMyReturnedSkAccomplishmentTarget(tenantId: string) {
+  const { data, error } = await client().rpc('get_my_returned_sk_accomplishment_target', { p_barangay_id: tenantId })
+  if (error) throw new Error(error.message)
+  return ((data ?? []) as { project_id: string; page_number: number }[])[0] ?? null
+}
+
 export async function listSkProjectUpdates(projectId: string, page: number): Promise<SkProjectHistoryPage<SkProjectUpdateRow>> {
   const { data, error } = await client().rpc('list_sk_project_update_page', {
     p_project_id: projectId, p_page: page, p_page_size: SK_PROJECT_HISTORY_PAGE_SIZE,

@@ -61,7 +61,7 @@ function SupportTicketDetails({ ticket, platformAdmin, currentUserId, busy, auto
   </>
 }
 
-export function SupportPage({ platformAdmin = false, focusId, onFocusHandled }: { platformAdmin?: boolean; focusId?: string; onFocusHandled?: () => void }) {
+export function SupportPage({ platformAdmin = false, focusId, focusOpenRequests, onFocusHandled }: { platformAdmin?: boolean; focusId?: string; focusOpenRequests?: boolean; onFocusHandled?: () => void }) {
   const { membership, user } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
   const queryClient = useQueryClient()
@@ -80,6 +80,14 @@ export function SupportPage({ platformAdmin = false, focusId, onFocusHandled }: 
   const [busyTicket, setBusyTicket] = useState('')
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+
+  useEffect(() => {
+    if (!focusOpenRequests || platformAdmin) return
+    setNeedsAttention(false)
+    setStatusFilter('open')
+    setSearchInput('')
+    setSearch('')
+  }, [focusOpenRequests, platformAdmin])
 
   async function refresh() {
     await Promise.all([
@@ -168,12 +176,12 @@ export function SupportPage({ platformAdmin = false, focusId, onFocusHandled }: 
       </div>
       <p className="support-guidance-privacy"><ShieldAlert size={15} />This support queue is not an emergency channel. For immediate danger, contact local emergency services or barangay officials directly.</p>
     </section>
-    <form className="support-ticket-controls" onSubmit={(event) => { event.preventDefault(); setSearch(searchInput.trim()) }}>{needsAttention && <p className="support-attention-hint">Showing new or in-progress requests with no activity for at least 3 days.</p>}<label className="support-search-field"><Search size={16} /><input aria-label="Search support request subjects" maxLength={180} placeholder="Search request subjects" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} /></label><label className="support-status-field">Status<select aria-label="Filter support requests by status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="all">All statuses</option>{statuses.map((status) => <option key={status} value={status}>{status.replaceAll('_',' ')}</option>)}</select></label><button className="button outline support-search-submit" type="submit">Search</button>{search && <button className="text-action support-search-clear" type="button" onClick={() => { setSearch(''); setSearchInput('') }}>Clear search</button>}</form>
+    <form className="support-ticket-controls" onSubmit={(event) => { event.preventDefault(); setSearch(searchInput.trim()) }}>{needsAttention && <p className="support-attention-hint">Showing new or in-progress requests with no activity for at least 3 days.</p>}<label className="support-search-field"><Search size={16} /><input aria-label="Search support request subjects" maxLength={180} placeholder="Search request subjects" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} /></label><label className="support-status-field">Status<select aria-label="Filter support requests by status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="all">All statuses</option>{!platformAdmin && <option value="open">All open statuses</option>}{statuses.map((status) => <option key={status} value={status}>{status.replaceAll('_',' ')}</option>)}</select></label><button className="button outline support-search-submit" type="submit">Search</button>{search && <button className="text-action support-search-clear" type="button" onClick={() => { setSearch(''); setSearchInput('') }}>Clear search</button>}</form>
     {message && <div className="ops-success"><CheckCircle2 size={16} />{message}</div>}{error && <ErrorNotice message={error} />}
     {showForm && !platformAdmin && <form className="ops-panel ops-form" onSubmit={(event) => void create(event)}><div className="ops-panel-heading"><div><h2>Contact support</h2><p>Do not include passwords, government ID numbers, or sensitive resident information.</p></div><Headset size={19} /></div><div className="ops-form-grid"><label>Topic<select name="category"><option value="account">Account access</option><option value="bug">Something is not working</option><option value="data">Record or data question</option><option value="question">How do I…?</option><option value="other">Other</option></select></label><label className="span-two">Subject<input name="subject" minLength={3} maxLength={180} required /></label><label className="span-two">Describe the issue<textarea name="description" minLength={3} maxLength={4000} rows={5} required /></label></div><div className="ops-form-actions"><button className="button primary" disabled={busyTicket === 'new'}>Send request</button></div></form>}
     {tickets.isPending && <LoadingNotice />}{tickets.error && <ErrorNotice message="Unable to load support requests. Please try again later." onRetry={() => void tickets.refetch()} retrying={tickets.isFetching} />}
     {focusedTicket.error && <ErrorNotice message="The support request from this update could not be opened. It may no longer be available to your account." onRetry={() => void focusedTicket.refetch()} retrying={focusedTicket.isFetching} />}
-    {visibleTicketItems.length === 0 && !tickets.isPending && !tickets.error && !focusedTicket.isPending && <div className="ops-empty support-ticket-empty"><Headset size={22} /><strong>{needsAttention ? 'No requests need attention' : platformAdmin ? 'No support requests' : 'No requests yet'}</strong><p>{needsAttention ? 'No new or in-progress requests have been quiet for 3 or more days.' : platformAdmin ? 'New requests will appear in this queue.' : 'Your support requests and replies will appear here.'}</p></div>}
+    {visibleTicketItems.length === 0 && !tickets.isPending && !tickets.error && !focusedTicket.isPending && <div className="ops-empty support-ticket-empty"><Headset size={22} /><strong>{needsAttention ? 'No requests need attention' : statusFilter === 'open' ? 'No open requests' : platformAdmin ? 'No support requests' : 'No requests yet'}</strong><p>{needsAttention ? 'No new or in-progress requests have been quiet for 3 or more days.' : statusFilter === 'open' ? 'New, in-progress, or waiting-on-you requests will appear here.' : platformAdmin ? 'New requests will appear in this queue.' : 'Your support requests and replies will appear here.'}</p></div>}
     <div className="support-ticket-list">{visibleTicketItems.map((ticket) => {
       return <article className="ops-panel support-ticket" key={ticket.id}>
         <header><div><StatusPill status={ticket.status} /><span className="support-category">{ticket.category.replace('_',' ')}</span></div>{platformAdmin && <small>{ticket.barangay_name ?? `Barangay ${ticket.barangay_id.slice(0,8)}`}</small>}</header>

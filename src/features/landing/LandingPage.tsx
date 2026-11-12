@@ -1,5 +1,8 @@
-import { ArrowRight, Bell, BookOpen, Building2, CheckCircle2, ChevronDown, ClipboardList, Facebook, FileText, HeartHandshake, LockKeyhole, Mail, Phone, ShieldCheck, Sparkles, UsersRound } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Activity, ArrowRight, Bell, BookOpen, Building2, CheckCircle2, ChevronDown, ClipboardList, Eye, Facebook, FileText, HeartHandshake, LockKeyhole, Mail, Phone, ShieldCheck, Sparkles, UsersRound } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { supabase } from '../../lib/supabase'
+import { getPublicSiteVisitorId, getPublicSiteVisitorMetrics, isSiteAnalyticsOptedOut, publicSiteSections, setSiteAnalyticsOptOut, trackPublicSiteHeartbeat, trackPublicSitePageView, type PublicSiteSection, type PublicVisitorMetrics } from './visitor-analytics'
 import './landing.css'
 
 const features = [
@@ -10,6 +13,52 @@ const features = [
 ]
 
 export function LandingPage() {
+  const [analyticsOptedOut, setAnalyticsOptedOut] = useState(isSiteAnalyticsOptedOut)
+  const [visitorMetrics, setVisitorMetrics] = useState<PublicVisitorMetrics | null>(null)
+
+  useEffect(() => {
+    if (analyticsOptedOut || !supabase) return
+    const visitorId = getPublicSiteVisitorId()
+    const viewedSections = new Set<PublicSiteSection>()
+    let active = true
+    const track = (section: PublicSiteSection) => {
+      if (viewedSections.has(section)) return
+      viewedSections.add(section)
+      void trackPublicSitePageView(visitorId, section).catch(() => undefined)
+    }
+    track('home')
+    void trackPublicSiteHeartbeat(visitorId).catch(() => undefined)
+    const heartbeat = window.setInterval(() => { void trackPublicSiteHeartbeat(visitorId).catch(() => undefined) }, 30_000)
+    const observer = typeof IntersectionObserver === 'undefined' ? null : new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting && publicSiteSections.includes(entry.target.id as PublicSiteSection)) track(entry.target.id as PublicSiteSection)
+      }
+    }, { threshold: 0.2 })
+    for (const section of publicSiteSections) {
+      const element = document.getElementById(section)
+      if (element) observer?.observe(element)
+    }
+    const refresh = () => { if (active) void getPublicSiteVisitorMetrics().then(setVisitorMetrics).catch(() => undefined) }
+    refresh()
+    const channel = supabase.channel('public-site-visitor-metrics')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'site_visitor_public_metrics' }, refresh)
+      .subscribe()
+    const poll = window.setInterval(refresh, 30_000)
+    return () => {
+      active = false
+      window.clearInterval(heartbeat)
+      window.clearInterval(poll)
+      observer?.disconnect()
+      void supabase?.removeChannel(channel)
+    }
+  }, [analyticsOptedOut])
+
+  function updateAnalyticsPreference(optedOut: boolean) {
+    setSiteAnalyticsOptOut(optedOut)
+    setAnalyticsOptedOut(optedOut)
+    if (optedOut) setVisitorMetrics(null)
+  }
+
   return <div className="landing-page">
     <a className="skip-link" href="#landing-main">Skip to main content</a>
     <header className="landing-nav">
@@ -88,6 +137,7 @@ export function LandingPage() {
               <section><h3>7. Your rights and how to make a request</h3><p>Subject to applicable law, data subjects may ask whether their information is processed, request access and a copy, seek correction, object to processing, request erasure or blocking where permitted, seek damages where available, and exercise data portability rights where applicable. To exercise a right, contact the barangay office responsible for the record and provide enough information to verify your identity. For platform account or support data, contact ArkByte using the details above. If you cannot resolve a concern, you may contact the <a href="https://privacy.gov.ph/data-subject-rights/" target="_blank" rel="noreferrer">National Privacy Commission</a> or review <a href="https://lawphil.net/statutes/repacts/ra2012/ra_10173_2012.html" target="_blank" rel="noreferrer">Republic Act No. 10173</a>.</p></section>
               <section><h3>8. Questions, complaints, and incidents</h3><p>For a barangay record, first contact the barangay or LGU identified in your workspace-specific notice. For KABALIKAT platform operations, contact <a href="mailto:kabalikatph2026@gmail.com">ArkByte Technologies</a>. If you suspect a privacy or security incident, notify the responsible barangay and ArkByte promptly. The responsible personal information controller will assess the incident and notify the NPC and affected individuals when required by law.</p></section>
               <section><h3>9. Changes and automated processing</h3><p>This notice may be updated when processing or providers change; the effective date above will be revised when it does. The current codebase does not make service decisions solely by automated profiling. Any future AI or automated decision feature must receive a separate privacy and security review and disclose its provider, data use, purpose, and meaningful effects before it is enabled. A privacy notice explains processing; it is not itself consent or a substitute for a valid legal basis.</p></section>
+              <section><h3>10. Public website traffic analytics</h3><p>If you allow analytics, KABALIKAT stores a random, pseudonymous identifier in this browser to estimate distinct browser visitors and count views of public landing-page sections. It records the section key and Manila calendar day, not your name, email, account, barangay, or the page URL. A heartbeat runs while this landing page is open; a browser is counted as live for up to two minutes after its last heartbeat. The same browser identifier prevents a refresh from becoming a new unique visitor, while page refreshes are counted as page views. Browser identifiers and section/day counts are kept for aggregate traffic reporting and are separate from barangay records. The public counter shows aggregate totals only; section charts are available only to platform administrators. This identifier can be cleared with browser site data, which will make that browser appear as a new visitor.</p></section>
             </div>
           </details>
           <details className="privacy-card"><summary><span><strong>Information in the workspace</strong><small>What KABALIKAT may store</small></span><ChevronDown size={18} aria-hidden="true" /></summary><p>Depending on the services a barangay enables, information may include account and role details, resident or household records, service requests, attendance, announcements, official documents, finance records, incident reports, and support conversations. A barangay should collect only information needed for its stated services.</p></details>
@@ -97,6 +147,7 @@ export function LandingPage() {
           <details className="privacy-card"><summary><span><strong>Providers and sharing</strong><small>Where information may go</small></span><ChevronDown size={18} aria-hidden="true" /></summary><p>Configured deployments use Supabase for authentication, database, and file storage services. Information may also be seen by authorized officials performing their duties. The organization operating a deployment should identify any additional providers, recipients, or data transfers in its own notice.</p></details>
           <details className="privacy-card"><summary><span><strong>Retention and your choices</strong><small>Questions, access, and correction</small></span><ChevronDown size={18} aria-hidden="true" /></summary><p>Retention periods depend on the barangay’s records rules and applicable requirements; this page does not set one universal period. For a privacy question or request to access or correct information, contact the barangay office responsible for the record. If the concern is about the platform itself, contact the service operator named in that deployment’s notice.</p></details>
         </div>
+        <details className="privacy-card analytics-privacy-controls"><summary><span><strong>Public website analytics</strong><small>Choose whether this browser contributes to visitor counts</small></span><ChevronDown size={18} aria-hidden="true" /></summary><div className="analytics-privacy-body"><p>{analyticsOptedOut ? 'Analytics is off for this browser.' : 'Analytics is on for this browser. A random, pseudonymous browser identifier and public landing-page section views are used for aggregate traffic counts.'}</p><button type="button" className="analytics-preference-button" aria-pressed={!analyticsOptedOut} onClick={() => updateAnalyticsPreference(!analyticsOptedOut)}>{analyticsOptedOut ? 'Allow visitor analytics' : 'Turn off analytics'}</button></div></details>
         <aside className="privacy-note"><ShieldCheck size={20} aria-hidden="true" /><div><strong>Important: check your barangay’s notice</strong><p>This general notice cannot supply details that vary by deployment. Before you submit personal information, your barangay or LGU should identify itself and its privacy contact, explain the purpose and lawful basis, name the actual providers and recipients, and state its retention schedule and complaint process. Ask the barangay office if these details are not shown in your workspace.</p></div></aside>
         <section className="privacy-contact" aria-labelledby="privacy-contact-title">
           <div><span className="landing-eyebrow">Need help or have a question?</span><h3 id="privacy-contact-title">Contact the developers</h3><p>Reach ArkByte Technologies for platform questions or support.</p></div>
@@ -111,5 +162,6 @@ export function LandingPage() {
       <section className="landing-final-cta"><div><span className="landing-eyebrow">KABALIKAT · BY ARKBYTE TECHNOLOGIES</span><h2>Let’s make community service more connected.</h2><p>Already have an account or invitation? Continue to your workspace.</p></div><Link className="landing-primary" to="/sign-in">Sign in to KABALIKAT <ArrowRight size={17} /></Link></section>
     </main>
     <footer className="landing-footer"><a className="landing-brand" href="#home"><span className="landing-brand-mark"><HeartHandshake size={19} /></span><span><strong>KABALIKAT</strong><small>BY ARKBYTE TECHNOLOGIES</small></span></a><span>Community and operations in one place.</span><nav aria-label="Footer navigation"><a href="#features">Platform</a><a href="#plans">Plans</a><a href="#privacy">Data privacy</a><Link to="/verify-document">Verify a document</Link><Link to="/sign-in">Sign in</Link></nav><small>© {new Date().getFullYear()} ArkByte Technologies</small></footer>
+    {!analyticsOptedOut && visitorMetrics && <aside className="landing-visitor-indicator" aria-label="Public website visitor statistics" aria-live="polite"><span className="visitor-indicator-icon"><Activity size={17} aria-hidden="true" /></span><span className="visitor-indicator-copy"><strong>{visitorMetrics.total_visitors.toLocaleString()} unique browsers visited KABALIKAT</strong><small><i aria-hidden="true" /> {visitorMetrics.live_visitors.toLocaleString()} currently exploring the platform</small></span><span className="visitor-indicator-today"><Eye size={14} aria-hidden="true" />Today {visitorMetrics.today_visitors.toLocaleString()}</span></aside>}
   </div>
 }

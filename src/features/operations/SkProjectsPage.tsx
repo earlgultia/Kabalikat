@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { CheckCircle2, ChevronLeft, ChevronRight, FileCheck2, FolderKanban } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import { hasPermission } from './data'
-import { addSkProjectUpdate, listSkAccomplishmentsForProjects, listSkProjects, reviewSkAccomplishment, reviewSkProject, SK_PROJECT_PAGE_SIZE, submitSkAccomplishment, submitSkProject, updateSkProjectStatus, type SkProjectRow } from './sk-data'
+import { addSkProjectUpdate, getMyReturnedSkAccomplishmentTarget, listSkAccomplishmentsForProjects, listSkProjects, reviewSkAccomplishment, reviewSkProject, SK_PROJECT_PAGE_SIZE, submitSkAccomplishment, submitSkProject, updateSkProjectStatus, type SkProjectRow } from './sk-data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 import { formatDateTime } from './format'
 import { ProjectProgressHistory, SkProjectActivityHistory } from './ProjectHistory'
@@ -14,12 +14,14 @@ const updateSchema = z.object({ type: z.enum(['milestone','progress']), title: z
 const accomplishmentSchema = z.object({ title: z.string().trim().min(3).max(180), summary: z.string().trim().min(20).max(2000) })
 const currency = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' })
 
-export function SkProjectsPage({ focusStatus, onFocusHandled }: { focusStatus?: SkProjectRow['status'] | 'all'; onFocusHandled?: () => void } = {}) {
+export function SkProjectsPage({ focusStatus, focusReturnedAccomplishment, onFocusHandled }: { focusStatus?: SkProjectRow['status'] | 'all'; focusReturnedAccomplishment?: boolean; onFocusHandled?: () => void } = {}) {
   const { membership, user } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
   const queryClient = useQueryClient()
   const [page, setPage] = useState(0)
   const [projectStatus, setProjectStatus] = useState<SkProjectRow['status'] | 'all'>('all')
+  const [focusReturnedProjectId, setFocusReturnedProjectId] = useState('')
+  const [focusError, setFocusError] = useState('')
   useEffect(() => { setPage(0); setProjectStatus('all') }, [tenantId])
   useEffect(() => {
     if (!focusStatus) return
@@ -33,6 +35,44 @@ export function SkProjectsPage({ focusStatus, onFocusHandled }: { focusStatus?: 
   const projects = useQuery({ queryKey: ['sk-projects', tenantId, projectStatus, page], queryFn: () => listSkProjects(tenantId, page, projectStatus), enabled })
   const projectIds = projects.data?.rows.map((project) => project.id) ?? []
   const accomplishments = useQuery({ queryKey: ['sk-accomplishments', tenantId, projectIds], queryFn: () => listSkAccomplishmentsForProjects(tenantId, projectIds), enabled: enabled && projectIds.length > 0 })
+  useEffect(() => {
+    if (!focusReturnedAccomplishment || !tenantId || !canManage.data) return
+    let active = true
+    setFocusError('')
+    void getMyReturnedSkAccomplishmentTarget(tenantId).then((target) => {
+      if (!active) return
+      if (!target) {
+        setFocusError('No returned accomplishment summary is currently available to revise.')
+        onFocusHandled?.()
+        return
+      }
+      setProjectStatus('completed')
+      setPage(target.page_number)
+      setFocusReturnedProjectId(target.project_id)
+    }).catch((reason: unknown) => {
+      if (!active) return
+      setFocusError(reason instanceof Error ? reason.message : 'The returned accomplishment could not be opened.')
+      onFocusHandled?.()
+    })
+    return () => { active = false }
+  }, [canManage.data, focusReturnedAccomplishment, onFocusHandled, tenantId])
+  useEffect(() => {
+    if (!focusReturnedAccomplishment || !focusReturnedProjectId || accomplishments.isPending || accomplishments.isError) return
+    const returned = accomplishments.data?.find((item) => item.project_id === focusReturnedProjectId && item.status === 'returned' && item.created_by === user?.id)
+    if (!returned) {
+      setFocusError('The returned summary is no longer available. Refresh the project list and try again.')
+      onFocusHandled?.()
+      return
+    }
+    setSummaryProject(focusReturnedProjectId)
+    const frame = window.requestAnimationFrame(() => {
+      const target = document.getElementById(`sk-project-${focusReturnedProjectId}`)
+      target?.focus({ preventScroll: true })
+      target?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      onFocusHandled?.()
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [accomplishments.data, accomplishments.isError, accomplishments.isPending, focusReturnedAccomplishment, focusReturnedProjectId, onFocusHandled, user?.id])
   const totalPages = Math.ceil((projects.data?.totalCount ?? 0) / SK_PROJECT_PAGE_SIZE)
   const [showForm, setShowForm] = useState(false)
   const [updateProject, setUpdateProject] = useState('')
@@ -113,6 +153,7 @@ export function SkProjectsPage({ focusStatus, onFocusHandled }: { focusStatus?: 
       {canManage.data && <button className="button primary" onClick={() => setShowForm((visible) => !visible)}>New proposal</button>}
     </PageHeading>
     {!tenantId && <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to view SK projects." />}
+    {focusError && <ErrorNotice message={focusError} />}
     {Boolean(tenantId) && (canManage.isPending || canReview.isPending) && <LoadingNotice compact />}
     {canManage.error && <ErrorNotice message="SK project management access could not be checked." onRetry={() => void canManage.refetch()} retrying={canManage.isFetching} />}
     {canReview.error && <ErrorNotice message="SK project review access could not be checked." onRetry={() => void canReview.refetch()} retrying={canReview.isFetching} />}
@@ -124,7 +165,7 @@ export function SkProjectsPage({ focusStatus, onFocusHandled }: { focusStatus?: 
     {accomplishments.error && <ErrorNotice message="Project accomplishment summaries could not be loaded." onRetry={() => void accomplishments.refetch()} retrying={accomplishments.isFetching} />}
     {projects.data?.totalCount === 0 && <div className="ops-empty"><FolderKanban size={22} /><strong>{projectStatus === 'all' ? 'No SK projects yet' : `No ${projectStatus === 'submitted' ? 'proposals awaiting review' : `${projectStatus} projects`} found`}</strong><p>{projectStatus === 'all' ? 'Submitted proposals and their review status will appear here.' : 'Choose another status to see more SK projects.'}</p></div>}
     <div className="sk-project-list">{projects.data?.rows.map((project) => {
-      return <article className="ops-panel sk-project-card" key={project.id}>
+      return <article id={`sk-project-${project.id}`} tabIndex={-1} className="ops-panel sk-project-card" key={project.id}>
         <div className="sk-project-header"><div><StatusPill status={project.status} /><h2>{project.title}</h2><p>{project.description}</p></div><strong className="sk-project-budget">{currency.format(Number(project.proposed_budget))}<small> proposed</small></strong></div>
         <div className="sk-project-meta"><span>Submitted {formatDateTime(project.created_at)}</span>{project.planned_start && <span>Start {new Date(`${project.planned_start}T00:00:00`).toLocaleDateString()}</span>}{project.planned_end && <span>End {new Date(`${project.planned_end}T00:00:00`).toLocaleDateString()}</span>}</div>
         {project.review_note && <p className="finance-review-note">Review note: {project.review_note}</p>}

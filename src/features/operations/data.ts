@@ -920,6 +920,29 @@ export async function listMeetingPage(tenantId: string, page: number, search = '
   return { meetings: rows, total: Number(rows[0]?.total_count ?? 0) }
 }
 
+export async function findMeetingSchedulePage(tenantId: string, meetingId: string) {
+  const targetQuery = await client().from('meetings').select('id,starts_at').eq('barangay_id', tenantId).eq('id', meetingId).maybeSingle()
+  if (targetQuery.error) throw new Error(targetQuery.error.message)
+  if (!targetQuery.data) return null
+  const beforeBase = () => client().from('meetings').select('id', { count: 'exact', head: true }).eq('barangay_id', tenantId)
+  const [newerStart, sameStart] = await Promise.all([
+    beforeBase().gt('starts_at', targetQuery.data.starts_at),
+    beforeBase().eq('starts_at', targetQuery.data.starts_at).gt('id', targetQuery.data.id),
+  ])
+  if (newerStart.error) throw new Error(newerStart.error.message)
+  if (sameStart.error) throw new Error(sameStart.error.message)
+  return Math.floor(((newerStart.count ?? 0) + (sameStart.count ?? 0)) / MEETING_PAGE_SIZE)
+}
+
+export async function getMeetingRecordReviewTarget(tenantId: string, kind: 'minutes' | 'resolutions') {
+  const { data, error } = await client().rpc('get_meeting_record_review_target', {
+    p_barangay_id: tenantId, p_kind: kind,
+  })
+  if (error) throw new Error(error.message)
+  const target = (data ?? [])[0] as { meeting_id: string; page_number: number } | undefined
+  return target ?? null
+}
+
 export async function listAllMeetingSchedule(tenantId: string, search: string, status: string, startsAfter: string | null, startsBefore: string | null) {
   const first = await listMeetingPage(tenantId, 0, search, status, startsAfter, startsBefore)
   const meetings = [...first.meetings]
