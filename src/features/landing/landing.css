@@ -258,13 +258,17 @@
 .landing-page .analytics-preference-button { background: #f1f5ed; border: 1px solid #d6e2d7; border-radius: 9px; color: #245a47; cursor: pointer; font-size: 12px; font-weight: 700; min-height: 40px; padding: 9px 13px; }
 .landing-page .analytics-preference-button:hover { background: #e7f0e6; }
 .landing-page .analytics-preference-button:focus-visible { outline: 3px solid #d49632; outline-offset: 2px; }
-.landing-page .landing-visitor-indicator { align-items: center; background: #fffefaee; backdrop-filter: blur(14px); border: 1px solid #d8e4dc; border-radius: 14px; bottom: max(18px, env(safe-area-inset-bottom, 0px)); box-shadow: 0 10px 35px #1b49321a; color: #29483d; display: flex; gap: 11px; max-width: min(520px, calc(100vw - 32px)); padding: 12px 14px; position: fixed; right: max(18px, env(safe-area-inset-right, 0px)); z-index: 20; }
-.landing-page .visitor-indicator-icon { align-items: center; background: #e8f2e8; border-radius: 10px; color: #22664e; display: flex; flex: none; height: 36px; justify-content: center; width: 36px; }
+.landing-page .landing-visitor-indicator { align-items: center; -webkit-backdrop-filter: blur(24px) saturate(175%); backdrop-filter: blur(24px) saturate(175%); background: linear-gradient(135deg, rgb(255 255 255 / 72%), rgb(234 246 238 / 48%)); border: 1px solid rgb(255 255 255 / 82%); border-radius: 16px; bottom: max(18px, env(safe-area-inset-bottom, 0px)); box-shadow: inset 0 1px 0 rgb(255 255 255 / 88%), 0 12px 36px rgb(24 66 46 / 18%), 0 2px 8px rgb(24 66 46 / 8%); color: #29483d; display: flex; gap: 11px; max-width: min(520px, calc(100vw - 32px)); padding: 12px 14px; position: fixed; right: max(18px, env(safe-area-inset-right, 0px)); transition: box-shadow 180ms ease, transform 180ms ease; z-index: 20; }
+.landing-page .landing-visitor-indicator:hover { box-shadow: inset 0 1px 0 rgb(255 255 255 / 92%), 0 16px 42px rgb(24 66 46 / 22%), 0 3px 10px rgb(24 66 46 / 10%); transform: translateY(-2px); }
+.landing-page .visitor-indicator-icon { align-items: center; background: rgb(232 242 232 / 72%); border: 1px solid rgb(255 255 255 / 78%); border-radius: 10px; color: #22664e; display: flex; flex: none; height: 36px; justify-content: center; width: 36px; }
 .landing-page .visitor-indicator-copy { display: grid; gap: 5px; min-width: 0; }
 .landing-page .visitor-indicator-copy strong { color: #25483a; font-size: 12px; line-height: 1.4; }
 .landing-page .visitor-indicator-copy small { align-items: center; color: #61776a; display: flex; font-size: 10px; gap: 6px; }
 .landing-page .visitor-indicator-copy small i { background: #35a66b; border-radius: 50%; box-shadow: 0 0 0 3px #35a66b22; height: 7px; width: 7px; }
 .landing-page .visitor-indicator-today { align-items: center; border-left: 1px solid #e0e9e1; color: #547262; display: flex; flex: none; font-size: 10px; gap: 5px; margin-left: 2px; padding-left: 10px; }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .landing-page .landing-visitor-indicator { background: #f7faf5; }
+}
 @media(max-width:650px) {
   .landing-page .analytics-privacy-body { align-items: stretch; padding: 0 15px 15px; }
   .landing-page .analytics-preference-button { width: 100%; }

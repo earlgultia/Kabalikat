@@ -64,6 +64,16 @@ export function SiteAnalyticsPage() {
         <div className="site-analytics-bars" role="img" aria-label={`${period} chart of visitors and page views`}>
           {points.map((point) => <div className="site-analytics-bar-group" key={point.period_start} title={`${point.period_start}: ${point.visitors} unique browsers, ${point.page_views} page views`}><div className="site-analytics-bars-pair"><span className="site-analytics-bar visitors" style={{ height: `${Math.max(point.visitors ? 3 : 0, point.visitors / maxValue * 100)}%` }} /><span className="site-analytics-bar views" style={{ height: `${Math.max(point.page_views ? 3 : 0, point.page_views / maxValue * 100)}%` }} /></div><small>{formatPeriodLabel(point.period_start, period)}</small></div>)}
         </div>
+        <details className="site-analytics-data">
+          <summary>View exact traffic values</summary>
+          <div className="site-analytics-table-wrap">
+            <table>
+              <caption>{period[0].toUpperCase() + period.slice(1)} landing-page traffic</caption>
+              <thead><tr><th scope="col">Period</th><th scope="col">Unique browsers</th><th scope="col">Page-section views</th></tr></thead>
+              <tbody>{points.map((point) => <tr key={point.period_start}><th scope="row">{formatPeriodLabel(point.period_start, period)}</th><td>{point.visitors.toLocaleString()}</td><td>{point.page_views.toLocaleString()}</td></tr>)}</tbody>
+            </table>
+          </div>
+        </details>
         {!points.some((point) => point.visitors || point.page_views) && <p className="site-analytics-empty">No landing-page activity has been recorded yet.</p>}
       </section>
       <section className="ops-panel site-top-pages" aria-labelledby="site-top-pages-heading"><div><h2 id="site-top-pages-heading">Top visited sections</h2><p>Only allowlisted public landing-page sections are counted.</p></div>{data.top_pages.length ? <div className="site-top-pages-list">{data.top_pages.map((page, index) => <article key={page.page_key}><span className="site-top-pages-rank">{index + 1}</span><div><strong>{sectionLabels[page.page_key] ?? page.page_key}</strong><small>{page.unique_visitors.toLocaleString()} unique browsers</small></div><strong>{page.page_views.toLocaleString()} views</strong></article>)}</div> : <p className="site-analytics-empty">No section views have been recorded yet.</p>}</section>
