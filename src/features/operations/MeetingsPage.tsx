@@ -10,7 +10,7 @@ import {
   type KagawadInvitedMeeting,
 } from './data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
-import { formatDateTime } from './format'
+import { formatDateTime, getManilaDateInputValue } from './format'
 import { MeetingRecordsPanel } from './MeetingRecordsPanel'
 import { MeetingQrPanel } from './MeetingQrPanel'
 import { MeetingReasonDialog } from './MeetingReasonDialog'
@@ -505,7 +505,7 @@ export function MeetingsPage({ focusId, focusPage, focusCorrectionRequestId, foc
       }
       const csv = `\uFEFF${[['Meeting', 'Location', 'Starts (UTC)', 'Ends (UTC)', 'Status'], ...rows.map((meeting) => [meeting.title, meeting.location, meeting.starts_at, meeting.ends_at ?? '', meeting.status])].map((row) => row.map(cell).join(',')).join('\r\n')}`
       const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
-      const link = document.createElement('a'); link.href = url; link.download = `kabalikat-meetings-${new Date().toISOString().slice(0, 10)}.csv`; link.click()
+      const link = document.createElement('a'); link.href = url; link.download = `kabalikat-meetings-${getManilaDateInputValue()}.csv`; link.click()
       window.setTimeout(() => URL.revokeObjectURL(url), 1_000)
     } catch { setScheduleExportError('The meeting schedule export could not be prepared. Refresh the list and try again.') }
     finally { setScheduleExportBusy(false) }
@@ -533,7 +533,7 @@ export function MeetingsPage({ focusId, focusPage, focusCorrectionRequestId, foc
       const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
       const link = document.createElement('a')
       link.href = url
-      link.download = `kabalikat-my-rsvp-history-${new Date().toISOString().slice(0, 10)}.csv`
+      link.download = `kabalikat-my-rsvp-history-${getManilaDateInputValue()}.csv`
       link.click()
       window.setTimeout(() => URL.revokeObjectURL(url), 1_000)
       setRsvpHistoryExportMessage(`Export ready with ${rows.length.toLocaleString()} matching responses.`)
@@ -568,7 +568,7 @@ export function MeetingsPage({ focusId, focusPage, focusCorrectionRequestId, foc
       const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
       const link = document.createElement('a')
       link.href = url
-      link.download = `kabalikat-my-attendance-correction-history-${new Date().toISOString().slice(0, 10)}.csv`
+      link.download = `kabalikat-my-attendance-correction-history-${getManilaDateInputValue()}.csv`
       link.click()
       window.setTimeout(() => URL.revokeObjectURL(url), 1_000)
       setCorrectionRequestExportMessage(`Export ready with ${rows.length.toLocaleString()} matching requests.`)

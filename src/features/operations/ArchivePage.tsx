@@ -10,6 +10,7 @@ import {
 } from './data'
 import { ocrAdapter } from './ocr-adapter'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
+import { formatManilaCalendarDate } from './format'
 
 const uploadSchema = z.object({
   description: z.string().trim().max(1000),
@@ -162,7 +163,7 @@ export function ArchivePage() {
       </form>}
       {documents.isPending ? <LoadingNotice /> : documents.error ? <ErrorNotice message={documents.error.message} onRetry={() => void documents.refetch()} retrying={documents.isFetching} /> : documents.data?.documents.length ?
         <div className="archive-document-list">{documents.data.documents.map((item) => <article className="ops-panel archive-document" key={item.id}>
-          <div className="archive-document-top"><div className="archive-file-icon"><Archive size={19} /></div><div className="archive-file-details"><strong>{item.file_name}</strong><p>{item.description || item.category}</p><small>{item.category} · {fileSize(item.file_size)} · {new Date(item.created_at).toLocaleDateString()}</small></div><StatusPill status={item.text_status.replaceAll('_', ' ')} /></div>
+          <div className="archive-document-top"><div className="archive-file-icon"><Archive size={19} /></div><div className="archive-file-details"><strong>{item.file_name}</strong><p>{item.description || item.category}</p><small>{item.category} · {fileSize(item.file_size)} · {formatManilaCalendarDate(item.created_at)}</small></div><StatusPill status={item.text_status.replaceAll('_', ' ')} /></div>
           <div className="archive-document-actions"><button className="button outline" onClick={() => void openFile(item.storage_path)}>Open private file</button>{canManage.data && <span className="field-hint">Manual text entry</span>}</div>
           {canManage.data && <details className="archive-text-editor"><summary>Searchable text <span className="field-hint">{ocrAdapter.available ? 'OCR available' : 'OCR not configured'}</span></summary>
             {!ocrAdapter.available && <p className="field-hint">Automatic text extraction is unavailable. Do not treat manually entered text as OCR output.</p>}

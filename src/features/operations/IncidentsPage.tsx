@@ -8,7 +8,7 @@ import { addIncidentUpdate, assignIncident, createIncidentEvidenceDownloadUrl, e
 import { TanodPicker } from './TanodPicker'
 import { IncidentResolutionDialog } from './IncidentResolutionDialog'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
-import { formatDateTime } from './format'
+import { formatDateTime, getManilaDateBoundary, getManilaDateInputValue } from './format'
 
 const incidentSchema = z.object({ category: z.enum(['safety','hazard','disturbance','property','disaster','other']), severity: z.enum(['low','moderate','high','urgent']), location: z.string().trim().min(2).max(240), summary: z.string().trim().min(3).max(180), details: z.string().max(3000) })
 const escalationSchema = z.object({ destination: z.string().trim().min(3).max(180), note: z.string().trim().min(3).max(1000), confirm: z.literal('yes') })
@@ -65,18 +65,13 @@ export function IncidentsPage({ focusId, focusAssignedActive, focusOpenReports, 
     return () => window.clearTimeout(timeout)
   }, [search, statusFilter, categoryFilter, severityFilter, assignmentFilter, activeOnly, createdAfter, createdBefore])
   const validDateRange = !createdAfter || !createdBefore || createdAfter <= createdBefore
-  function localDateBound(value: string, nextDay = false) {
-    if (!value) return null
-    const [year, month, day] = value.split('-').map(Number)
-    return new Date(year, month - 1, day + (nextDay ? 1 : 0)).toISOString()
-  }
   const incidents = useQuery({
     queryKey: ['incidents', tenantId, page, debouncedSearch, statusFilter, categoryFilter, severityFilter, assignmentFilter, activeOnly, createdAfter, createdBefore],
-    queryFn: () => listIncidents({ tenantId, page, search: debouncedSearch, status: statusFilter, category: categoryFilter, severity: severityFilter, assignmentFilter, activeOnly, createdAfter: localDateBound(createdAfter), createdBefore: localDateBound(createdBefore, true) }),
+    queryFn: () => listIncidents({ tenantId, page, search: debouncedSearch, status: statusFilter, category: categoryFilter, severity: severityFilter, assignmentFilter, activeOnly, createdAfter: getManilaDateBoundary(createdAfter), createdBefore: getManilaDateBoundary(createdBefore, 1) }),
     enabled: enabled && validDateRange,
   })
-  const summary = useQuery({ queryKey: ['incident-summary', tenantId, user?.id, createdAfter, createdBefore], queryFn: () => listIncidentSummary(tenantId, user?.id ?? '', localDateBound(createdAfter), localDateBound(createdBefore, true)), enabled: Boolean(enabled && user?.id && validDateRange) })
-  const breakdown = useQuery({ queryKey: ['incident-breakdown', tenantId, createdAfter, createdBefore], queryFn: () => listIncidentBreakdown(tenantId, localDateBound(createdAfter), localDateBound(createdBefore, true)), enabled: Boolean(canManage.data && validDateRange) })
+  const summary = useQuery({ queryKey: ['incident-summary', tenantId, user?.id, createdAfter, createdBefore], queryFn: () => listIncidentSummary(tenantId, user?.id ?? '', getManilaDateBoundary(createdAfter), getManilaDateBoundary(createdBefore, 1)), enabled: Boolean(enabled && user?.id && validDateRange) })
+  const breakdown = useQuery({ queryKey: ['incident-breakdown', tenantId, createdAfter, createdBefore], queryFn: () => listIncidentBreakdown(tenantId, getManilaDateBoundary(createdAfter), getManilaDateBoundary(createdBefore, 1)), enabled: Boolean(canManage.data && validDateRange) })
   const ownStatusOnly = Boolean(canReport.data && !canCreate.data && !canManage.data)
   const incidentIds = incidents.data?.rows.map((incident) => incident.id) ?? []
   const evidence = useQuery({ queryKey: ['incident-evidence', tenantId, incidentIds], queryFn: () => listIncidentEvidence(tenantId, incidentIds), enabled: Boolean(tenantId && incidents.data && (canCreate.data || canManage.data)) })
@@ -215,7 +210,7 @@ export function IncidentsPage({ focusId, focusAssignedActive, focusOpenReports, 
       let totalCount = 0
       const exportPageSize = 100
       for (let exportPage = 0; exportPage === 0 || rows.length < totalCount; exportPage += 1) {
-        const result = await listIncidents({ tenantId, page: exportPage, pageSize: exportPageSize, search: debouncedSearch, status: statusFilter, category: categoryFilter, severity: severityFilter, assignmentFilter, activeOnly, createdAfter: localDateBound(createdAfter), createdBefore: localDateBound(createdBefore, true) })
+        const result = await listIncidents({ tenantId, page: exportPage, pageSize: exportPageSize, search: debouncedSearch, status: statusFilter, category: categoryFilter, severity: severityFilter, assignmentFilter, activeOnly, createdAfter: getManilaDateBoundary(createdAfter), createdBefore: getManilaDateBoundary(createdBefore, 1) })
         rows.push(...result.rows)
         totalCount = result.totalCount
         if (result.rows.length === 0) break
@@ -230,7 +225,7 @@ export function IncidentsPage({ focusId, focusAssignedActive, focusOpenReports, 
       const url = URL.createObjectURL(blob)
       const anchor = document.createElement('a')
       anchor.href = url
-      anchor.download = `kabalikat-incident-queue-${new Date().toISOString().slice(0, 10)}.csv`
+      anchor.download = `kabalikat-incident-queue-${getManilaDateInputValue()}.csv`
       anchor.click()
       URL.revokeObjectURL(url)
       setMessage(`Downloaded ${rows.length} incident ${rows.length === 1 ? 'report' : 'reports'}.`)

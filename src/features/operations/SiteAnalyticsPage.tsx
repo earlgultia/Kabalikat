@@ -17,6 +17,13 @@ type AnalyticsResult = {
 
 const sectionLabels: Record<string, string> = { home: 'Landing page', features: 'What it does', plans: 'Plans', 'how-it-works': 'Getting started', privacy: 'Data privacy' }
 
+function formatPeriodLabel(periodStart: string, period: 'daily' | 'weekly' | 'monthly') {
+  const options: Intl.DateTimeFormatOptions = period === 'monthly'
+    ? { month: 'short', year: '2-digit', timeZone: 'Asia/Manila' }
+    : { month: 'short', day: 'numeric', timeZone: 'Asia/Manila' }
+  return new Intl.DateTimeFormat('en-PH', options).format(new Date(`${periodStart}T12:00:00+08:00`))
+}
+
 async function loadSiteAnalytics(): Promise<AnalyticsResult> {
   if (!supabase) throw new Error('Supabase is not configured')
   const { data, error } = await supabase.rpc('get_platform_site_visitor_analytics')
@@ -55,7 +62,7 @@ export function SiteAnalyticsPage() {
         <div className="site-analytics-chart-heading"><div><h2 id="site-traffic-heading">Visitor activity</h2><p>Unique browsers and page-section views by Manila date.</p></div><div className="site-analytics-toolbar"><label className="site-period-select">Period<select value={period} onChange={(event) => setPeriod(event.target.value as typeof period)}><option value="daily">Daily · 30 days</option><option value="weekly">Weekly · 12 weeks</option><option value="monthly">Monthly · 12 months</option></select></label><button type="button" className="button outline" disabled={analytics.isFetching} onClick={() => void analytics.refetch()}><RefreshCw size={15} />Refresh</button></div></div>
         <div className="site-analytics-legend"><span><i className="visitor-legend" />Unique browsers</span><span><i className="views-legend" />Page-section views</span></div>
         <div className="site-analytics-bars" role="img" aria-label={`${period} chart of visitors and page views`}>
-          {points.map((point) => <div className="site-analytics-bar-group" key={point.period_start} title={`${point.period_start}: ${point.visitors} unique browsers, ${point.page_views} page views`}><div className="site-analytics-bars-pair"><span className="site-analytics-bar visitors" style={{ height: `${Math.max(point.visitors ? 3 : 0, point.visitors / maxValue * 100)}%` }} /><span className="site-analytics-bar views" style={{ height: `${Math.max(point.page_views ? 3 : 0, point.page_views / maxValue * 100)}%` }} /></div><small>{period === 'daily' ? new Date(`${point.period_start}T12:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : new Date(`${point.period_start}T12:00:00`).toLocaleDateString(undefined, { month: 'short', year: period === 'monthly' ? '2-digit' : undefined })}</small></div>)}
+          {points.map((point) => <div className="site-analytics-bar-group" key={point.period_start} title={`${point.period_start}: ${point.visitors} unique browsers, ${point.page_views} page views`}><div className="site-analytics-bars-pair"><span className="site-analytics-bar visitors" style={{ height: `${Math.max(point.visitors ? 3 : 0, point.visitors / maxValue * 100)}%` }} /><span className="site-analytics-bar views" style={{ height: `${Math.max(point.page_views ? 3 : 0, point.page_views / maxValue * 100)}%` }} /></div><small>{formatPeriodLabel(point.period_start, period)}</small></div>)}
         </div>
         {!points.some((point) => point.visitors || point.page_views) && <p className="site-analytics-empty">No landing-page activity has been recorded yet.</p>}
       </section>

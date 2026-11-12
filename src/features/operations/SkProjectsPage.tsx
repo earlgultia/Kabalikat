@@ -6,7 +6,7 @@ import { useAuth } from '../../auth/AuthProvider'
 import { hasPermission } from './data'
 import { addSkProjectUpdate, getMyReturnedSkAccomplishmentTarget, listSkAccomplishmentsForProjects, listSkProjects, reviewSkAccomplishment, reviewSkProject, SK_PROJECT_PAGE_SIZE, submitSkAccomplishment, submitSkProject, updateSkProjectStatus, type SkProjectRow } from './sk-data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
-import { formatDateTime } from './format'
+import { formatDateTime, formatManilaDate } from './format'
 import { ProjectProgressHistory, SkProjectActivityHistory } from './ProjectHistory'
 
 const projectSchema = z.object({ title: z.string().trim().min(3).max(180), description: z.string().trim().min(3).max(4000), budget: z.coerce.number().min(0).max(999999999999.99), start: z.string(), end: z.string() })
@@ -167,7 +167,7 @@ export function SkProjectsPage({ focusStatus, focusReturnedAccomplishment, onFoc
     <div className="sk-project-list">{projects.data?.rows.map((project) => {
       return <article id={`sk-project-${project.id}`} tabIndex={-1} className="ops-panel sk-project-card" key={project.id}>
         <div className="sk-project-header"><div><StatusPill status={project.status} /><h2>{project.title}</h2><p>{project.description}</p></div><strong className="sk-project-budget">{currency.format(Number(project.proposed_budget))}<small> proposed</small></strong></div>
-        <div className="sk-project-meta"><span>Submitted {formatDateTime(project.created_at)}</span>{project.planned_start && <span>Start {new Date(`${project.planned_start}T00:00:00`).toLocaleDateString()}</span>}{project.planned_end && <span>End {new Date(`${project.planned_end}T00:00:00`).toLocaleDateString()}</span>}</div>
+        <div className="sk-project-meta"><span>Submitted {formatDateTime(project.created_at)}</span>{project.planned_start && <span>Start {formatManilaDate(project.planned_start)}</span>}{project.planned_end && <span>End {formatManilaDate(project.planned_end)}</span>}</div>
         {project.review_note && <p className="finance-review-note">Review note: {project.review_note}</p>}
         {(canManage.data || canReview.data) && <SkProjectActivityHistory tenantId={tenantId} projectId={project.id} />}
         {(() => {

@@ -5,6 +5,7 @@ import { Clipboard, UserPlus, XCircle } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import { createInvitation, hasPermission, listInvitationPage, revokeInvitation, INVITATION_PAGE_SIZE } from './data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
+import { formatDateTime } from './format'
 
 const invitationSchema = z.object({
   email: z.email(),
@@ -84,7 +85,7 @@ export function InvitationsPage() {
       <div className="ops-table-wrap"><table className="ops-table"><thead><tr><th>Email</th><th>Status</th><th>Expires</th><th>Actions</th></tr></thead><tbody>
         {invitations.data.invitations.map((invite) => {
           const expired = invite.status === 'pending' && new Date(invite.expires_at).getTime() <= Date.now()
-          return <tr key={invite.id}><td>{invite.invited_email}</td><td><StatusPill status={expired ? 'expired' : invite.status} /></td><td>{new Date(invite.expires_at).toLocaleString()}</td><td>{canInvite.data && invite.status === 'pending' && !expired && <button className="text-action danger-action" onClick={() => void revoke(invite.id, invite.invited_email)}><XCircle size={13} />Revoke</button>}</td></tr>
+          return <tr key={invite.id}><td>{invite.invited_email}</td><td><StatusPill status={expired ? 'expired' : invite.status} /></td><td>{formatDateTime(invite.expires_at)}</td><td>{canInvite.data && invite.status === 'pending' && !expired && <button className="text-action danger-action" onClick={() => void revoke(invite.id, invite.invited_email)}><XCircle size={13} />Revoke</button>}</td></tr>
         })}
       </tbody></table></div> : <EmptyNotice title="No invitations on this page" detail="Move to another page to see more invitations." /> : <EmptyNotice title="No invitations yet" detail="New invitation records will appear here." />}
     {invitations.data && invitations.data.total > INVITATION_PAGE_SIZE && <nav className="ops-form-actions" aria-label="Invitation pages">

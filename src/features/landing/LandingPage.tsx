@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Activity, ArrowRight, Bell, BookOpen, Building2, CheckCircle2, ChevronDown, ClipboardList, Eye, Facebook, FileText, HeartHandshake, LockKeyhole, Mail, Phone, ShieldCheck, Sparkles, UsersRound } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { getPublicSiteVisitorId, getPublicSiteVisitorMetrics, isSiteAnalyticsOptedOut, publicSiteSections, setSiteAnalyticsOptOut, trackPublicSiteHeartbeat, trackPublicSitePageView, type PublicSiteSection, type PublicVisitorMetrics } from './visitor-analytics'
+import { getPublicSiteVisitorId, getPublicSiteVisitorMetrics, isSiteAnalyticsOptedOut, publicSiteSections, setSiteAnalyticsOptOut, siteAnalyticsOptOutStorageKey, trackPublicSiteHeartbeat, trackPublicSitePageView, type PublicSiteSection, type PublicVisitorMetrics } from './visitor-analytics'
 import './landing.css'
 
 const features = [
@@ -17,6 +17,17 @@ export function LandingPage() {
   const [visitorMetrics, setVisitorMetrics] = useState<PublicVisitorMetrics | null>(null)
 
   useEffect(() => {
+    const syncAnalyticsPreference = (event: StorageEvent) => {
+      if (event.key !== siteAnalyticsOptOutStorageKey && event.key !== null) return
+      const optedOut = isSiteAnalyticsOptedOut()
+      setAnalyticsOptedOut(optedOut)
+      if (optedOut) setVisitorMetrics(null)
+    }
+    window.addEventListener('storage', syncAnalyticsPreference)
+    return () => window.removeEventListener('storage', syncAnalyticsPreference)
+  }, [])
+
+  useEffect(() => {
     if (analyticsOptedOut || !supabase) return
     const visitorId = getPublicSiteVisitorId()
     const viewedSections = new Set<PublicSiteSection>()
@@ -27,8 +38,11 @@ export function LandingPage() {
       void trackPublicSitePageView(visitorId, section).catch(() => undefined)
     }
     track('home')
-    void trackPublicSiteHeartbeat(visitorId).catch(() => undefined)
-    const heartbeat = window.setInterval(() => { void trackPublicSiteHeartbeat(visitorId).catch(() => undefined) }, 30_000)
+    const heartbeatNow = () => {
+      if (!document.hidden) void trackPublicSiteHeartbeat(visitorId).catch(() => undefined)
+    }
+    heartbeatNow()
+    const heartbeat = window.setInterval(heartbeatNow, 30_000)
     const observer = typeof IntersectionObserver === 'undefined' ? null : new IntersectionObserver((entries) => {
       for (const entry of entries) {
         if (entry.isIntersecting && publicSiteSections.includes(entry.target.id as PublicSiteSection)) track(entry.target.id as PublicSiteSection)
@@ -38,7 +52,15 @@ export function LandingPage() {
       const element = document.getElementById(section)
       if (element) observer?.observe(element)
     }
-    const refresh = () => { if (active) void getPublicSiteVisitorMetrics().then(setVisitorMetrics).catch(() => undefined) }
+    const refresh = () => {
+      if (active && !document.hidden) void getPublicSiteVisitorMetrics().then(setVisitorMetrics).catch(() => undefined)
+    }
+    const handleVisibilityChange = () => {
+      if (document.hidden) return
+      heartbeatNow()
+      refresh()
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
     refresh()
     const channel = supabase.channel('public-site-visitor-metrics')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'site_visitor_public_metrics' }, refresh)
@@ -48,6 +70,7 @@ export function LandingPage() {
       active = false
       window.clearInterval(heartbeat)
       window.clearInterval(poll)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
       observer?.disconnect()
       void supabase?.removeChannel(channel)
     }

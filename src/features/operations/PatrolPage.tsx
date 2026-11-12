@@ -7,7 +7,7 @@ import { hasPermission } from './data'
 import { addPatrolLog, cancelPatrolShift, completePatrolShift, createPatrolShift, findVisiblePatrolShiftPage, getPatrolCoverageSummary, listPatrolLogs, listPatrolShifts, PATROL_LOG_PAGE_SIZE, PATROL_SHIFT_PAGE_SIZE, reschedulePatrolShift, startPatrolShift } from './patrol-data'
 import { TanodPicker } from './TanodPicker'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
-import { formatDateTime } from './format'
+import { formatDateTime, getManilaDateInputValue } from './format'
 import { encodeCsv } from './csv'
 
 const scheduleSchema = z.object({ assignee: z.string().uuid(), title: z.string().trim().min(3).max(140), area: z.string().trim().min(2).max(240), start: z.string().min(1), end: z.string().min(1) })
@@ -18,10 +18,6 @@ function toDateTimeInput(value: string) {
   const date = new Date(value)
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
   return local.toISOString().slice(0, 16)
-}
-
-function toLocalDateInput(date: Date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
 
 function PatrolLogHistory({ tenantId, shiftId }: { tenantId: string; shiftId: string }) {
@@ -61,11 +57,8 @@ export function PatrolPage({ focusId, focusStatus, onFocusHandled }: { focusId?:
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'scheduled' | 'active' | 'completed' | 'cancelled'>('all')
-  const [coverageFrom, setCoverageFrom] = useState(() => {
-    const now = new Date()
-    return toLocalDateInput(new Date(now.getFullYear(), now.getMonth(), 1))
-  })
-  const [coverageTo, setCoverageTo] = useState(() => toLocalDateInput(new Date()))
+  const [coverageFrom, setCoverageFrom] = useState(() => `${getManilaDateInputValue().slice(0, 7)}-01`)
+  const [coverageTo, setCoverageTo] = useState(() => getManilaDateInputValue())
   const [focusReadyId, setFocusReadyId] = useState('')
   const [reschedulingId, setReschedulingId] = useState('')
   useEffect(() => { setPage(0); setSearchInput(''); setSearch(''); setStatusFilter('all') }, [tenantId])
@@ -137,7 +130,7 @@ export function PatrolPage({ focusId, focusStatus, onFocusHandled }: { focusId?:
       const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
       const link = document.createElement('a')
       link.href = url
-      link.download = `kabalikat-patrol-shifts-${new Date().toISOString().slice(0, 10)}.csv`
+      link.download = `kabalikat-patrol-shifts-${getManilaDateInputValue()}.csv`
       link.click()
       window.setTimeout(() => URL.revokeObjectURL(url), 1000)
       setMessage(`Downloaded ${rows.length} matching patrol ${rows.length === 1 ? 'shift' : 'shifts'}.`)

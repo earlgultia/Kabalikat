@@ -5,6 +5,7 @@ import { Bell, Megaphone, Search } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import { ANNOUNCEMENT_PAGE_SIZE, createAnnouncement, findAnnouncementPage, hasPermission, listAnnouncementAudienceRoles, listAnnouncementPage, updateAnnouncementStatus } from './data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
+import { formatDateTime, formatManilaCalendarDate } from './format'
 
 const announcementSchema = z.object({
   title: z.string().trim().min(3).max(180),
@@ -152,7 +153,7 @@ export function AnnouncementsPage({ focusId, onFocusHandled }: { focusId?: strin
     {!tenantId ? <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to view local announcements." /> : dateRangeInvalid ? null : announcements.isPending ? <LoadingNotice /> : announcements.error ? <ErrorNotice message={announcements.error.message} onRetry={() => void announcements.refetch()} retrying={announcements.isFetching} /> : announcements.data?.total ? announcements.data.announcements.length ?
       <div className="ops-announcement-list">{announcements.data.announcements.map((item) => <article id={`announcement-${item.id}`} tabIndex={-1} className="ops-panel announcement-card" key={item.id}>
         <div className="announcement-top"><div><StatusPill status={item.status} /><span className="audience-label">{item.audience === 'role' ? `Role: ${audienceRoles.data?.find((role) => role.id === item.audience_role_id)?.label ?? 'selected role'}` : item.audience}</span></div>{canPublish.data && item.status !== 'archived' && <button className="text-action" onClick={() => void setStatus(item.id, item.status === 'published' ? 'archived' : 'published')}>{item.status === 'published' ? 'Archive' : 'Publish'}</button>}</div>
-        <h2>{item.title}</h2><p>{item.body}</p><small>{item.published_at ? 'Published ' + new Date(item.published_at).toLocaleString() : 'Draft'}{item.expires_at ? ' · Expires ' + new Date(item.expires_at).toLocaleDateString() : ''}</small>
+        <h2>{item.title}</h2><p>{item.body}</p><small>{item.published_at ? 'Published ' + formatDateTime(item.published_at) : 'Draft'}{item.expires_at ? ' · Expires ' + formatManilaCalendarDate(item.expires_at) : ''}</small>
     </article>)}</div> : <EmptyNotice title="No announcements on this page" detail="Move to another page to see more community updates." /> : <EmptyNotice title={search || statusFilter !== 'all' || createdFrom || createdThrough ? 'No matching announcements' : 'No announcements yet'} detail={search || statusFilter !== 'all' || createdFrom || createdThrough ? 'Try another search, status, or creation date range.' : 'Published community updates will appear here.'} />}
     {announcements.data && announcements.data.total > ANNOUNCEMENT_PAGE_SIZE && <nav className="ops-form-actions" aria-label="Announcement pages">
       <button className="button outline" disabled={page === 0 || announcements.isFetching} onClick={() => setPage((current) => Math.max(0, current - 1))}>Previous</button>

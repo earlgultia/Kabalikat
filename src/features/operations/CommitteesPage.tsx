@@ -54,7 +54,7 @@ function CommitteeTaskNotesViewer({ taskId }: { taskId: string }) {
     finally { setBusy(false) }
   }
   return <div className="kagawad-task-notes committee-task-notes-viewer">
-    {notes.isPending ? <LoadingNotice compact /> : notes.error ? <ErrorNotice message="Task progress notes could not be loaded." onRetry={() => void notes.refetch()} retrying={notes.isFetching} /> : notes.data?.length ? <ol>{notes.data.map((note) => <li key={note.id}><p>{note.note}</p><small>{note.author_name} · {new Date(note.created_at).toLocaleString()}</small></li>)}</ol> : <p className="field-hint">No progress notes have been added.</p>}
+    {notes.isPending ? <LoadingNotice compact /> : notes.error ? <ErrorNotice message="Task progress notes could not be loaded." onRetry={() => void notes.refetch()} retrying={notes.isFetching} /> : notes.data?.length ? <ol>{notes.data.map((note) => <li key={note.id}><p>{note.note}</p><small>{note.author_name} · {formatDateTime(note.created_at)}</small></li>)}</ol> : <p className="field-hint">No progress notes have been added.</p>}
     {error && <ErrorNotice message={error} />}
     <form onSubmit={(event) => void submit(event)}><label htmlFor={`manager-task-note-${taskId}`}>Add a manager response<textarea id={`manager-task-note-${taskId}`} value={draft} maxLength={2000} minLength={3} required placeholder="Share guidance or a follow-up request." onChange={(event) => setDraft(event.target.value)} /></label><button className="button outline" disabled={busy || draft.trim().length < 3}>{busy ? 'Adding…' : 'Add response'}</button></form>
   </div>
@@ -104,7 +104,7 @@ function KagawadDueDateRequestPanel({ taskId, currentDueDate, disabled }: { task
     {open && <div className="kagawad-due-date-request-content">
       {request.isPending && <LoadingNotice compact />}
       {request.error && <ErrorNotice message="Your due-date request could not be loaded." onRetry={() => void request.refetch()} retrying={request.isFetching} />}
-      {request.data?.rows.map((entry) => <article key={entry.id} className={`due-date-request-status ${entry.status}`}><strong>{entry.status === 'pending' ? 'Awaiting manager review' : entry.status === 'approved' ? 'Approved' : entry.status === 'withdrawn' ? 'Withdrawn by you' : 'Declined'}</strong><span>{entry.current_due_date ? `Requested ${formatManilaDate(entry.current_due_date)} → ${formatManilaDate(entry.proposed_due_date)}` : `Proposed date: ${formatManilaDate(entry.proposed_due_date)}`}</span><p>{entry.reason}</p>{entry.decision_note && entry.status !== 'pending' && <p className="due-date-decision-note">{entry.status === 'withdrawn' ? 'Note: ' : 'Decision: '}{entry.decision_note}</p>}<small>Submitted {new Date(entry.created_at).toLocaleString()}</small>{entry.reviewed_at && <small>{entry.status === 'withdrawn' ? 'Withdrawn by' : 'Reviewed by'} {entry.reviewer_name ?? 'a committee member'} · {new Date(entry.reviewed_at).toLocaleString()}</small>}{entry.id === latestRequest?.id && entry.status === 'pending' && !disabled && <button type="button" className="button outline due-date-request-withdraw" disabled={busy} onClick={() => void withdraw(entry.id)}>{busy ? 'Withdrawing…' : 'Withdraw request'}</button>}</article>)}
+      {request.data?.rows.map((entry) => <article key={entry.id} className={`due-date-request-status ${entry.status}`}><strong>{entry.status === 'pending' ? 'Awaiting manager review' : entry.status === 'approved' ? 'Approved' : entry.status === 'withdrawn' ? 'Withdrawn by you' : 'Declined'}</strong><span>{entry.current_due_date ? `Requested ${formatManilaDate(entry.current_due_date)} → ${formatManilaDate(entry.proposed_due_date)}` : `Proposed date: ${formatManilaDate(entry.proposed_due_date)}`}</span><p>{entry.reason}</p>{entry.decision_note && entry.status !== 'pending' && <p className="due-date-decision-note">{entry.status === 'withdrawn' ? 'Note: ' : 'Decision: '}{entry.decision_note}</p>}<small>Submitted {formatDateTime(entry.created_at)}</small>{entry.reviewed_at && <small>{entry.status === 'withdrawn' ? 'Withdrawn by' : 'Reviewed by'} {entry.reviewer_name ?? 'a committee member'} · {formatDateTime(entry.reviewed_at)}</small>}{entry.id === latestRequest?.id && entry.status === 'pending' && !disabled && <button type="button" className="button outline due-date-request-withdraw" disabled={busy} onClick={() => void withdraw(entry.id)}>{busy ? 'Withdrawing…' : 'Withdraw request'}</button>}</article>)}
       {request.data && request.data.totalCount > 5 && <div className="committee-picker-pagination"><span>Page {currentPage + 1} of {totalPages} · {request.data.totalCount} requests</span><div><button type="button" className="button outline" disabled={currentPage === 0 || request.isFetching} onClick={() => setPage(currentPage - 1)}>Previous</button><button type="button" className="button outline" disabled={currentPage + 1 >= totalPages || request.isFetching} onClick={() => setPage(currentPage + 1)}>Next</button></div></div>}
       {(!latestRequest || latestRequest.status !== 'pending') && !request.error && !request.isPending && !disabled && <form onSubmit={(event) => void submit(event)}><label>Proposed due date<input type="date" min={minDateValue} value={proposedDate} required onChange={(event) => setProposedDate(event.target.value)} /></label><label>Reason<textarea value={reason} minLength={3} maxLength={2000} required placeholder="Explain why you need more time." onChange={(event) => setReason(event.target.value)} /></label><button className="button outline" disabled={busy || reason.trim().length < 3}>{busy ? 'Submitting…' : 'Send request'}</button></form>}
       {error && <ErrorNotice message={error} />}
@@ -119,7 +119,7 @@ function CommitteeDueDateRequestCard({ request, busy, onDecide }: { request: Com
   return <article className="committee-due-request-card">
     <div><span className="status-pill status-pending">Awaiting review</span><h3>{request.task_title}</h3><p>{request.committee_name} · Requested by {request.requester_name}</p></div>
     <p>Task status: <strong>{request.task_status.replaceAll('_', ' ')}</strong></p>
-    <small>Submitted {new Date(request.created_at).toLocaleString()}</small>
+    <small>Submitted {formatDateTime(request.created_at)}</small>
     {completed && <p className="field-hint">This task is completed. Its due date cannot be changed; decline the request with a reason.</p>}
     <div className="committee-due-request-dates"><span>Current: {request.current_due_date ? formatManilaDate(request.current_due_date) : 'No due date'}</span><ChevronRight size={16} /><strong>Proposed: {formatManilaDate(request.proposed_due_date)}</strong></div>
     <p className="committee-due-request-reason">{request.reason}</p>
@@ -242,7 +242,7 @@ function CommitteeDueDateRequestHistory({ tenantId }: { tenantId: string }) {
       <div><span className={`committee-due-history-status ${entry.status}`}>{entry.status.replaceAll('_', ' ')}</span><strong>{entry.task_title}</strong><small>{entry.committee_name} · Requested by {entry.requester_name}</small></div>
       <p>{entry.current_due_date ? `Requested ${formatManilaDate(entry.current_due_date)} → ${formatManilaDate(entry.proposed_due_date)}` : `Proposed ${formatManilaDate(entry.proposed_due_date)}`}</p>
       <p className="committee-due-request-reason">{entry.reason}</p>
-      <small>{entry.status === 'withdrawn' ? 'Withdrawn by' : 'Reviewed by'} {entry.reviewer_name} · {entry.reviewed_at ? new Date(entry.reviewed_at).toLocaleString() : 'Review time unavailable'}</small>
+      <small>{entry.status === 'withdrawn' ? 'Withdrawn by' : 'Reviewed by'} {entry.reviewer_name} · {entry.reviewed_at ? formatDateTime(entry.reviewed_at) : 'Review time unavailable'}</small>
       {entry.decision_note && <p className="due-date-decision-note">{entry.decision_note}</p>}
     </li>)}</ul> : null}
     {history.data && totalPages > 1 && <div className="committee-picker-pagination"><span>Page {currentPage + 1} of {totalPages} · {history.data.totalCount} requests</span><div><button type="button" className="button outline" disabled={currentPage === 0 || history.isFetching} onClick={() => setPage(currentPage - 1)}>Previous</button><button type="button" className="button outline" disabled={currentPage + 1 >= totalPages || history.isFetching} onClick={() => setPage(currentPage + 1)}>Next</button></div></div>}
@@ -316,8 +316,8 @@ function FocusedCommitteeTask({ tenantId, taskId, onClose }: { tenantId: string;
             <span>{entry.current_due_date ? `Requested ${formatManilaDate(entry.current_due_date)} → ${formatManilaDate(entry.proposed_due_date)}` : `Proposed date: ${formatManilaDate(entry.proposed_due_date)}`}</span>
             <p>{entry.reason}</p>
             {entry.decision_note && <p className="due-date-decision-note">{entry.status === 'withdrawn' ? 'Note: ' : 'Decision: '}{entry.decision_note}</p>}
-            <small>Submitted {new Date(entry.created_at).toLocaleString()}</small>
-            {entry.reviewed_at && <small>{entry.status === 'withdrawn' ? 'Withdrawn by' : 'Reviewed by'} {entry.reviewer_name ?? 'a committee member'} · {new Date(entry.reviewed_at).toLocaleString()}</small>}
+            <small>Submitted {formatDateTime(entry.created_at)}</small>
+            {entry.reviewed_at && <small>{entry.status === 'withdrawn' ? 'Withdrawn by' : 'Reviewed by'} {entry.reviewer_name ?? 'a committee member'} · {formatDateTime(entry.reviewed_at)}</small>}
           </li>)}</ol>
           {dueDateRequests.data.totalCount > 5 && <div className="committee-picker-pagination"><span>Page {currentDueDatePage + 1} of {dueDatePages} · {dueDateRequests.data.totalCount} requests</span><div><button type="button" className="button outline" disabled={currentDueDatePage === 0 || dueDateRequests.isFetching} onClick={() => setDueDatePage(currentDueDatePage - 1)}>Previous</button><button type="button" className="button outline" disabled={currentDueDatePage + 1 >= dueDatePages || dueDateRequests.isFetching} onClick={() => setDueDatePage(currentDueDatePage + 1)}>Next</button></div></div>}
         </> : <p className="field-hint">You have not requested a due-date change for this task.</p>}
@@ -598,7 +598,7 @@ export function CommitteesPage({ focusId, focusDueDateRequestStatus, focusDueDat
       const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
       const link = document.createElement('a')
       link.href = url
-      link.download = `kabalikat-my-completed-work-${new Date().toISOString().slice(0, 10)}.csv`
+      link.download = `kabalikat-my-completed-work-${dateInputValue(new Date())}.csv`
       link.click()
       window.setTimeout(() => URL.revokeObjectURL(url), 1000)
       setCompletedWorkExportMessage(`Export ready with ${rows.length.toLocaleString()} matching completions.`)
@@ -632,7 +632,7 @@ export function CommitteesPage({ focusId, focusDueDateRequestStatus, focusDueDat
       const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
       const link = document.createElement('a')
       link.href = url
-      link.download = `kabalikat-my-task-assignment-history-${new Date().toISOString().slice(0, 10)}.csv`
+      link.download = `kabalikat-my-task-assignment-history-${dateInputValue(new Date())}.csv`
       link.click()
       window.setTimeout(() => URL.revokeObjectURL(url), 1000)
       setTaskHistoryExportMessage(`Export ready with ${rows.length.toLocaleString()} matching assignments.`)
@@ -666,7 +666,7 @@ export function CommitteesPage({ focusId, focusDueDateRequestStatus, focusDueDat
       const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
       const link = document.createElement('a')
       link.href = url
-      link.download = `kabalikat-my-due-date-requests-${new Date().toISOString().slice(0, 10)}.csv`
+      link.download = `kabalikat-my-due-date-requests-${dateInputValue(new Date())}.csv`
       link.click()
       window.setTimeout(() => URL.revokeObjectURL(url), 1000)
       setDueDateHistoryExportMessage(`Export ready with ${rows.length.toLocaleString()} matching requests.`)

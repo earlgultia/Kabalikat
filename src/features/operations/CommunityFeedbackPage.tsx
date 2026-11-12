@@ -6,6 +6,7 @@ import { useAuth } from '../../auth/AuthProvider'
 import { hasPermission } from './data'
 import { COMMUNITY_FEEDBACK_HISTORY_PAGE_SIZE, findCommunityFeedbackPage, listCommunityFeedback, listCommunityFeedbackEventPage, submitCommunityFeedback, updateCommunityFeedback, type CommunityFeedbackStatus } from './feedback-data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
+import { formatDateTime } from './format'
 
 const feedbackSchema = z.object({
   category: z.enum(['service','suggestion','accessibility','other']),
@@ -132,10 +133,10 @@ export function CommunityFeedbackPage({ focusId, focusAwaitingResponse, onFocusH
     </form>
     <div className="community-feedback-filter"><label htmlFor="feedback-status-filter">Show feedback</label><select id="feedback-status-filter" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as CommunityFeedbackStatus | 'all' | 'awaiting_response')}><option value="all">All statuses</option>{isResident && <option value="awaiting_response">Awaiting a response</option>}<option value="submitted">Submitted</option><option value="in_review">In review</option><option value="responded">Responded</option><option value="closed">Closed</option></select></div>
     {!tenantId ? null : feedback.isPending ? <LoadingNotice /> : feedback.error ? <ErrorNotice message={feedback.error.message} onRetry={() => void feedback.refetch()} retrying={feedback.isFetching} /> : feedbackItems.length ? <><div className="community-feedback-list">{feedbackItems.map((item) => <article className="ops-panel community-feedback-card" id={`community-feedback-${item.id}`} tabIndex={-1} key={item.id}>
-      <header><div><StatusPill status={item.status} /><span>{item.category.replaceAll('_',' ')}</span></div><time dateTime={item.created_at}>{new Date(item.created_at).toLocaleString()}</time></header>
+      <header><div><StatusPill status={item.status} /><span>{item.category.replaceAll('_',' ')}</span></div><time dateTime={item.created_at}>{formatDateTime(item.created_at)}</time></header>
       <small className="community-feedback-reference">Feedback ref {item.id.toUpperCase()}</small><h2>{item.subject}</h2><p className="community-feedback-message">{item.message}</p>
       <FeedbackHistory tenantId={tenantId} feedbackId={item.id} />
-      {item.staff_response && <div className="community-feedback-response"><strong>Barangay office response</strong><p>{item.staff_response}</p>{item.responded_at && <time dateTime={item.responded_at}>{new Date(item.responded_at).toLocaleString()}</time>}</div>}
+      {item.staff_response && <div className="community-feedback-response"><strong>Barangay office response</strong><p>{item.staff_response}</p>{item.responded_at && <time dateTime={item.responded_at}>{formatDateTime(item.responded_at)}</time>}</div>}
       {canManage.data && <div className="community-feedback-actions">
         {item.status === 'submitted' && <button className="button outline" disabled={busy} onClick={() => void changeStatus(item.id,'in_review')}>Start review</button>}
         {item.status === 'in_review' && <form className="community-feedback-response-form" onSubmit={(event) => void respond(event,item.id)}><label>Private response<textarea name="response" required minLength={3} maxLength={2000} rows={3} placeholder="Write a helpful response" /></label><button className="button primary" disabled={busy}>{busy ? 'Sending…' : 'Send response'}</button></form>}
@@ -156,7 +157,7 @@ function FeedbackHistory({ tenantId, feedbackId }: { tenantId: string; feedbackI
   return <details className="community-feedback-history" onToggle={(event) => setOpen(event.currentTarget.open)}>
     <summary>Activity history{history.data ? ` (${history.data.total})` : ''}</summary>
     {open && <>
-      {history.isPending ? <LoadingNotice compact /> : history.error ? <ErrorNotice message="Feedback activity could not be loaded." onRetry={() => void history.refetch()} retrying={history.isFetching} /> : history.data?.events.length ? <ol>{history.data.events.map((event) => <li key={event.id}><span>{event.action === 'review_started' ? 'Review started' : event.action === 'responded' ? 'Response sent' : event.action === 'closed' ? 'Feedback closed' : 'Feedback submitted'}</span><time dateTime={event.created_at}>{new Date(event.created_at).toLocaleString()}</time></li>)}</ol> : <p className="field-hint">No activity has been recorded.</p>}
+      {history.isPending ? <LoadingNotice compact /> : history.error ? <ErrorNotice message="Feedback activity could not be loaded." onRetry={() => void history.refetch()} retrying={history.isFetching} /> : history.data?.events.length ? <ol>{history.data.events.map((event) => <li key={event.id}><span>{event.action === 'review_started' ? 'Review started' : event.action === 'responded' ? 'Response sent' : event.action === 'closed' ? 'Feedback closed' : 'Feedback submitted'}</span><time dateTime={event.created_at}>{formatDateTime(event.created_at)}</time></li>)}</ol> : <p className="field-hint">No activity has been recorded.</p>}
       {history.data && history.data.total > COMMUNITY_FEEDBACK_HISTORY_PAGE_SIZE && <nav className="ops-form-actions" aria-label="Feedback history pages"><button type="button" className="button outline" disabled={page === 0 || history.isFetching} onClick={() => setPage((current) => Math.max(0, current - 1))}><ChevronLeft size={15} />Previous</button><span className="field-hint">Page {page + 1} of {Math.ceil(history.data.total / COMMUNITY_FEEDBACK_HISTORY_PAGE_SIZE)}</span><button type="button" className="button outline" disabled={(page + 1) * COMMUNITY_FEEDBACK_HISTORY_PAGE_SIZE >= history.data.total || history.isFetching} onClick={() => setPage((current) => current + 1)}>Next<ChevronRight size={15} /></button></nav>}
     </>}
   </details>

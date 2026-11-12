@@ -5,6 +5,7 @@ import { Building2, ClipboardCheck } from 'lucide-react'
 import { onboardBarangay } from './data'
 import { createExistingBarangayCaptainInvitation } from './platform-data'
 import { ErrorNotice, PageHeading } from './shared'
+import { formatDateTime } from './format'
 
 const onboardingSchema = z.object({
   name: z.string().trim().min(2).max(120),
@@ -92,7 +93,7 @@ export function OnboardingPage() {
         <label>Captain account email<input type="email" name="captainEmail" required autoComplete="email" /></label>
         <div className="span-two ops-form-actions"><span className="field-hint">The Captain must open the link and accept it while signed in with this same email.</span><button className="button primary" disabled={busy}>{busy ? 'Creating invite…' : 'Create Captain invitation'}</button></div>
       </form>
-      {existingCaptainInviteUrl && <div className="invite-link-box"><label>Existing barangay Captain invitation<input readOnly value={existingCaptainInviteUrl} /><span className="field-hint">Expires {new Date(existingCaptainInviteExpiresAt).toLocaleString()}</span></label><button type="button" className="button outline" onClick={() => void copyExistingCaptainInvite()}><ClipboardCheck size={15} />Copy link</button></div>}
+      {existingCaptainInviteUrl && <div className="invite-link-box"><label>Existing barangay Captain invitation<input readOnly value={existingCaptainInviteUrl} /><span className="field-hint">Expires {formatDateTime(existingCaptainInviteExpiresAt)}</span></label><button type="button" className="button outline" onClick={() => void copyExistingCaptainInvite()}><ClipboardCheck size={15} />Copy link</button></div>}
     </section>
   </section>
 }

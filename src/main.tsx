@@ -10,7 +10,16 @@ import { PwaUpdatePrompt } from './pwa/PwaUpdatePrompt'
 import { ConnectionStatus } from './pwa/ConnectionStatus'
 import './styles.css'
 
-const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } } })
+const queryClient = new QueryClient({ defaultOptions: { queries: {
+  retry: (failureCount, error) => {
+    if (failureCount >= 2) return false
+    const status = typeof error === 'object' && error !== null && 'status' in error
+      ? Number(error.status)
+      : undefined
+    return status === undefined || !Number.isFinite(status) || status === 0 || status >= 500
+  },
+  refetchOnWindowFocus: true,
+} } })
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

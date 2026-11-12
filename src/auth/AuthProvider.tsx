@@ -14,6 +14,7 @@ type AuthValue = {
   isPlatformAdmin: boolean
   loading: boolean
   error: string | null
+  retryAccessProfile: () => void
   signIn: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
 }
@@ -41,6 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null)
   const knownTenantIds = useRef<string[]>([])
   const currentUserId = useRef<string | null>(null)
+  const retryAccessProfileRef = useRef<() => void>(() => {})
 
   const clearTenantData = useCallback((tenantIds: string[]) => {
     if (!tenantIds.length) return
@@ -56,7 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const loadMembership = async (userId: string | undefined) => {
       if (!userId) {
         clearTenantData(knownTenantIds.current); knownTenantIds.current = []
-        setMembership(null); setMemberships([]); setIsPlatformAdmin(false); return
+        setError(null); setMembership(null); setMemberships([]); setIsPlatformAdmin(false); return
       }
       const [membershipResult, adminResult] = await Promise.all([
         client.from('barangay_memberships')
@@ -90,18 +92,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       currentUserId.current = data.session?.user.id ?? null
       setSession(data.session)
       await loadMembership(data.session?.user.id)
+    }).catch(() => {
+      if (!alive) return
+      currentUserId.current = null
+      setSession(null); setMembership(null); setMemberships([]); setIsPlatformAdmin(false)
+      setError('We could not verify your saved session. Check your connection and try again.')
+    }).finally(() => {
       if (alive) setLoading(false)
     })
     let lastProfileRefresh = Date.now()
     const refreshProfile = () => {
       if (!alive || document.visibilityState !== 'visible' || Date.now() - lastProfileRefresh < 30_000) return
       lastProfileRefresh = Date.now()
-      void client.auth.getSession().then(({ data }) => loadMembership(data.session?.user.id))
+      void client.auth.getSession().then(({ data }) => loadMembership(data.session?.user.id)).catch(() => {
+        if (alive) setError('We could not refresh your secure access profile. Please try again.')
+      })
+    }
+    retryAccessProfileRef.current = () => {
+      if (!alive) return
+      setLoading(true)
+      lastProfileRefresh = Date.now()
+      void client.auth.getSession().then(async ({ data }) => {
+        if (!alive) return
+        currentUserId.current = data.session?.user.id ?? null
+        setSession(data.session)
+        await loadMembership(data.session?.user.id)
+      }).catch(() => {
+        if (alive) setError('We could not load your secure access profile. Please try again.')
+      }).finally(() => {
+        if (alive) setLoading(false)
+      })
     }
     window.addEventListener('focus', refreshProfile)
     document.addEventListener('visibilitychange', refreshProfile)
     const { data: listener } = client.auth.onAuthStateChange((event, nextSession) => {
-      currentUserId.current = nextSession?.user.id ?? null
+      const nextUserId = nextSession?.user.id ?? null
+      if (currentUserId.current !== nextUserId) {
+        queryClient.clear()
+        knownTenantIds.current = []
+      }
+      currentUserId.current = nextUserId
       setSession(nextSession)
       if (event === 'USER_UPDATED') return
       setLoading(true)
@@ -110,17 +140,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         void loadMembership(nextSession?.user.id).finally(() => { if (alive) setLoading(false) })
       }, 0)
     })
-    return () => { alive = false; listener.subscription.unsubscribe(); window.removeEventListener('focus', refreshProfile); document.removeEventListener('visibilitychange', refreshProfile) }
+    return () => { alive = false; retryAccessProfileRef.current = () => {}; listener.subscription.unsubscribe(); window.removeEventListener('focus', refreshProfile); document.removeEventListener('visibilitychange', refreshProfile) }
   }, [clearTenantData, queryClient])
 
   const value = useMemo<AuthValue>(() => ({
     session, user: session?.user ?? null, membership, memberships, isPlatformAdmin, loading, error,
+    retryAccessProfile: () => retryAccessProfileRef.current(),
     switchMembership: (membershipId) => {
       const selected = memberships.find((item) => item.id === membershipId)
       if (!selected || !session?.user.id) return
-      if (membership?.barangay_id && membership.barangay_id !== selected.barangay_id) clearTenantData([membership.barangay_id])
+      if (membership && membership.id !== selected.id) clearTenantData([membership.barangay_id])
       setMembership(selected)
       storeSelectedMembership(session.user.id, selected.id)
+      void queryClient.invalidateQueries()
     },
     signIn: async (email, password) => {
       if (!supabase) throw new Error('Supabase is not configured.')
@@ -132,7 +164,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { error: signOutError } = await supabase.auth.signOut()
         if (signOutError) throw signOutError
       }
-      clearTenantData(knownTenantIds.current)
+      queryClient.clear()
       knownTenantIds.current = []
       currentUserId.current = null
       setSession(null)
@@ -142,7 +174,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setError(null)
       setLoading(false)
     },
-  }), [session, membership, memberships, isPlatformAdmin, loading, error, clearTenantData])
+  }), [session, membership, memberships, isPlatformAdmin, loading, error, clearTenantData, queryClient])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

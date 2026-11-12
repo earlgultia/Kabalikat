@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { Clock3, FileSignature, MapPin, Save, ShieldCheck } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import { supabase } from '../../lib/supabase'
+import { formatDateTime } from './format'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading } from './shared'
 
 const settingsSchema = z.object({
@@ -121,7 +122,7 @@ export function BarangaySettingsPage() {
         <div className="ops-form-actions"><span className="field-hint">Each save records which fields changed.</span><button className="button primary" disabled={busy || settings.isPending}><Save size={15} />{busy ? 'Saving…' : 'Save office settings'}</button></div>
       </form>}
       <section className="ops-panel member-access-history barangay-settings-history"><div className="ops-panel-heading"><div><h2>Recent settings activity</h2><p>Names of changed fields are recorded without storing prior values.</p></div><Clock3 size={18} /></div>
-        {history.isPending ? <LoadingNotice compact /> : history.error ? <ErrorNotice message="Office settings history could not be loaded." onRetry={() => void history.refetch()} retrying={history.isFetching} /> : history.data?.length ? <ol>{history.data.map((entry) => <li key={entry.id}><div><strong>{entry.changed_fields.map((field) => fieldLabels[field] ?? field).join(', ')}</strong></div><time dateTime={entry.created_at}>{new Date(entry.created_at).toLocaleString()}</time></li>)}</ol> : <p className="field-hint">No settings changes have been recorded.</p>}
+        {history.isPending ? <LoadingNotice compact /> : history.error ? <ErrorNotice message="Office settings history could not be loaded." onRetry={() => void history.refetch()} retrying={history.isFetching} /> : history.data?.length ? <ol>{history.data.map((entry) => <li key={entry.id}><div><strong>{entry.changed_fields.map((field) => fieldLabels[field] ?? field).join(', ')}</strong></div><time dateTime={entry.created_at}>{formatDateTime(entry.created_at)}</time></li>)}</ol> : <p className="field-hint">No settings changes have been recorded.</p>}
       </section>
     </>}
   </section>

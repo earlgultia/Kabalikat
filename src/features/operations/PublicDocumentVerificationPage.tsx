@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { ArrowLeft, CheckCircle2, FileCheck2, Search, ShieldAlert } from 'lucide-react'
 import { z } from 'zod'
 import { supabase } from '../../lib/supabase'
+import { formatManilaCalendarDate } from './format'
 
 type VerificationResult = {
   document_status: 'valid' | 'expired' | 'revoked' | 'corrected'
@@ -63,7 +64,7 @@ export function PublicDocumentVerificationPage() {
         {isValid ? <CheckCircle2 size={23} /> : <ShieldAlert size={23} />}
         <div><h2>{isValid ? 'Record verified' : `Document ${result.document_status}`}</h2>
           <p>{isValid ? 'The issuing barangay has a matching record, and it is currently marked valid.' : 'The matching record is not currently valid. Contact the issuing barangay before relying on this document.'}</p>
-          <dl><div><dt>Document</dt><dd>{result.document_type}</dd></div><div><dt>Issuing barangay</dt><dd>{result.barangay_name}</dd></div><div><dt>Issued</dt><dd>{new Date(result.issued_at).toLocaleDateString()}</dd></div>{result.expires_at && <div><dt>Expires</dt><dd>{new Date(result.expires_at).toLocaleDateString()}</dd></div>}</dl>
+          <dl><div><dt>Document</dt><dd>{result.document_type}</dd></div><div><dt>Issuing barangay</dt><dd>{result.barangay_name}</dd></div><div><dt>Issued</dt><dd>{formatManilaCalendarDate(result.issued_at)}</dd></div>{result.expires_at && <div><dt>Expires</dt><dd>{formatManilaCalendarDate(result.expires_at)}</dd></div>}</dl>
         </div>
       </section>}
       <p className="public-verification-privacy">This check does not display the document holder's personal details. Compare the name and information on the original document directly with the person presenting it.</p>

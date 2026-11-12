@@ -9,7 +9,7 @@ import {
   cleanupExpiredFinancialReceiptUploads, recordFinanceReportExport, requestFinanceBudgetAmendment, requestFinancialAdjustment, uploadFinancialReceipt, voidFinancialTransaction,
 } from './data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
-import { formatDateTime } from './format'
+import { formatDateTime, formatManilaDate, getManilaDateInputValue } from './format'
 import { encodeCsv } from './csv'
 
 const budgetSchema = z.object({ fiscalYear: z.coerce.number().int().min(2000).max(2200), name: z.string().trim().min(3).max(120), amount: z.coerce.number().positive().finite().max(999999999999.99) })
@@ -29,7 +29,7 @@ const centsToDecimal = (amount: bigint) => {
 }
 const allowedReceiptTypes = new Set(['application/pdf', 'image/jpeg', 'image/png'])
 const receiptLimitBytes = 10 * 1024 * 1024
-const localDate = (() => { const today = new Date(); return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}` })()
+const manilaDate = getManilaDateInputValue()
 
 export function FinancePage({ focusQueue, onFocusHandled }: { focusQueue?: 'budgets' | 'transactions' | 'budget_changes' | 'transaction_changes'; onFocusHandled?: () => void }) {
   const { membership, user } = useAuth()
@@ -60,7 +60,7 @@ export function FinancePage({ focusQueue, onFocusHandled }: { focusQueue?: 'budg
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
-  const thisYear = new Date().getFullYear()
+  const thisYear = Number(manilaDate.slice(0, 4))
   const [reportFrom, setReportFrom] = useState(`${thisYear}-01-01`)
   const [reportTo, setReportTo] = useState(`${thisYear}-12-31`)
 
@@ -322,14 +322,14 @@ export function FinancePage({ focusQueue, onFocusHandled }: { focusQueue?: 'budg
       </section>
       {budgetForm && canManage.data && <form className="ops-panel ops-form finance-form" onSubmit={(event) => void submitBudget(event)}>
         <div className="ops-panel-heading"><div><h2>Submit an annual budget</h2><p>A different authorized reviewer must approve it before transactions can use it.</p></div><CircleDollarSign size={18} /></div>
-        <div className="ops-form-grid"><label>Fiscal year<input name="fiscalYear" type="number" min="2000" max="2200" defaultValue={new Date().getFullYear()} required /></label><label>Budget name<input name="name" minLength={3} maxLength={120} placeholder="General operations" required /></label><label>Approved amount (PHP)<input name="amount" type="number" min="0.01" step="0.01" required /></label></div>
+        <div className="ops-form-grid"><label>Fiscal year<input name="fiscalYear" type="number" min="2000" max="2200" defaultValue={thisYear} required /></label><label>Budget name<input name="name" minLength={3} maxLength={120} placeholder="General operations" required /></label><label>Approved amount (PHP)<input name="amount" type="number" min="0.01" step="0.01" required /></label></div>
         <div className="ops-form-actions"><button className="button primary" disabled={busy}>{busy ? 'Submitting…' : 'Submit budget'}</button></div>
       </form>}
       {canManage.data && !budgets.data?.total && !transactionForm && <p className="finance-next-step">Submit and approve an annual budget before adding financial entries.</p>}
       {transactionForm && canManage.data && <form className="ops-panel ops-form finance-form" onSubmit={(event) => void submitTransaction(event)}>
         <div className="ops-panel-heading"><div><h2>Submit a financial transaction</h2><p>Entries are submitted for independent review and cannot be edited after submission.</p></div><ReceiptText size={18} /></div>
         {budgetPicker.isPending ? <LoadingNotice compact /> : budgetPicker.error ? <ErrorNotice message="Approved budgets could not be loaded." onRetry={() => void budgetPicker.refetch()} retrying={budgetPicker.isFetching} /> : <>
-          <div className="ops-form-grid"><label>Approved budget<select name="budgetId" required defaultValue=""><option value="" disabled>{approvedBudgets.length ? 'Select budget' : 'No approved budgets on this page'}</option>{approvedBudgets.map((budget) => <option key={budget.id} value={budget.id}>{budget.fiscal_year} · {budget.name}</option>)}</select></label><label>Type<select name="type"><option value="expense">Expense</option><option value="income">Income</option></select></label><label>Category<input name="category" maxLength={80} placeholder="Supplies" required /></label><label>Amount (PHP)<input name="amount" type="number" min="0.01" step="0.01" required /></label><label>Date<input name="date" type="date" defaultValue={localDate} required /></label><label className="span-two">Description<input name="description" minLength={3} maxLength={1000} required /></label></div>
+          <div className="ops-form-grid"><label>Approved budget<select name="budgetId" required defaultValue=""><option value="" disabled>{approvedBudgets.length ? 'Select budget' : 'No approved budgets on this page'}</option>{approvedBudgets.map((budget) => <option key={budget.id} value={budget.id}>{budget.fiscal_year} · {budget.name}</option>)}</select></label><label>Type<select name="type"><option value="expense">Expense</option><option value="income">Income</option></select></label><label>Category<input name="category" maxLength={80} placeholder="Supplies" required /></label><label>Amount (PHP)<input name="amount" type="number" min="0.01" step="0.01" required /></label><label>Date<input name="date" type="date" defaultValue={manilaDate} required /></label><label className="span-two">Description<input name="description" minLength={3} maxLength={1000} required /></label></div>
           {budgetPicker.data && budgetPicker.data.total > FINANCE_BUDGET_PAGE_SIZE && <nav className="ops-form-actions" aria-label="Approved budget options"><button type="button" className="button outline" disabled={budgetPickerPage === 0 || budgetPicker.isFetching} onClick={() => setBudgetPickerPage((current) => Math.max(0, current - 1))}><ChevronLeft size={15} />Previous budgets</button><span className="field-hint">Page {budgetPickerPage + 1} of {Math.ceil(budgetPicker.data.total / FINANCE_BUDGET_PAGE_SIZE)}</span><button type="button" className="button outline" disabled={(budgetPickerPage + 1) * FINANCE_BUDGET_PAGE_SIZE >= budgetPicker.data.total || budgetPicker.isFetching} onClick={() => setBudgetPickerPage((current) => current + 1)}>More budgets<ChevronRight size={15} /></button></nav>}
         </>}
         <div className="ops-form-actions"><button className="button primary" disabled={busy}>{busy ? 'Submitting…' : 'Submit for review'}</button></div>
@@ -361,7 +361,7 @@ export function FinancePage({ focusQueue, onFocusHandled }: { focusQueue?: 'budg
       {adjustments.error && <ErrorNotice message={adjustments.error.message} onRetry={() => void adjustments.refetch()} retrying={adjustments.isFetching} />}
       {receipts.error && <ErrorNotice message={receipts.error.message} onRetry={() => void receipts.refetch()} retrying={receipts.isFetching} />}
       {transactions.isPending ? <LoadingNotice /> : transactions.error ? <ErrorNotice message={transactions.error.message} onRetry={() => void transactions.refetch()} retrying={transactions.isFetching} /> : transactions.data?.transactions.length ? <div className="ops-panel finance-transaction-list" id="finance-transaction-changes">{transactions.data.transactions.map((item) => <article className="finance-transaction" key={item.id}>
-        <div className="finance-transaction-main"><div><strong>{item.description}</strong><p>{item.category} · {item.budget?.name ?? 'Budget'} · {new Date(`${item.transaction_date}T00:00:00`).toLocaleDateString()}</p></div><div className="finance-transaction-amount"><strong className={item.transaction_type === 'income' ? 'finance-income' : ''}>{item.transaction_type === 'expense' ? '−' : '+'}{currency.format(Number(item.amount))}</strong><StatusPill status={item.status} /></div></div>
+        <div className="finance-transaction-main"><div><strong>{item.description}</strong><p>{item.category} · {item.budget?.name ?? 'Budget'} · {formatManilaDate(item.transaction_date)}</p></div><div className="finance-transaction-amount"><strong className={item.transaction_type === 'income' ? 'finance-income' : ''}>{item.transaction_type === 'expense' ? '−' : '+'}{currency.format(Number(item.amount))}</strong><StatusPill status={item.status} /></div></div>
         {item.review_note && <p className="finance-review-note">Review note: {item.review_note}</p>}
         {item.void_reason && <p className="finance-review-note">Voided {item.voided_at ? formatDateTime(item.voided_at) : ''}: {item.void_reason}</p>}
         {adjustments.data?.filter((adjustment) => adjustment.transaction_id === item.id).map((adjustment) => <div className="finance-adjustment" key={adjustment.id}><div><StatusPill status={adjustment.status} /><strong>{Number(adjustment.amount_change) > 0 ? '+' : '−'}{currency.format(Math.abs(Number(adjustment.amount_change)))}</strong></div><p>{adjustment.reason}</p>{adjustment.review_note && <small>Review: {adjustment.review_note}</small>}{canApprove.data && adjustment.status === 'pending' && adjustment.requested_by !== user?.id && <div className="finance-review-actions"><button className="button outline" disabled={busy} onClick={() => void reviewAdjustment(adjustment.id, false)}>Reject adjustment</button><button className="button primary" disabled={busy} onClick={() => void reviewAdjustment(adjustment.id, true)}>Approve adjustment</button></div>}</div>)}

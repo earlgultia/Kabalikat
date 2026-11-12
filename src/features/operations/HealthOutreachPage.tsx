@@ -6,7 +6,7 @@ import { useAuth } from '../../auth/AuthProvider'
 import { hasPermission } from './data'
 import { cancelHealthCampaign, completeHealthCampaign, correctHealthCampaignAttendance, createHealthCampaign, getHealthCampaignNotificationSummary, getHealthCampaignSummary, HEALTH_CAMPAIGN_EVENT_PAGE_SIZE, HEALTH_CAMPAIGN_PAGE_SIZE, HEALTH_CAMPAIGN_SCHEDULE_HISTORY_PAGE_SIZE, listAllHealthCampaigns, listHealthCampaignEvents, listHealthCampaignScheduleChanges, listHealthCampaigns, rescheduleHealthCampaign, reviewHealthCampaign, updateHealthCampaign, type HealthCampaign } from './health-outreach-data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
-import { formatDateTime } from './format'
+import { formatDateTime, getManilaDateBoundary, getManilaDateInputValue } from './format'
 import { encodeCsv } from './csv'
 
 const campaignSchema = z.object({ title: z.string().trim().min(3).max(180), description: z.string().trim().max(2000), location: z.string().trim().min(2).max(240), starts: z.string().min(1), ends: z.string().min(1) })
@@ -60,20 +60,6 @@ function HealthCampaignNotificationReach({ tenantId, campaignId }: { tenantId: s
   </details>
 }
 
-function dateAtLocalMidnightUtc(value: string): string | null {
-  if (!value) return null
-  const parsed = new Date(`${value}T00:00:00`)
-  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString()
-}
-
-function nextLocalDateAtMidnightUtc(value: string): string | null {
-  if (!value) return null
-  const parsed = new Date(`${value}T00:00:00`)
-  if (Number.isNaN(parsed.getTime())) return null
-  parsed.setDate(parsed.getDate() + 1)
-  return parsed.toISOString()
-}
-
 export function HealthOutreachPage({ focusId, focusPage, focusStatus, onFocusHandled }: { focusId?: string; focusPage?: number; focusStatus?: 'draft' | 'changes_requested' | 'published' | 'cancelled' | 'completed'; onFocusHandled?: () => void }) {
   const { membership, user } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
@@ -85,13 +71,12 @@ export function HealthOutreachPage({ focusId, focusPage, focusStatus, onFocusHan
   const [startsFrom, setStartsFrom] = useState('')
   const [startsThrough, setStartsThrough] = useState('')
   const dateRangeInvalid = Boolean(startsFrom && startsThrough && startsFrom > startsThrough)
-  const dateWindow = { startsAfter: dateAtLocalMidnightUtc(startsFrom), startsBefore: nextLocalDateAtMidnightUtc(startsThrough) }
+  const dateWindow = { startsAfter: getManilaDateBoundary(startsFrom), startsBefore: getManilaDateBoundary(startsThrough, 1) }
   useEffect(() => { setPage(0); setSearchInput(''); setSearch(''); setStatusFilter('all'); setStartsFrom(''); setStartsThrough('') }, [tenantId])
   useEffect(() => {
     if (!focusId && !focusStatus) return
-    const today = new Date()
-    const todayLocal = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
-    setPage(focusPage ?? 0); setSearchInput(''); setSearch(''); setStatusFilter(focusStatus ?? 'cancelled'); setStartsFrom(!focusId && focusStatus === 'published' ? todayLocal : ''); setStartsThrough('')
+    const todayInManila = getManilaDateInputValue()
+    setPage(focusPage ?? 0); setSearchInput(''); setSearch(''); setStatusFilter(focusStatus ?? 'cancelled'); setStartsFrom(!focusId && focusStatus === 'published' ? todayInManila : ''); setStartsThrough('')
     if (!focusId) onFocusHandled?.()
   }, [focusId, focusPage, focusStatus, onFocusHandled])
   useEffect(() => {
@@ -252,7 +237,7 @@ export function HealthOutreachPage({ focusId, focusPage, focusStatus, onFocusHan
       const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
       const anchor = document.createElement('a')
       anchor.href = url
-      anchor.download = `kabalikat-health-outreach-${statusFilter}-${new Date().toISOString().slice(0, 10)}.csv`
+      anchor.download = `kabalikat-health-outreach-${statusFilter}-${getManilaDateInputValue()}.csv`
       anchor.click()
       window.setTimeout(() => URL.revokeObjectURL(url), 1000)
     } catch { setExportError('Unable to export all matching outreach schedules. Please try again.') }

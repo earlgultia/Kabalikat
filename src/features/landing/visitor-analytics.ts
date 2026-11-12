@@ -1,7 +1,8 @@
 import { supabase } from '../../lib/supabase'
 
 const visitorStorageKey = 'kabalikat.public-site-visitor-id'
-const optOutStorageKey = 'kabalikat.public-site-analytics-opt-out'
+const visitorIdPattern = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i
+export const siteAnalyticsOptOutStorageKey = 'kabalikat.public-site-analytics-opt-out'
 let volatileVisitorId: string | null = null
 let volatileOptOut = false
 
@@ -17,19 +18,27 @@ export type PublicVisitorMetrics = {
 }
 
 export function isSiteAnalyticsOptedOut() {
-  try { return window.localStorage.getItem(optOutStorageKey) === 'true' || volatileOptOut } catch { return volatileOptOut }
+  try { return window.localStorage.getItem(siteAnalyticsOptOutStorageKey) === 'true' } catch { return volatileOptOut }
 }
 
 export function setSiteAnalyticsOptOut(optedOut: boolean) {
   volatileOptOut = optedOut
   try {
-    if (optedOut) window.localStorage.setItem(optOutStorageKey, 'true')
-    else window.localStorage.removeItem(optOutStorageKey)
+    if (optedOut) window.localStorage.setItem(siteAnalyticsOptOutStorageKey, 'true')
+    else window.localStorage.removeItem(siteAnalyticsOptOutStorageKey)
   } catch { /* Browser privacy settings may disable local storage. */ }
 }
 
 function createVisitorId() {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID()
+  const cryptoApi = typeof globalThis.crypto === 'undefined' ? undefined : globalThis.crypto
+  if (typeof cryptoApi?.randomUUID === 'function') return cryptoApi.randomUUID()
+  if (typeof cryptoApi?.getRandomValues === 'function') {
+    const bytes = cryptoApi.getRandomValues(new Uint8Array(16))
+    bytes[6] = (bytes[6] & 0x0f) | 0x40
+    bytes[8] = (bytes[8] & 0x3f) | 0x80
+    const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+  }
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
     const random = Math.random() * 16 | 0
     return (char === 'x' ? random : (random & 0x3 | 0x8)).toString(16)
@@ -39,7 +48,7 @@ function createVisitorId() {
 export function getPublicSiteVisitorId() {
   try {
     const existing = window.localStorage.getItem(visitorStorageKey)
-    if (existing && /^[0-9a-f-]{36}$/i.test(existing)) return existing
+    if (existing && visitorIdPattern.test(existing)) return existing
     const next = createVisitorId()
     window.localStorage.setItem(visitorStorageKey, next)
     return next

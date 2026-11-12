@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Activity, Check, ChevronLeft, ChevronRight, CircleStop, Copy, Download, RefreshCw, RotateCcw, Search, ShieldCheck } from 'lucide-react'
-import { formatDateTime } from './format'
+import { formatDateTime, getManilaDateBoundary } from './format'
 import { ErrorNotice, LoadingNotice, PageHeading } from './shared'
 import { listPlatformActivityExportPage, listPlatformActivityPage, PLATFORM_ACTIVITY_EXPORT_PAGE_SIZE, PLATFORM_ACTIVITY_PAGE_SIZE, type PlatformActivityEvent } from './platform-activity-data'
 import { encodeCsv } from './csv'
@@ -11,17 +11,6 @@ const typeLabels: Record<string, string> = {
   subscription_created: 'Subscription created',
   subscription_updated: 'Subscription updated',
   subscription_plan_updated: 'Subscription plan updated',
-}
-
-function localDayStart(value: string) {
-  return value ? new Date(`${value}T00:00:00`).toISOString() : null
-}
-
-function localDayAfter(value: string) {
-  if (!value) return null
-  const day = new Date(`${value}T00:00:00`)
-  day.setDate(day.getDate() + 1)
-  return day.toISOString()
 }
 
 export function PlatformActivityPage() {
@@ -39,8 +28,8 @@ export function PlatformActivityPage() {
   const exportController = useRef<AbortController | null>(null)
   const validDateRange = !dateFrom || !dateTo || dateFrom <= dateTo
   const searchSettled = search === searchInput.trim().slice(0, 100)
-  const createdAfter = localDayStart(dateFrom)
-  const createdBefore = localDayAfter(dateTo)
+  const createdAfter = getManilaDateBoundary(dateFrom)
+  const createdBefore = getManilaDateBoundary(dateTo, 1)
   const hasActiveFilters = eventType !== 'all' || Boolean(dateFrom || dateTo || searchInput.trim())
   useEffect(() => {
     const timeout = window.setTimeout(() => { setSearch(searchInput.trim().slice(0, 100)); setPage(0) }, 250)

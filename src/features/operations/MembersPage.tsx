@@ -6,6 +6,7 @@ import { useAuth } from '../../auth/AuthProvider'
 import { supabase } from '../../lib/supabase'
 import { ActionConfirmationDialog } from '../../components/ActionConfirmationDialog'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
+import { formatDateTime, formatManilaCalendarDate } from './format'
 
 const allowedRoles = ['secretary', 'treasurer', 'kagawad', 'sk_chairperson', 'bhw', 'tanod', 'resident'] as const
 const accessChangeSchema = z.object({ role: z.enum(allowedRoles), status: z.enum(['active', 'suspended']) })
@@ -206,7 +207,7 @@ export function MembersPage({ onOpenInvitations }: { onOpenInvitations?: () => v
         const rolePermissions = memberPermissionData.data?.rolePermissions.filter((assignment) => assignment.role_id === member.role_id && assignment.permission) ?? []
         const overrides = memberPermissionData.data?.overrides.filter((override) => override.membership_id === member.id) ?? []
         return <article className="ops-panel member-access-card" key={member.id}>
-          <header><div><h2>{name}</h2><p>{member.role?.label ?? 'Unknown role'} · Joined {new Date(member.created_at).toLocaleDateString()}</p></div><StatusPill status={member.status} /></header>
+          <header><div><h2>{name}</h2><p>{member.role?.label ?? 'Unknown role'} · Joined {formatManilaCalendarDate(member.created_at)}</p></div><StatusPill status={member.status} /></header>
           {revokedRecord ? <div className="member-access-revoked"><p>Access to this barangay was revoked. To restore access, create and send this person a new invitation.</p>{onOpenInvitations && <button type="button" className="button outline" onClick={onOpenInvitations}><UserPlus size={15} />Open invitations</button>}</div> : captainRecord || ownRecord ? <p className="member-access-protected">{captainRecord ? 'Captain role is protected from changes in this workspace.' : 'You cannot change your own access from this page.'}</p> : <>
             <div className="member-access-controls">
               <label>Workspace role<select value={draft.role} disabled={busyId === member.id} onChange={(event) => setDrafts((current) => ({ ...current, [member.id]: { ...draft, role: event.target.value } }))}>{allowedRoles.map((role) => <option key={role} value={role}>{role === 'sk_chairperson' ? 'SK Chairperson' : role === 'bhw' ? 'Barangay Health Worker' : role === 'tanod' ? 'Barangay Tanod' : role === 'kagawad' ? 'Barangay Kagawad' : role === 'secretary' ? 'Barangay Secretary' : role === 'treasurer' ? 'Barangay Treasurer' : 'Resident'}</option>)}</select></label>
@@ -252,5 +253,5 @@ export function MembersPage({ onOpenInvitations }: { onOpenInvitations?: () => v
 }
 
 function formatEventDate(value: string) {
-  return new Date(value).toLocaleString()
+  return formatDateTime(value)
 }

@@ -5,7 +5,7 @@ import { useAuth } from '../../auth/AuthProvider'
 import { hasPermission } from './data'
 import { listAllSkAccomplishments, listSkAccomplishments, listSkAccomplishmentYears, reviewSkAccomplishment, SK_ACCOMPLISHMENT_PAGE_SIZE } from './sk-data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
-import { formatDateTime } from './format'
+import { formatDateTime, formatManilaCalendarDate } from './format'
 import { encodeCsv } from './csv'
 
 export function SkTransparencyPage({ focusReviewQueue, onFocusHandled }: { focusReviewQueue?: boolean; onFocusHandled?: () => void }) {
@@ -74,7 +74,7 @@ export function SkTransparencyPage({ focusReviewQueue, onFocusHandled }: { focus
     try {
       const allPublished = await listAllSkAccomplishments(tenantId, yearNumber)
       const rows = [['Published', 'Title', 'Summary'], ...allPublished.map((item) => [
-      item.published_at ? new Date(item.published_at).toLocaleDateString() : '', item.title, item.summary,
+      item.published_at ? formatManilaCalendarDate(item.published_at) : '', item.title, item.summary,
     ])]
       const blob = new Blob([encodeCsv(rows)], { type: 'text/csv;charset=utf-8' })
       const url = URL.createObjectURL(blob)

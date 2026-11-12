@@ -1,6 +1,6 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, ChevronLeft, ChevronRight, FileText, History, Plus, ScrollText } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, ClipboardList, FileText, History, Plus, ScrollText } from 'lucide-react'
 import {
   approveMeetingResolution, createMeetingResolution, getMeetingMinutes, listAllMeetingResolutions,
   listAllMeetingStatusHistory, listMeetingResolutionPage, listMeetingStatusHistoryPage, MEETING_RESOLUTION_PAGE_SIZE,
@@ -20,6 +20,8 @@ export function MeetingRecordsPanel({ tenantId, meetingId, meetingTitle, locatio
   const [resolutionPage, setResolutionPage] = useState(0)
   const resolutions = useQuery({ queryKey: ['meeting-resolutions', meetingId, currentUserId, resolutionPage], queryFn: () => listMeetingResolutionPage(meetingId, resolutionPage) })
   const [minutesText, setMinutesText] = useState('')
+  const [minutesDirty, setMinutesDirty] = useState(false)
+  const loadedMeetingId = useRef(meetingId)
   const [resolutionTitle, setResolutionTitle] = useState('')
   const [resolutionText, setResolutionText] = useState('')
   const [busy, setBusy] = useState(false)
@@ -35,7 +37,23 @@ export function MeetingRecordsPanel({ tenantId, meetingId, meetingTitle, locatio
     enabled: Boolean(canManage && statusHistoryOpen),
   })
 
-  useEffect(() => { setMinutesText(minutes.data?.content ?? '') }, [minutes.data?.content, minutes.data?.updated_at, minutes.data?.id])
+  useEffect(() => {
+    const meetingChanged = loadedMeetingId.current !== meetingId
+    if (meetingChanged) {
+      loadedMeetingId.current = meetingId
+      setMinutesDirty(false)
+    }
+    if (meetingChanged || !minutesDirty) setMinutesText(minutes.data?.content ?? '')
+  }, [meetingId, minutes.data?.content, minutes.data?.updated_at, minutes.data?.id, minutesDirty])
+  useEffect(() => {
+    if (!minutesDirty) return
+    const warnBeforeLeaving = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', warnBeforeLeaving)
+    return () => window.removeEventListener('beforeunload', warnBeforeLeaving)
+  }, [minutesDirty])
   useEffect(() => {
     if (printResolutions === null) return
     const finishPrint = () => { setPrintResolutions(null); setPrintStatusHistory(null) }
@@ -71,6 +89,7 @@ export function MeetingRecordsPanel({ tenantId, meetingId, meetingTitle, locatio
     try {
       await saveMeetingMinutes(meetingId, minutesText, reviewed)
       await refresh()
+      setMinutesDirty(false)
       setMessage(reviewed ? 'Minutes saved and marked reviewed.' : 'Minutes saved as a draft.')
     } catch (err) { setError(err instanceof Error ? err.message : 'Unable to save meeting minutes.') }
     finally { setBusy(false) }
@@ -94,10 +113,34 @@ export function MeetingRecordsPanel({ tenantId, meetingId, meetingTitle, locatio
     finally { setBusy(false) }
   }
 
+  function insertMinutesOutline() {
+    const outline = [
+      '1. Attendance and quorum',
+      '[Record attendance and confirm quorum.]',
+      '',
+      '2. Agenda and discussion',
+      '[Summarize the main points discussed.]',
+      '',
+      '3. Decisions and resolutions',
+      '[Record decisions and reference any approved resolution numbers.]',
+      '',
+      '4. Action items',
+      '[Action item] — [Responsible role or person] — [Due date]',
+      '',
+      '5. Next steps and next meeting',
+      '[Record follow-up steps and the next meeting schedule, if agreed.]',
+      '',
+      'Prepared by: [Secretary]',
+      'Reviewed by: [Authorized reviewer]',
+    ].join('\n')
+    setMinutesText((current) => `${current.trimEnd()}${current.trim() ? '\n\n' : ''}${outline}`)
+    setMinutesDirty(true)
+  }
+
   return <section className="meeting-records" aria-label="Meeting minutes and resolutions">
     <div className="meeting-records-heading"><div><h3>Minutes & resolutions</h3><p>Keep a clear record of decisions made at this meeting.</p></div>
-      {canManage && <button className="button outline" disabled={busy || minutes.isPending || resolutions.isPending || attendanceLoading}
-        onClick={() => void exportReport()}><FileText size={15} />{busy || minutes.isPending || resolutions.isPending || attendanceLoading ? 'Preparing report…' : 'Export report PDF'}</button>}
+      {canManage && <button className="button outline" disabled={busy || minutes.isPending || resolutions.isPending || attendanceLoading || minutesDirty}
+        onClick={() => void exportReport()}><FileText size={15} />{busy || minutes.isPending || resolutions.isPending || attendanceLoading ? 'Preparing report…' : minutesDirty ? 'Save minutes to export' : 'Export report PDF'}</button>}
     </div>
     {canManage && <details className="meeting-status-history" onToggle={(event) => setStatusHistoryOpen(event.currentTarget.open)}>
       <summary><History size={15} />Status change history{statusHistory.data ? ` (${statusHistory.data.total})` : ''}</summary>
@@ -118,7 +161,9 @@ export function MeetingRecordsPanel({ tenantId, meetingId, meetingTitle, locatio
       <section className="meeting-record-card">
         <div className="meeting-record-title"><FileText size={17} /><h4>Meeting minutes</h4>{minutes.data && <StatusPill status={minutes.data.status} />}</div>
         {minutes.isPending ? <LoadingNotice compact /> : minutes.error ? <ErrorNotice message={minutes.error.message} onRetry={() => void minutes.refetch()} retrying={minutes.isFetching} /> : <>
-          {canManage ? <><label className="meeting-record-input">Write or update the minutes<textarea rows={7} maxLength={100000} value={minutesText} onChange={(event) => setMinutesText(event.target.value)} placeholder="Summarize the discussion, decisions, and next steps." /></label>
+          {canManage ? <><label className="meeting-record-input">Write or update the minutes<textarea rows={7} maxLength={100000} value={minutesText} onChange={(event) => { setMinutesText(event.target.value); setMinutesDirty(true) }} placeholder="Summarize the discussion, decisions, and next steps." /></label>
+            <div className="meeting-record-actions"><button type="button" className="button outline" disabled={busy || minutesText.length + 500 > 100000} onClick={insertMinutesOutline}><ClipboardList size={15} />Insert minutes outline</button><small className="field-hint">Edits stay in this form until you save the draft or mark it reviewed.</small></div>
+            {minutesDirty && <small className="field-hint" role="status">Save the latest minutes before exporting so the report includes your changes.</small>}
             <div className="meeting-record-actions"><button className="button outline" disabled={busy} onClick={() => void persistMinutes(false)}>Save draft</button>{minutes.data?.status === 'draft' && minutes.data.drafted_by !== currentUserId && <button className="button primary" disabled={busy || minutesText.trim().length < 3} onClick={() => void persistMinutes(true)}>Mark reviewed</button>}</div>
             {minutes.data?.status === 'draft' && minutes.data.drafted_by === currentUserId && <small className="field-hint">A different authorized meeting manager must review these minutes.</small>}
             {minutes.data?.status === 'reviewed' && <small className="field-hint">Save changes as a draft before asking another manager to review them.</small>}

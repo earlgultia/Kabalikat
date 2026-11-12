@@ -6,13 +6,13 @@ import { useAuth } from '../../auth/AuthProvider'
 import { hasPermission } from './data'
 import { addBarangayProjectUpdate, BARANGAY_PROJECT_PAGE_SIZE, createBarangayProject, listBarangayProjects, listKagawadProjectContributions, updateBarangayProjectStatus, type BarangayProject } from './projects-data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
-import { formatDateTime } from './format'
+import { formatDateTime, formatManilaDate, getManilaDateInputValue } from './format'
 import { BarangayProjectUpdateResponseThread, ProjectProgressHistory } from './ProjectHistory'
 import { encodeCsv } from './csv'
 
 const projectSchema = z.object({ title: z.string().trim().min(3).max(180), description: z.string().trim().max(4000), start: z.string(), end: z.string() })
 const updateSchema = z.object({ type: z.enum(['milestone', 'progress']), title: z.string().trim().min(3).max(180), details: z.string().trim().max(3000) })
-const dateLabel = (value: string) => new Date(`${value}T00:00:00`).toLocaleDateString()
+const dateLabel = (value: string) => formatManilaDate(value)
 
 const transitions: Record<BarangayProject['status'], Array<{ label: string; status: BarangayProject['status'] }>> = {
   planned: [{ label: 'Start project', status: 'active' }, { label: 'Cancel project', status: 'cancelled' }],
@@ -110,7 +110,7 @@ export function ProjectsPage({ focusProjectId, focusProjectPage, focusUpdateId, 
       const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
       const link = document.createElement('a')
       link.href = url
-      link.download = `kabalikat-my-project-contributions-${new Date().toISOString().slice(0, 10)}.csv`
+      link.download = `kabalikat-my-project-contributions-${getManilaDateInputValue()}.csv`
       link.click()
       window.setTimeout(() => URL.revokeObjectURL(url), 1000)
       setContributionExportMessage(`Export ready with ${rows.length.toLocaleString()} matching contributions.`)

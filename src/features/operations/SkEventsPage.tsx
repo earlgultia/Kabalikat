@@ -6,7 +6,7 @@ import { useAuth } from '../../auth/AuthProvider'
 import { hasPermission } from './data'
 import { cancelSkEvent, completeSkEvent, createSkEvent, getSkEventNotificationSummary, getSkEventQueueSummary, listAllSkEvents, listSkEventAudit, listSkEventScheduleChanges, listSkEvents, rescheduleSkEvent, reviewSkEvent, updateSkEvent, SK_EVENT_HISTORY_PAGE_SIZE, SK_EVENT_PAGE_SIZE, SK_EVENT_SCHEDULE_HISTORY_PAGE_SIZE, type SkEvent } from './sk-events-data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
-import { formatDateTime } from './format'
+import { formatDateTime, getManilaDateInputValue } from './format'
 
 const eventSchema = z.object({ title: z.string().trim().min(3).max(180), description: z.string().trim().max(2000), location: z.string().trim().min(2).max(240), starts: z.string().min(1), ends: z.string().min(1) })
 const rescheduleSchema = z.object({ location: z.string().trim().min(2).max(240), starts: z.string().min(1), ends: z.string().min(1), reason: z.string().trim().min(3).max(1000) })
@@ -64,7 +64,7 @@ function downloadSkEventCsv(events: SkEvent[]) {
   const url = URL.createObjectURL(new Blob([`\uFEFF${csv}\r\n`], { type: 'text/csv;charset=utf-8' }))
   const link = document.createElement('a')
   link.href = url
-  link.download = `kabalikat-sk-events-${new Date().toISOString().slice(0, 10)}.csv`
+  link.download = `kabalikat-sk-events-${getManilaDateInputValue()}.csv`
   document.body.append(link)
   link.click()
   link.remove()
