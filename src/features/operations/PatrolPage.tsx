@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Download, MapPinned, Route, Search } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import { hasPermission } from './data'
-import { addPatrolLog, cancelPatrolShift, completePatrolShift, createPatrolShift, findVisiblePatrolShiftPage, getPatrolCoverageSummary, listPatrolLogs, listPatrolShifts, PATROL_LOG_PAGE_SIZE, PATROL_SHIFT_PAGE_SIZE, reschedulePatrolShift, startPatrolShift } from './patrol-data'
+import { addPatrolLog, cancelPatrolShift, completePatrolShift, createPatrolShift, findVisiblePatrolShiftPage, getPatrolCoverageSummary, listPatrolLogs, listPatrolShifts, listUpcomingPatrolShifts, PATROL_LOG_PAGE_SIZE, PATROL_SHIFT_PAGE_SIZE, reschedulePatrolShift, startPatrolShift } from './patrol-data'
 import { TanodPicker } from './TanodPicker'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 import { formatDateTime, getManilaDateInputValue } from './format'
@@ -57,14 +57,15 @@ export function PatrolPage({ focusId, focusStatus, onFocusHandled }: { focusId?:
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'scheduled' | 'active' | 'completed' | 'cancelled'>('all')
+  const [upcomingOnly, setUpcomingOnly] = useState(false)
   const [coverageFrom, setCoverageFrom] = useState(() => `${getManilaDateInputValue().slice(0, 7)}-01`)
   const [coverageTo, setCoverageTo] = useState(() => getManilaDateInputValue())
   const [focusReadyId, setFocusReadyId] = useState('')
   const [reschedulingId, setReschedulingId] = useState('')
-  useEffect(() => { setPage(0); setSearchInput(''); setSearch(''); setStatusFilter('all') }, [tenantId])
+  useEffect(() => { setPage(0); setSearchInput(''); setSearch(''); setStatusFilter('all'); setUpcomingOnly(false) }, [tenantId])
   useEffect(() => {
     if (!focusStatus || !enabled) return
-    setPage(0); setSearchInput(''); setSearch(''); setStatusFilter(focusStatus)
+    setPage(0); setSearchInput(''); setSearch(''); setStatusFilter(focusStatus); setUpcomingOnly(focusStatus === 'scheduled')
     window.requestAnimationFrame(() => document.getElementById('patrol-shift-list')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
     onFocusHandled?.()
   }, [enabled, focusStatus, onFocusHandled])
@@ -72,7 +73,7 @@ export function PatrolPage({ focusId, focusStatus, onFocusHandled }: { focusId?:
     const timeout = window.setTimeout(() => { setSearch(searchInput.trim()); setPage(0) }, 250)
     return () => window.clearTimeout(timeout)
   }, [searchInput])
-  const shifts = useQuery({ queryKey: ['patrol-shifts', tenantId, page, search, statusFilter], queryFn: () => listPatrolShifts(tenantId, page, search, statusFilter), enabled })
+  const shifts = useQuery({ queryKey: ['patrol-shifts', tenantId, page, search, statusFilter, upcomingOnly], queryFn: () => upcomingOnly ? listUpcomingPatrolShifts(tenantId, page) : listPatrolShifts(tenantId, page, search, statusFilter), enabled })
   const coverage = useQuery({
     queryKey: ['patrol-coverage-summary', tenantId, coverageFrom, coverageTo],
     queryFn: () => getPatrolCoverageSummary(tenantId, coverageFrom, coverageTo),
@@ -85,7 +86,7 @@ export function PatrolPage({ focusId, focusStatus, onFocusHandled }: { focusId?:
   useEffect(() => {
     if (!focusId || !tenantId || !enabled) return
     let cancelled = false
-    setSearchInput(''); setSearch(''); setStatusFilter('all'); setPage(0); setFocusReadyId('')
+    setSearchInput(''); setSearch(''); setStatusFilter('all'); setUpcomingOnly(false); setPage(0); setFocusReadyId('')
     void findVisiblePatrolShiftPage(tenantId, focusId).then((targetPage) => {
       if (cancelled) return
       if (targetPage === null) { onFocusHandled?.(); return }
@@ -118,7 +119,9 @@ export function PatrolPage({ focusId, focusStatus, onFocusHandled }: { focusId?:
       const rows = [] as Awaited<ReturnType<typeof listPatrolShifts>>['rows']
       let totalCount = 0
       for (let exportPage = 0; exportPage === 0 || rows.length < totalCount; exportPage += 1) {
-        const result = await listPatrolShifts(tenantId, exportPage, search, statusFilter, 100)
+        const result = upcomingOnly
+          ? await listUpcomingPatrolShifts(tenantId, exportPage, 100)
+          : await listPatrolShifts(tenantId, exportPage, search, statusFilter, 100)
         rows.push(...result.rows)
         totalCount = result.totalCount
         if (result.rows.length === 0) break
@@ -216,8 +219,8 @@ export function PatrolPage({ focusId, focusStatus, onFocusHandled }: { focusId?:
       <label>Starts<input type="datetime-local" name="start" required /></label><label>Ends<input type="datetime-local" name="end" required /></label>
     </div><div className="ops-form-actions"><button className="button primary" disabled={busy || !assigneeId}>Schedule shift</button></div></form>}
     {enabled && <div className="health-outreach-filters">
-      <label className="archive-search"><Search size={16} /><input type="search" aria-label="Search patrol shifts" maxLength={100} placeholder="Search shift title or patrol area" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} /></label>
-      <label>Status<select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value as typeof statusFilter); setPage(0) }}><option value="all">All statuses</option><option value="scheduled">Scheduled</option><option value="active">Active</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></label>
+      <label className="archive-search"><Search size={16} /><input type="search" aria-label="Search patrol shifts" maxLength={100} placeholder="Search shift title or patrol area" value={searchInput} onChange={(event) => { setUpcomingOnly(false); setSearchInput(event.target.value) }} /></label>
+      <label>Status<select value={statusFilter} onChange={(event) => { setUpcomingOnly(false); setStatusFilter(event.target.value as typeof statusFilter); setPage(0) }}><option value="all">All statuses</option><option value="scheduled">Scheduled</option><option value="active">Active</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></label>
     </div>}
     {canManage.data && <section className="ops-panel patrol-coverage" aria-labelledby="patrol-coverage-title">
       <div className="patrol-coverage-heading"><div><h2 id="patrol-coverage-title">Patrol coverage</h2><p>Shift and field-log totals for the selected dates.</p></div>

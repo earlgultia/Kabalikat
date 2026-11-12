@@ -41,7 +41,6 @@ export function LandingPage() {
     const heartbeatNow = () => {
       if (!document.hidden) void trackPublicSiteHeartbeat(visitorId).catch(() => undefined)
     }
-    heartbeatNow()
     const heartbeat = window.setInterval(heartbeatNow, 30_000)
     const observer = typeof IntersectionObserver === 'undefined' ? null : new IntersectionObserver((entries) => {
       for (const entry of entries) {

@@ -60,7 +60,7 @@ function HealthCampaignNotificationReach({ tenantId, campaignId }: { tenantId: s
   </details>
 }
 
-export function HealthOutreachPage({ focusId, focusPage, focusStatus, onFocusHandled }: { focusId?: string; focusPage?: number; focusStatus?: 'draft' | 'changes_requested' | 'published' | 'cancelled' | 'completed'; onFocusHandled?: () => void }) {
+export function HealthOutreachPage({ focusId, focusPage, focusStatus, focusUpcoming, onFocusHandled }: { focusId?: string; focusPage?: number; focusStatus?: 'draft' | 'changes_requested' | 'published' | 'cancelled' | 'completed'; focusUpcoming?: boolean; onFocusHandled?: () => void }) {
   const { membership, user } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
   const queryClient = useQueryClient()
@@ -70,23 +70,24 @@ export function HealthOutreachPage({ focusId, focusPage, focusStatus, onFocusHan
   const [statusFilter, setStatusFilter] = useState<'all' | HealthCampaign['status']>('all')
   const [startsFrom, setStartsFrom] = useState('')
   const [startsThrough, setStartsThrough] = useState('')
+  const [upcomingStartsAfter, setUpcomingStartsAfter] = useState('')
   const dateRangeInvalid = Boolean(startsFrom && startsThrough && startsFrom > startsThrough)
-  const dateWindow = { startsAfter: getManilaDateBoundary(startsFrom), startsBefore: getManilaDateBoundary(startsThrough, 1) }
-  useEffect(() => { setPage(0); setSearchInput(''); setSearch(''); setStatusFilter('all'); setStartsFrom(''); setStartsThrough('') }, [tenantId])
+  const dateWindow = { startsAfter: upcomingStartsAfter || getManilaDateBoundary(startsFrom), startsBefore: getManilaDateBoundary(startsThrough, 1) }
+  useEffect(() => { setPage(0); setSearchInput(''); setSearch(''); setStatusFilter('all'); setStartsFrom(''); setStartsThrough(''); setUpcomingStartsAfter('') }, [tenantId])
   useEffect(() => {
-    if (!focusId && !focusStatus) return
+    if (!focusId && !focusStatus && !focusUpcoming) return
     const todayInManila = getManilaDateInputValue()
-    setPage(focusPage ?? 0); setSearchInput(''); setSearch(''); setStatusFilter(focusStatus ?? 'cancelled'); setStartsFrom(!focusId && focusStatus === 'published' ? todayInManila : ''); setStartsThrough('')
+    setPage(focusPage ?? 0); setSearchInput(''); setSearch(''); setStatusFilter(focusStatus ?? (focusUpcoming ? 'published' : 'cancelled')); setStartsFrom(focusUpcoming || !focusId && focusStatus === 'published' ? todayInManila : ''); setStartsThrough(''); setUpcomingStartsAfter(focusUpcoming ? new Date().toISOString() : '')
     if (!focusId) onFocusHandled?.()
-  }, [focusId, focusPage, focusStatus, onFocusHandled])
+  }, [focusId, focusPage, focusStatus, focusUpcoming, onFocusHandled])
   useEffect(() => {
     const timeout = window.setTimeout(() => { setSearch(searchInput.trim()); setPage(0) }, 250)
     return () => window.clearTimeout(timeout)
   }, [searchInput])
   const canManage = useQuery({ queryKey: ['permission', tenantId, 'health.campaign.manage'], queryFn: () => hasPermission(tenantId, 'health.campaign.manage'), enabled: Boolean(tenantId) })
   const canReview = useQuery({ queryKey: ['permission', tenantId, 'health.campaign.review'], queryFn: () => hasPermission(tenantId, 'health.campaign.review'), enabled: Boolean(tenantId) })
-  const campaigns = useQuery({ queryKey: ['health-outreach-campaigns', tenantId, page, search, statusFilter, startsFrom, startsThrough], queryFn: () => listHealthCampaigns(tenantId, page, search, statusFilter, dateWindow), enabled: Boolean(tenantId) && !dateRangeInvalid })
-  const summary = useQuery({ queryKey: ['health-outreach-summary', tenantId, search, statusFilter, startsFrom, startsThrough], queryFn: () => getHealthCampaignSummary(tenantId, search, statusFilter, dateWindow), enabled: Boolean(tenantId) && !dateRangeInvalid, staleTime: 30_000 })
+  const campaigns = useQuery({ queryKey: ['health-outreach-campaigns', tenantId, page, search, statusFilter, startsFrom, startsThrough, upcomingStartsAfter], queryFn: () => listHealthCampaigns(tenantId, page, search, statusFilter, dateWindow), enabled: Boolean(tenantId) && !dateRangeInvalid })
+  const summary = useQuery({ queryKey: ['health-outreach-summary', tenantId, search, statusFilter, startsFrom, startsThrough, upcomingStartsAfter], queryFn: () => getHealthCampaignSummary(tenantId, search, statusFilter, dateWindow), enabled: Boolean(tenantId) && !dateRangeInvalid, staleTime: 30_000 })
   const [historyCampaignId, setHistoryCampaignId] = useState<string | null>(null)
   const [historyPage, setHistoryPage] = useState(0)
   const history = useQuery({ queryKey: ['health-outreach-history', tenantId, historyCampaignId, historyPage], queryFn: () => listHealthCampaignEvents(tenantId, historyCampaignId!, historyPage), enabled: Boolean(tenantId && historyCampaignId && (canManage.data || canReview.data)) })

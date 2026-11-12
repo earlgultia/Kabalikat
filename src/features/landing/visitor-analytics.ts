@@ -18,15 +18,32 @@ export type PublicVisitorMetrics = {
 }
 
 export function isSiteAnalyticsOptedOut() {
-  try { return window.localStorage.getItem(siteAnalyticsOptOutStorageKey) === 'true' } catch { return volatileOptOut }
+  try {
+    if (window.localStorage.getItem(siteAnalyticsOptOutStorageKey) === 'true') return true
+  } catch { /* Use session storage when persistent storage is blocked. */ }
+  try {
+    volatileOptOut = window.sessionStorage.getItem(siteAnalyticsOptOutStorageKey) === 'true'
+    return volatileOptOut
+  } catch { return volatileOptOut }
 }
 
 export function setSiteAnalyticsOptOut(optedOut: boolean) {
   volatileOptOut = optedOut
+  let persistentStorageAvailable = false
   try {
     if (optedOut) window.localStorage.setItem(siteAnalyticsOptOutStorageKey, 'true')
     else window.localStorage.removeItem(siteAnalyticsOptOutStorageKey)
-  } catch { /* Browser privacy settings may disable local storage. */ }
+    persistentStorageAvailable = true
+  } catch { /* Fall back to a tab-session preference when persistent storage is blocked. */ }
+  try {
+    if (!persistentStorageAvailable && optedOut) window.sessionStorage.setItem(siteAnalyticsOptOutStorageKey, 'true')
+    else window.sessionStorage.removeItem(siteAnalyticsOptOutStorageKey)
+  } catch { /* Browser privacy settings may disable both storage types. */ }
+  if (optedOut) {
+    volatileVisitorId = null
+    try { window.localStorage.removeItem(visitorStorageKey) } catch { /* Persistent storage may be blocked. */ }
+    try { window.sessionStorage.removeItem(visitorStorageKey) } catch { /* Session storage may be blocked. */ }
+  }
 }
 
 function createVisitorId() {
@@ -53,19 +70,27 @@ export function getPublicSiteVisitorId() {
     window.localStorage.setItem(visitorStorageKey, next)
     return next
   } catch {
-    volatileVisitorId ??= createVisitorId()
-    return volatileVisitorId
+    try {
+      const existing = window.sessionStorage.getItem(visitorStorageKey)
+      if (existing && visitorIdPattern.test(existing)) return existing
+      const next = createVisitorId()
+      window.sessionStorage.setItem(visitorStorageKey, next)
+      return next
+    } catch {
+      volatileVisitorId ??= createVisitorId()
+      return volatileVisitorId
+    }
   }
 }
 
 export async function trackPublicSiteHeartbeat(visitorId: string) {
-  if (!supabase) return
+  if (isSiteAnalyticsOptedOut() || !supabase) return
   const { error } = await supabase.rpc('track_site_visitor_heartbeat', { p_visitor_id: visitorId })
   if (error) throw error
 }
 
 export async function trackPublicSitePageView(visitorId: string, pageKey: PublicSiteSection) {
-  if (!supabase) return
+  if (isSiteAnalyticsOptedOut() || !supabase) return
   const { error } = await supabase.rpc('track_site_page_view', { p_visitor_id: visitorId, p_page_key: pageKey })
   if (error) throw error
 }

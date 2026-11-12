@@ -32,6 +32,21 @@ export async function listPatrolShifts(tenantId: string, page: number, search: s
   return { rows, totalCount: Number(rows[0]?.total_count ?? 0) }
 }
 
+export async function listUpcomingPatrolShifts(tenantId: string, page: number, pageSize = PATROL_SHIFT_PAGE_SIZE): Promise<PatrolShiftPage> {
+  const now = new Date().toISOString()
+  const from = Math.max(0, page) * pageSize
+  const { data, error, count } = await client().from('patrol_shifts')
+    .select('id,title,patrol_area,starts_at,ends_at,status,assigned_to,started_at,completed_at,cancellation_note,created_at', { count: 'exact' })
+    .eq('barangay_id', tenantId)
+    .eq('status', 'scheduled')
+    .gte('starts_at', now)
+    .order('starts_at', { ascending: true })
+    .order('id', { ascending: true })
+    .range(from, from + pageSize - 1)
+  if (error) throw new Error(error.message)
+  return { rows: (data ?? []) as PatrolShift[], totalCount: count ?? 0 }
+}
+
 export async function getPatrolCoverageSummary(tenantId: string, from: string, to: string): Promise<PatrolCoverageSummary> {
   const { data, error } = await client().rpc('get_patrol_coverage_summary', {
     p_barangay_id: tenantId, p_from: from, p_to: to,

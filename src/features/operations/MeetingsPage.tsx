@@ -79,7 +79,7 @@ function KagawadMeetingAgenda({ meetingId }: { meetingId: string }) {
   </details>
 }
 
-export function MeetingsPage({ focusId, focusPage, focusCorrectionRequestId, focusCorrectionPage, focusCorrectionQueue, focusMeetingRecords, focusRsvpNeeded, onFocusHandled }: { focusId?: string; focusPage?: number; focusCorrectionRequestId?: string; focusCorrectionPage?: number; focusCorrectionQueue?: boolean; focusMeetingRecords?: 'minutes' | 'resolutions'; focusRsvpNeeded?: boolean; onFocusHandled?: () => void }) {
+export function MeetingsPage({ focusId, focusPage, focusCorrectionRequestId, focusCorrectionPage, focusCorrectionQueue, focusMeetingRecords, focusRsvpNeeded, focusMeetingInvitations, focusMeetingAttendance, onFocusHandled }: { focusId?: string; focusPage?: number; focusCorrectionRequestId?: string; focusCorrectionPage?: number; focusCorrectionQueue?: boolean; focusMeetingRecords?: 'minutes' | 'resolutions'; focusRsvpNeeded?: boolean; focusMeetingInvitations?: boolean; focusMeetingAttendance?: 'present' | 'absent' | 'excused'; onFocusHandled?: () => void }) {
   const { membership, user } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
   const isKagawad = membership?.role?.key === 'kagawad'
@@ -232,6 +232,26 @@ export function MeetingsPage({ focusId, focusPage, focusCorrectionRequestId, foc
     })
     return () => window.cancelAnimationFrame(frame)
   }, [focusRsvpNeeded, isKagawad, onFocusHandled])
+  useEffect(() => {
+    if (!focusMeetingInvitations || !isKagawad) return
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById('kagawad-invited-meetings-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      onFocusHandled?.()
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [focusMeetingInvitations, isKagawad, onFocusHandled])
+  useEffect(() => {
+    if (!focusMeetingAttendance || !isKagawad) return
+    const nextFilters = { search: '', attendanceStatus: focusMeetingAttendance, meetingDateAfter: '', meetingDateBefore: '' }
+    setMeetingHistoryDraft(nextFilters)
+    setMeetingHistoryFilters(nextFilters)
+    setMeetingHistoryPage(0)
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById('kagawad-meeting-history-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      onFocusHandled?.()
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [focusMeetingAttendance, isKagawad, onFocusHandled])
   useEffect(() => {
     if (!meetings.isPending && !meetings.isError && page > 0 && meetings.data?.meetings.length === 0) setPage((current) => Math.max(0, current - 1))
   }, [meetings.data?.meetings.length, meetings.isError, meetings.isPending, page])
@@ -693,7 +713,7 @@ export function MeetingsPage({ focusId, focusPage, focusCorrectionRequestId, foc
         {Number(rsvpHistory.data[0]?.total_count ?? 0) > 10 && <nav className="committee-picker-pagination" aria-label="RSVP history pages"><span>Page {rsvpHistoryPage + 1} of {Math.ceil(Number(rsvpHistory.data[0]?.total_count ?? 0) / 10)} · {rsvpHistory.data[0]?.total_count} responses</span><div><button type="button" className="button outline" disabled={rsvpHistoryPage === 0 || rsvpHistory.isFetching} onClick={() => setRsvpHistoryPage((current) => current - 1)}>Previous</button><button type="button" className="button outline" disabled={(rsvpHistoryPage + 1) * 10 >= Number(rsvpHistory.data[0]?.total_count ?? 0) || rsvpHistory.isFetching} onClick={() => setRsvpHistoryPage((current) => current + 1)}>Next</button></div></nav>}
       </> : <p className="field-hint">{rsvpHistoryFilters.search || rsvpHistoryFilters.response !== 'all' || rsvpHistoryFilters.meetingDateAfter || rsvpHistoryFilters.meetingDateBefore ? 'No RSVP changes match these filters.' : 'Your RSVP changes will appear here.'}</p>}
     </section>}
-    {isKagawad && <section className="ops-panel kagawad-invited-meetings" aria-labelledby="kagawad-meeting-history-title">
+    {isKagawad && <section id="kagawad-meeting-history-section" className="ops-panel kagawad-invited-meetings" aria-labelledby="kagawad-meeting-history-title">
       <div className="ops-panel-heading"><div><h2 id="kagawad-meeting-history-title">My meeting history</h2><p>Past meetings you were invited to and your recorded attendance.</p></div><History size={19} /></div>
       <form className="kagawad-meeting-history-filters" onSubmit={(event) => { event.preventDefault(); if (meetingHistoryDraft.meetingDateAfter && meetingHistoryDraft.meetingDateBefore && meetingHistoryDraft.meetingDateAfter > meetingHistoryDraft.meetingDateBefore) return; setMeetingHistoryPage(0); setMeetingHistoryFilters({ ...meetingHistoryDraft, search: meetingHistoryDraft.search.trim() }) }}>
         <label>Search meetings<input type="search" maxLength={100} placeholder="Meeting title or location" value={meetingHistoryDraft.search} onChange={(event) => setMeetingHistoryDraft((current) => ({ ...current, search: event.target.value }))} /></label>
