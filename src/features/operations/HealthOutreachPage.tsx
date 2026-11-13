@@ -60,34 +60,35 @@ function HealthCampaignNotificationReach({ tenantId, campaignId }: { tenantId: s
   </details>
 }
 
-export function HealthOutreachPage({ focusId, focusPage, focusStatus, focusUpcoming, onFocusHandled }: { focusId?: string; focusPage?: number; focusStatus?: 'draft' | 'changes_requested' | 'published' | 'cancelled' | 'completed'; focusUpcoming?: boolean; onFocusHandled?: () => void }) {
+export function HealthOutreachPage({ focusId, focusPage, focusStatus, focusUpcoming, focusMine, onFocusHandled }: { focusId?: string; focusPage?: number; focusStatus?: 'draft' | 'changes_requested' | 'review_queue' | 'published' | 'cancelled' | 'completed'; focusUpcoming?: boolean; focusMine?: boolean; onFocusHandled?: () => void }) {
   const { membership, user } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
   const queryClient = useQueryClient()
   const [page, setPage] = useState(0)
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<'all' | HealthCampaign['status']>('all')
+  const [statusFilter, setStatusFilter] = useState<'all' | HealthCampaign['status'] | 'review_queue'>('all')
   const [startsFrom, setStartsFrom] = useState('')
   const [startsThrough, setStartsThrough] = useState('')
   const [upcomingStartsAfter, setUpcomingStartsAfter] = useState('')
+  const [ownOnly, setOwnOnly] = useState(Boolean(focusMine))
   const dateRangeInvalid = Boolean(startsFrom && startsThrough && startsFrom > startsThrough)
   const dateWindow = { startsAfter: upcomingStartsAfter || getManilaDateBoundary(startsFrom), startsBefore: getManilaDateBoundary(startsThrough, 1) }
-  useEffect(() => { setPage(0); setSearchInput(''); setSearch(''); setStatusFilter('all'); setStartsFrom(''); setStartsThrough(''); setUpcomingStartsAfter('') }, [tenantId])
+  useEffect(() => { setPage(0); setSearchInput(''); setSearch(''); setStatusFilter('all'); setStartsFrom(''); setStartsThrough(''); setUpcomingStartsAfter(''); setOwnOnly(false) }, [tenantId])
   useEffect(() => {
-    if (!focusId && !focusStatus && !focusUpcoming) return
+    if (!focusId && !focusStatus && !focusUpcoming && focusMine === undefined) return
     const todayInManila = getManilaDateInputValue()
-    setPage(focusPage ?? 0); setSearchInput(''); setSearch(''); setStatusFilter(focusStatus ?? (focusUpcoming ? 'published' : 'cancelled')); setStartsFrom(focusUpcoming || !focusId && focusStatus === 'published' ? todayInManila : ''); setStartsThrough(''); setUpcomingStartsAfter(focusUpcoming ? new Date().toISOString() : '')
+    setPage(focusPage ?? 0); setSearchInput(''); setSearch(''); setOwnOnly(Boolean(focusMine)); setStatusFilter(focusStatus ?? (focusUpcoming ? 'published' : 'cancelled')); setStartsFrom(focusUpcoming || !focusId && focusStatus === 'published' ? todayInManila : ''); setStartsThrough(''); setUpcomingStartsAfter(focusUpcoming ? new Date().toISOString() : '')
     if (!focusId) onFocusHandled?.()
-  }, [focusId, focusPage, focusStatus, focusUpcoming, onFocusHandled])
+  }, [focusId, focusPage, focusStatus, focusUpcoming, focusMine, onFocusHandled])
   useEffect(() => {
     const timeout = window.setTimeout(() => { setSearch(searchInput.trim()); setPage(0) }, 250)
     return () => window.clearTimeout(timeout)
   }, [searchInput])
   const canManage = useQuery({ queryKey: ['permission', tenantId, 'health.campaign.manage'], queryFn: () => hasPermission(tenantId, 'health.campaign.manage'), enabled: Boolean(tenantId) })
   const canReview = useQuery({ queryKey: ['permission', tenantId, 'health.campaign.review'], queryFn: () => hasPermission(tenantId, 'health.campaign.review'), enabled: Boolean(tenantId) })
-  const campaigns = useQuery({ queryKey: ['health-outreach-campaigns', tenantId, page, search, statusFilter, startsFrom, startsThrough, upcomingStartsAfter], queryFn: () => listHealthCampaigns(tenantId, page, search, statusFilter, dateWindow), enabled: Boolean(tenantId) && !dateRangeInvalid })
-  const summary = useQuery({ queryKey: ['health-outreach-summary', tenantId, search, statusFilter, startsFrom, startsThrough, upcomingStartsAfter], queryFn: () => getHealthCampaignSummary(tenantId, search, statusFilter, dateWindow), enabled: Boolean(tenantId) && !dateRangeInvalid, staleTime: 30_000 })
+  const campaigns = useQuery({ queryKey: ['health-outreach-campaigns', tenantId, page, search, statusFilter, startsFrom, startsThrough, upcomingStartsAfter, ownOnly], queryFn: () => listHealthCampaigns(tenantId, page, search, statusFilter, dateWindow, ownOnly), enabled: Boolean(tenantId) && !dateRangeInvalid })
+  const summary = useQuery({ queryKey: ['health-outreach-summary', tenantId, search, statusFilter, startsFrom, startsThrough, upcomingStartsAfter, ownOnly], queryFn: () => getHealthCampaignSummary(tenantId, search, statusFilter === 'review_queue' ? 'all' : statusFilter, dateWindow, ownOnly), enabled: Boolean(tenantId) && !dateRangeInvalid, staleTime: 30_000 })
   const [historyCampaignId, setHistoryCampaignId] = useState<string | null>(null)
   const [historyPage, setHistoryPage] = useState(0)
   const history = useQuery({ queryKey: ['health-outreach-history', tenantId, historyCampaignId, historyPage], queryFn: () => listHealthCampaignEvents(tenantId, historyCampaignId!, historyPage), enabled: Boolean(tenantId && historyCampaignId && (canManage.data || canReview.data)) })
@@ -230,7 +231,7 @@ export function HealthOutreachPage({ focusId, focusPage, focusStatus, focusUpcom
   async function exportSchedules() {
     setExporting(true); setExportError('')
     try {
-      const rows = await listAllHealthCampaigns(tenantId, search, statusFilter, dateWindow)
+      const rows = await listAllHealthCampaigns(tenantId, search, statusFilter, dateWindow, ownOnly)
       const csv = encodeCsv([
         ['Title', 'Location', 'Starts', 'Ends', 'Status', 'Aggregate attendance'],
         ...rows.map((campaign) => [campaign.title, campaign.location, formatDateTime(campaign.starts_at), formatDateTime(campaign.ends_at), campaign.status, campaign.attendance_count ?? '']),
@@ -262,7 +263,8 @@ export function HealthOutreachPage({ focusId, focusPage, focusStatus, focusUpcom
     </form>}
     {Boolean(tenantId) && <div className="health-outreach-filters">
       <label className="archive-search"><Search size={16} /><input type="search" aria-label="Search outreach schedules" maxLength={100} placeholder="Search title, location, or details" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} /></label>
-      <label>Status<select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value as typeof statusFilter); setPage(0) }}><option value="all">All statuses</option><option value="draft">Awaiting review</option><option value="changes_requested">Changes requested</option><option value="published">Published</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></label>
+      <label>Status<select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value as typeof statusFilter); setPage(0) }}><option value="all">All statuses</option><option value="review_queue">Review queue</option><option value="draft">Awaiting review</option><option value="changes_requested">Changes requested</option><option value="published">Published</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></label>
+      {canManage.data && <label className="health-outreach-own-filter"><input type="checkbox" checked={ownOnly} onChange={(event) => { setOwnOnly(event.target.checked); setPage(0) }} />Only schedules I created</label>}
       <label>Starts from<input type="date" value={startsFrom} max={startsThrough || undefined} onChange={(event) => { setStartsFrom(event.target.value); setPage(0) }} /></label>
       <label>Starts through<input type="date" value={startsThrough} min={startsFrom || undefined} onChange={(event) => { setStartsThrough(event.target.value); setPage(0) }} /></label>
     </div>}
@@ -270,7 +272,7 @@ export function HealthOutreachPage({ focusId, focusPage, focusStatus, focusUpcom
     {summary.error && <ErrorNotice message="Unable to load the aggregate outreach summary." onRetry={() => void summary.refetch()} retrying={summary.isFetching} />}
     {exportError && <ErrorNotice message={exportError} />}
     {summary.data && <section className="health-outreach-summary" aria-label="Outreach schedule overview">
-      <article className="ops-panel"><span>Matching schedules</span><strong>{summary.data.totalCount.toLocaleString()}</strong></article>
+      <article className="ops-panel"><span>Matching schedules</span><strong>{(statusFilter === 'review_queue' ? campaigns.data?.totalCount ?? 0 : summary.data.totalCount).toLocaleString()}</strong></article>
       <button type="button" className="ops-panel health-outreach-summary-action" aria-label={`Show ${summary.data.awaitingReviewCount} schedules awaiting review`} onClick={() => { setPage(0); setStatusFilter('draft') }}><span>Awaiting review</span><strong>{summary.data.awaitingReviewCount.toLocaleString()}</strong><small>View review queue</small></button>
       <button type="button" className="ops-panel health-outreach-summary-action" aria-label={`Show ${summary.data.changesRequestedCount} schedules with changes requested`} onClick={() => { setPage(0); setStatusFilter('changes_requested') }}><span>Changes requested</span><strong>{summary.data.changesRequestedCount.toLocaleString()}</strong><small>View returned schedules</small></button>
       <article className="ops-panel"><span>Completed</span><strong>{summary.data.completedCount.toLocaleString()}</strong></article>

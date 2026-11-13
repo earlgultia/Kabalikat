@@ -8,7 +8,7 @@ import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from
 import { formatDateTime, formatManilaCalendarDate } from './format'
 import { encodeCsv } from './csv'
 
-export function SkTransparencyPage({ focusReviewQueue, onFocusHandled }: { focusReviewQueue?: boolean; onFocusHandled?: () => void }) {
+export function SkTransparencyPage({ focusReviewQueue, onFocusHandled }: { focusReviewQueue?: 'all' | 'mine' | 'captain'; onFocusHandled?: () => void }) {
   const { membership, user } = useAuth()
   const queryClient = useQueryClient()
   const tenantId = membership?.barangay_id ?? ''
@@ -17,6 +17,7 @@ export function SkTransparencyPage({ focusReviewQueue, onFocusHandled }: { focus
   const [year, setYear] = useState('all')
   const [publishedPage, setPublishedPage] = useState(0)
   const [reviewPage, setReviewPage] = useState(0)
+  const [reviewStatus, setReviewStatus] = useState<'review' | 'my_submitted' | 'captain_review'>('review')
   const [exporting, setExporting] = useState(false)
   const [exportError, setExportError] = useState('')
   const [reviewBusy, setReviewBusy] = useState(false)
@@ -30,8 +31,8 @@ export function SkTransparencyPage({ focusReviewQueue, onFocusHandled }: { focus
     enabled: Boolean(tenantId),
   })
   const reviewItems = useQuery({
-    queryKey: ['sk-accomplishments', tenantId, 'review', reviewPage],
-    queryFn: () => listSkAccomplishments(tenantId, reviewPage, 'review'),
+    queryKey: ['sk-accomplishments', tenantId, reviewStatus, reviewPage],
+    queryFn: () => listSkAccomplishments(tenantId, reviewPage, reviewStatus),
     enabled: Boolean(tenantId && (canManage.data || canReview.data)),
   })
   const published = items.data?.rows ?? []
@@ -45,6 +46,8 @@ export function SkTransparencyPage({ focusReviewQueue, onFocusHandled }: { focus
       onFocusHandled?.()
       return
     }
+    setReviewStatus(focusReviewQueue === 'mine' ? 'my_submitted' : focusReviewQueue === 'captain' ? 'captain_review' : 'review')
+    setReviewPage(0)
     const frame = window.requestAnimationFrame(() => {
       document.getElementById('sk-accomplishment-review-queue')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
       onFocusHandled?.()
@@ -103,6 +106,6 @@ export function SkTransparencyPage({ focusReviewQueue, onFocusHandled }: { focus
     {items.data?.totalCount === 0 && !items.isPending && <div className="ops-empty"><Award size={22} /><strong>No published accomplishments for this period</strong><p>Approved summaries will appear here after independent Captain review.</p></div>}
     <div className="sk-project-list">{published.map((item) => <article className="ops-panel sk-project-card" key={item.id}><div className="sk-project-header sk-accomplishment-header"><div><StatusPill status={item.status} /><h2>{item.title}</h2><p>{item.summary}</p></div><Award size={22} /></div><div className="sk-project-meta"><span>{item.published_at ? `Published ${formatDateTime(item.published_at)}` : ''}</span></div></article>)}</div>
     {publishedPages > 1 && <nav className="ops-panel ops-form-actions" aria-label="Published SK accomplishment pages"><span className="field-hint">Page {publishedPage + 1} of {publishedPages} · {items.data?.totalCount.toLocaleString()} summaries</span><div className="finance-review-actions"><button className="button outline" disabled={publishedPage === 0 || items.isFetching} onClick={() => setPublishedPage((page) => page - 1)}><ChevronLeft size={16} />Previous</button><button className="button outline" disabled={publishedPage + 1 >= publishedPages || items.isFetching} onClick={() => setPublishedPage((page) => page + 1)}>Next<ChevronRight size={16} /></button></div></nav>}
-    {(canManage.data || canReview.data) && <section className="sk-project-list" id="sk-accomplishment-review-queue"><h2>Internal review queue</h2>{reviewMessage && <div className="ops-success" role="status">{reviewMessage}</div>}{reviewError && <ErrorNotice message={reviewError} />}{reviewItems.isPending && <LoadingNotice compact />}{reviewItems.error && <ErrorNotice message="Unable to load the accomplishment review queue." onRetry={() => void reviewItems.refetch()} retrying={reviewItems.isFetching} />}{reviewItems.data?.totalCount === 0 && !reviewItems.isPending && <p className="field-hint">No accomplishments are waiting for review.</p>}{reviewQueue.map((item) => <article className="ops-panel sk-project-card" key={item.id}><div className="sk-project-header"><div><StatusPill status={item.status} /><h3>{item.title}</h3><p>{item.summary}</p></div></div><div className="sk-project-meta"><span>Submitted {formatDateTime(item.created_at)}</span></div>{item.review_note && <p className="finance-review-note">Captain’s note: {item.review_note}</p>}{canReview.data && item.status === 'submitted' && item.created_by !== user?.id && <div className="finance-review-actions"><button className="button outline danger-action" disabled={reviewBusy} onClick={() => void review(item.id, false)}>Return with reason</button><button className="button primary" disabled={reviewBusy} onClick={() => void review(item.id, true)}>Publish summary</button></div>}</article>)}{reviewPages > 1 && <nav className="ops-panel ops-form-actions" aria-label="Accomplishment review pages"><span className="field-hint">Page {reviewPage + 1} of {reviewPages} · {reviewItems.data?.totalCount.toLocaleString()} items</span><div className="finance-review-actions"><button className="button outline" disabled={reviewPage === 0 || reviewItems.isFetching} onClick={() => setReviewPage((page) => page - 1)}><ChevronLeft size={16} />Previous</button><button className="button outline" disabled={reviewPage + 1 >= reviewPages || reviewItems.isFetching} onClick={() => setReviewPage((page) => page + 1)}>Next<ChevronRight size={16} /></button></div></nav>}</section>}
+    {(canManage.data || canReview.data) && <section className="sk-project-list" id="sk-accomplishment-review-queue"><h2>Internal review queue</h2><div className="ops-filter-row"><label>Show<select value={reviewStatus} onChange={(event) => { setReviewStatus(event.target.value as typeof reviewStatus); setReviewPage(0) }}><option value="review">All review items</option>{canReview.data && membership?.role?.key === 'captain' && <option value="captain_review">Submitted by others · awaiting review</option>}{canManage.data && <option value="my_submitted">My summaries awaiting review</option>}</select></label></div>{reviewMessage && <div className="ops-success" role="status">{reviewMessage}</div>}{reviewError && <ErrorNotice message={reviewError} />}{reviewItems.isPending && <LoadingNotice compact />}{reviewItems.error && <ErrorNotice message="Unable to load the accomplishment review queue." onRetry={() => void reviewItems.refetch()} retrying={reviewItems.isFetching} />}{reviewItems.data?.totalCount === 0 && !reviewItems.isPending && <p className="field-hint">{reviewStatus === 'my_submitted' ? 'You have no accomplishment summaries awaiting review.' : 'No accomplishments are waiting for review.'}</p>}{reviewQueue.map((item) => <article className="ops-panel sk-project-card" key={item.id}><div className="sk-project-header"><div><StatusPill status={item.status} /><h3>{item.title}</h3><p>{item.summary}</p></div></div><div className="sk-project-meta"><span>Submitted {formatDateTime(item.created_at)}</span></div>{item.review_note && <p className="finance-review-note">Captain’s note: {item.review_note}</p>}{canReview.data && item.status === 'submitted' && item.created_by !== user?.id && <div className="finance-review-actions"><button className="button outline danger-action" disabled={reviewBusy} onClick={() => void review(item.id, false)}>Return with reason</button><button className="button primary" disabled={reviewBusy} onClick={() => void review(item.id, true)}>Publish summary</button></div>}</article>)}{reviewPages > 1 && <nav className="ops-panel ops-form-actions" aria-label="Accomplishment review pages"><span className="field-hint">Page {reviewPage + 1} of {reviewPages} · {reviewItems.data?.totalCount.toLocaleString()} items</span><div className="finance-review-actions"><button className="button outline" disabled={reviewPage === 0 || reviewItems.isFetching} onClick={() => setReviewPage((page) => page - 1)}><ChevronLeft size={16} />Previous</button><button className="button outline" disabled={reviewPage + 1 >= reviewPages || reviewItems.isFetching} onClick={() => setReviewPage((page) => page + 1)}>Next<ChevronRight size={16} /></button></div></nav>}</section>}
   </section>
 }

@@ -990,6 +990,8 @@
 .health-campaign-history-event p { color: #40564d; font-size: 13px; line-height: 1.55; margin: 0; white-space: pre-wrap; }
 .health-campaign-focused { border-color: #6c9b78; box-shadow: 0 0 0 3px rgb(108 155 120 / 18%); }
 .health-outreach-filters > label:not(.archive-search) { color: #354f4c; display: grid; flex: 0 1 220px; font-size: 11px; font-weight: 700; gap: 5px; }
+.health-outreach-filters > label.health-outreach-own-filter { align-items: center; display: flex; flex: 0 1 auto; gap: 8px; min-height: 40px; }
+.health-outreach-filters > label.health-outreach-own-filter input[type=checkbox] { accent-color: #176254; height: 18px; min-height: 18px; width: 18px; }
 .health-outreach-filters select, .health-outreach-filters input[type=date] { background: #fffefa; border: 1px solid #bfcec8; border-radius: 8px; color: #24353b; font: inherit; min-height: 40px; padding: 8px 10px; width: 100%; }
 .health-outreach-summary { display: grid; gap: 12px; grid-template-columns: repeat(5, minmax(0, 1fr)); margin: 14px 0; }
 .sk-event-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }

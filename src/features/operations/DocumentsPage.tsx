@@ -99,7 +99,7 @@ export function DocumentsPage({ focusId, focusReviewQueue, focusActiveRequests, 
     if (!focusReviewQueue) return
     setRequestSearch('')
     setDebouncedRequestSearch('')
-    setStatusFilter('pending')
+    setStatusFilter('review_queue')
     setRequestPage(0)
   }, [focusReviewQueue])
   useEffect(() => {
@@ -119,7 +119,7 @@ export function DocumentsPage({ focusId, focusReviewQueue, focusActiveRequests, 
     enabled: Boolean(tenantId),
   })
   useEffect(() => {
-    if (!focusReviewQueue || requests.isPending || requests.isError || statusFilter !== 'pending') return
+    if (!focusReviewQueue || requests.isPending || requests.isError || statusFilter !== 'review_queue') return
     const frame = window.requestAnimationFrame(() => {
       document.getElementById('document-request-review-queue')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
       onFocusHandled?.()
@@ -314,7 +314,7 @@ export function DocumentsPage({ focusId, focusReviewQueue, focusActiveRequests, 
     {types.error && <ErrorNotice message={types.error.message} onRetry={() => void types.refetch()} retrying={types.isFetching} />}
     <div id="document-request-review-queue" className="ops-section-title"><h2>Requests</h2><p>Residents see only their own private requests; authorized staff see their tenant queue.</p></div>
     {focusError && <p className="account-security-error" role="status">{focusError}</p>}
-    {tenantId && <div className="incident-filters"><label>Search requests<input type="search" value={requestSearch} onChange={(event) => setRequestSearch(event.target.value)} placeholder="Reference, resident, purpose, or document" /></label><label>Filter requests by status<select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setRequestPage(0) }}><option value="all">All requests</option>{isResident && <option value="in_progress">In progress</option>}{['pending', 'under_review', 'awaiting_approval', 'approved', 'rejected', 'issued', 'released', 'cancelled'].map((status) => <option value={status} key={status}>{status.replaceAll('_', ' ')}</option>)}</select></label></div>}
+    {tenantId && <div className="incident-filters"><label>Search requests<input type="search" value={requestSearch} onChange={(event) => setRequestSearch(event.target.value)} placeholder="Reference, resident, purpose, or document" /></label><label>Filter requests by status<select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setRequestPage(0) }}><option value="all">All requests</option>{!isResident && <option value="review_queue">Needs review (all stages)</option>}{isResident && <option value="in_progress">In progress</option>}{['pending', 'under_review', 'awaiting_approval', 'approved', 'rejected', 'issued', 'released', 'cancelled'].map((status) => <option value={status} key={status}>{status.replaceAll('_', ' ')}</option>)}</select></label></div>}
     {!tenantId ? <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to view document services and requests." /> : requests.isPending ? <LoadingNotice /> : requests.error ? <ErrorNotice message={requests.error.message} onRetry={() => void requests.refetch()} retrying={requests.isFetching} /> : requests.data?.total ? visibleRequests.length ?
       <div className="ops-request-list">{visibleRequests.map((request) => {
         const isStaff = Boolean(canReview.data || canIssue.data)

@@ -79,7 +79,7 @@ function KagawadMeetingAgenda({ meetingId }: { meetingId: string }) {
   </details>
 }
 
-export function MeetingsPage({ focusId, focusPage, focusCorrectionRequestId, focusCorrectionPage, focusCorrectionQueue, focusMeetingRecords, focusRsvpNeeded, focusMeetingInvitations, focusMeetingAttendance, onFocusHandled }: { focusId?: string; focusPage?: number; focusCorrectionRequestId?: string; focusCorrectionPage?: number; focusCorrectionQueue?: boolean; focusMeetingRecords?: 'minutes' | 'resolutions'; focusRsvpNeeded?: boolean; focusMeetingInvitations?: boolean; focusMeetingAttendance?: 'present' | 'absent' | 'excused'; onFocusHandled?: () => void }) {
+export function MeetingsPage({ focusId, focusPage, focusCorrectionRequestId, focusCorrectionPage, focusCorrectionQueue, focusMeetingRecords, focusRsvpNeeded, focusMeetingInvitations, focusMeetingAttendance, onFocusHandled }: { focusId?: string; focusPage?: number; focusCorrectionRequestId?: string; focusCorrectionPage?: number; focusCorrectionQueue?: boolean; focusMeetingRecords?: 'minutes' | 'resolutions'; focusRsvpNeeded?: boolean; focusMeetingInvitations?: 'upcoming' | 'check_in'; focusMeetingAttendance?: 'present' | 'absent' | 'excused'; onFocusHandled?: () => void }) {
   const { membership, user } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
   const isKagawad = membership?.role?.key === 'kagawad'
@@ -234,6 +234,11 @@ export function MeetingsPage({ focusId, focusPage, focusCorrectionRequestId, foc
   }, [focusRsvpNeeded, isKagawad, onFocusHandled])
   useEffect(() => {
     if (!focusMeetingInvitations || !isKagawad) return
+    const response = focusMeetingInvitations === 'check_in' ? 'check_in_open' : 'upcoming'
+    const nextFilters = { search: '', response, meetingDateAfter: '', meetingDateBefore: '' }
+    setInvitedMeetingDraft(nextFilters)
+    setInvitedMeetingFilters(nextFilters)
+    setInvitedMeetingPage(0)
     const frame = window.requestAnimationFrame(() => {
       document.getElementById('kagawad-invited-meetings-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
       onFocusHandled?.()
@@ -670,7 +675,7 @@ export function MeetingsPage({ focusId, focusPage, focusCorrectionRequestId, foc
       <div className="ops-panel-heading"><div><h2 id="kagawad-invited-meetings-title">My invited meetings</h2><p>Share your plan ahead of time. RSVP does not record attendance; check in when the window opens.</p></div><CalendarDays size={19} /></div>
       <form className="kagawad-invited-meeting-filters" onSubmit={(event) => { event.preventDefault(); if (invitedMeetingDraft.meetingDateAfter && invitedMeetingDraft.meetingDateBefore && invitedMeetingDraft.meetingDateAfter > invitedMeetingDraft.meetingDateBefore) return; setInvitedMeetingPage(0); setInvitedMeetingFilters({ ...invitedMeetingDraft, search: invitedMeetingDraft.search.trim() }) }}>
         <label>Search meetings<input type="search" maxLength={100} placeholder="Meeting title or location" value={invitedMeetingDraft.search} onChange={(event) => setInvitedMeetingDraft((current) => ({ ...current, search: event.target.value }))} /></label>
-        <label>My RSVP<select value={invitedMeetingDraft.response} onChange={(event) => setInvitedMeetingDraft((current) => ({ ...current, response: event.target.value }))}><option value="all">All invitations</option><option value="no_response">RSVP needed</option><option value="attending">Plan to attend</option><option value="unavailable">Unavailable</option></select></label>
+        <label>Meeting filter<select value={invitedMeetingDraft.response} onChange={(event) => setInvitedMeetingDraft((current) => ({ ...current, response: event.target.value }))}><option value="all">All invitations</option><option value="upcoming">Upcoming, not checked in</option><option value="check_in_open">Check-in is open</option><option value="no_response">RSVP needed</option><option value="attending">Plan to attend</option><option value="unavailable">Unavailable</option></select></label>
         <label>Meeting on or after<input type="date" max={invitedMeetingDraft.meetingDateBefore || undefined} value={invitedMeetingDraft.meetingDateAfter} onChange={(event) => setInvitedMeetingDraft((current) => ({ ...current, meetingDateAfter: event.target.value }))} /></label>
         <label>Meeting on or before<input type="date" min={invitedMeetingDraft.meetingDateAfter || undefined} value={invitedMeetingDraft.meetingDateBefore} onChange={(event) => setInvitedMeetingDraft((current) => ({ ...current, meetingDateBefore: event.target.value }))} /></label>
         <div className="kagawad-invited-meeting-filter-actions"><button className="button primary" type="submit">Apply filters</button><button className="button outline" type="button" onClick={() => { const empty = { search: '', response: 'all', meetingDateAfter: '', meetingDateBefore: '' }; setInvitedMeetingDraft(empty); setInvitedMeetingFilters(empty); setInvitedMeetingPage(0) }}>Clear</button></div>

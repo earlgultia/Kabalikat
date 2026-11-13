@@ -40,6 +40,19 @@ export async function listSkProjects(tenantId: string, page: number, status: SkP
   return { rows: (data ?? []) as SkProjectRow[], totalCount: count ?? 0 }
 }
 
+export async function listCaptainSkProjectReviewPage(tenantId: string, page: number) {
+  const { data, error } = await client().rpc('list_captain_sk_project_review_page', {
+    p_barangay_id: tenantId, p_page: Math.max(page, 0), p_page_size: SK_PROJECT_PAGE_SIZE,
+  })
+  if (error) throw new Error(error.message)
+  const rows = (data ?? []) as Array<SkProjectRow & { total_count: number }>
+  return { rows: rows.map((row) => {
+    const { total_count, ...project } = row
+    void total_count
+    return project
+  }), totalCount: Number(rows[0]?.total_count ?? 0) }
+}
+
 export async function getMyReturnedSkAccomplishmentTarget(tenantId: string) {
   const { data, error } = await client().rpc('get_my_returned_sk_accomplishment_target', { p_barangay_id: tenantId })
   if (error) throw new Error(error.message)
@@ -55,10 +68,11 @@ export async function listSkProjectUpdates(projectId: string, page: number): Pro
   return { rows, totalCount: Number(rows[0]?.total_count ?? 0) }
 }
 
-export async function listSkAccomplishments(tenantId: string, page: number, status: 'published' | 'review', year: number | null = null): Promise<SkAccomplishmentPage> {
-  const { data, error } = await client().rpc('list_sk_accomplishment_page', {
-    p_barangay_id: tenantId, p_page: page, p_page_size: SK_ACCOMPLISHMENT_PAGE_SIZE, p_status: status, p_year: status === 'published' ? year : null,
-  })
+export async function listSkAccomplishments(tenantId: string, page: number, status: 'published' | 'review' | 'my_submitted' | 'captain_review', year: number | null = null): Promise<SkAccomplishmentPage> {
+  const args = status === 'captain_review'
+    ? { p_barangay_id: tenantId, p_page: page, p_page_size: SK_ACCOMPLISHMENT_PAGE_SIZE }
+    : { p_barangay_id: tenantId, p_page: page, p_page_size: SK_ACCOMPLISHMENT_PAGE_SIZE, p_status: status, p_year: status === 'published' ? year : null }
+  const { data, error } = await client().rpc(status === 'captain_review' ? 'list_captain_sk_accomplishment_review_page' : 'list_sk_accomplishment_page', args)
   if (error) throw new Error(error.message)
   const rows = (data ?? []) as Array<SkAccomplishment & { total_count: number }>
   return { rows, totalCount: Number(rows[0]?.total_count ?? 0) }

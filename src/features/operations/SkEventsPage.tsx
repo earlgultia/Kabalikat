@@ -126,24 +126,24 @@ function SkEventNotificationReach({ tenantId, eventId }: { tenantId: string; eve
   </details>
 }
 
-export function SkEventsPage({ focusId, focusPage, focusStatus, onFocusHandled }: { focusId?: string; focusPage?: number; focusStatus?: SkEvent['status']; onFocusHandled?: () => void }) {
+export function SkEventsPage({ focusId, focusPage, focusStatus, focusMyDrafts, onFocusHandled }: { focusId?: string; focusPage?: number; focusStatus?: SkEvent['status'] | 'review_queue'; focusMyDrafts?: boolean; onFocusHandled?: () => void }) {
   const { membership, user } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
   const queryClient = useQueryClient()
   const [page, setPage] = useState(0)
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<'all' | SkEvent['status']>('all')
+  const [statusFilter, setStatusFilter] = useState<'all' | SkEvent['status'] | 'review_queue' | 'my_drafts'>('all')
   const [startsOnOrAfter, setStartsOnOrAfter] = useState('')
   const [startsOnOrBefore, setStartsOnOrBefore] = useState('')
   const [editingEventId, setEditingEventId] = useState<string | null>(null)
   const [reschedulingEventId, setReschedulingEventId] = useState<string | null>(null)
   useEffect(() => { setPage(0); setSearchInput(''); setSearch(''); setStatusFilter('all'); setStartsOnOrAfter(''); setStartsOnOrBefore('') }, [tenantId])
   useEffect(() => {
-    if (!focusId && !focusStatus) return
-    setPage(focusPage ?? 0); setSearchInput(''); setSearch(''); setStatusFilter(focusStatus ?? 'draft'); setStartsOnOrAfter(''); setStartsOnOrBefore('')
+    if (!focusId && !focusStatus && !focusMyDrafts) return
+    setPage(focusPage ?? 0); setSearchInput(''); setSearch(''); setStatusFilter(focusMyDrafts ? 'my_drafts' : focusStatus ?? 'draft'); setStartsOnOrAfter(''); setStartsOnOrBefore('')
     if (!focusId) onFocusHandled?.()
-  }, [focusId, focusPage, focusStatus, onFocusHandled])
+  }, [focusId, focusMyDrafts, focusPage, focusStatus, onFocusHandled])
   useEffect(() => {
     const timeout = window.setTimeout(() => { setSearch(searchInput.trim()); setPage(0) }, 250)
     return () => window.clearTimeout(timeout)
@@ -154,7 +154,7 @@ export function SkEventsPage({ focusId, focusPage, focusStatus, onFocusHandled }
   const startsAfter = localDateBoundary(startsOnOrAfter)
   const startsBefore = localDateBoundary(startsOnOrBefore, 1)
   const events = useQuery({ queryKey: ['sk-events', tenantId, page, search, statusFilter, startsOnOrAfter, startsOnOrBefore], queryFn: () => listSkEvents(tenantId, page, search, statusFilter, startsAfter, startsBefore), enabled: Boolean(tenantId && !dateRangeInvalid) })
-  const summary = useQuery({ queryKey: ['sk-event-summary', tenantId, search, statusFilter, startsOnOrAfter, startsOnOrBefore], queryFn: () => getSkEventQueueSummary(tenantId, search, statusFilter, startsAfter, startsBefore), enabled: Boolean(tenantId && !dateRangeInvalid), staleTime: 30_000 })
+  const summary = useQuery({ queryKey: ['sk-event-summary', tenantId, search, statusFilter, startsOnOrAfter, startsOnOrBefore], queryFn: () => getSkEventQueueSummary(tenantId, search, statusFilter === 'review_queue' || statusFilter === 'my_drafts' ? 'all' : statusFilter, startsAfter, startsBefore), enabled: Boolean(tenantId && !dateRangeInvalid), staleTime: 30_000 })
   useEffect(() => {
     if (!events.isPending && !events.isError && page > 0 && events.data?.rows.length === 0) setPage((current) => Math.max(0, current - 1))
   }, [events.data?.rows.length, events.isError, events.isPending, page])
@@ -285,7 +285,7 @@ export function SkEventsPage({ focusId, focusPage, focusStatus, onFocusHandled }
     </form>}
     {Boolean(tenantId) && <div className="health-outreach-filters">
       <label className="archive-search"><Search size={16} /><input type="search" aria-label="Search SK events" maxLength={100} placeholder="Search event, location, or details" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} /></label>
-      <label>Status<select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value as typeof statusFilter); setPage(0) }}><option value="all">All statuses</option><option value="draft">Awaiting review</option><option value="changes_requested">Changes requested</option><option value="published">Published</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></label>
+      <label>Status<select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value as typeof statusFilter); setPage(0) }}><option value="all">All statuses</option><option value="review_queue">Review queue</option><option value="my_drafts">My drafts</option><option value="draft">Awaiting review</option><option value="changes_requested">Changes requested</option><option value="published">Published</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></label>
       <label>Starts on or after<input type="date" value={startsOnOrAfter} max={startsOnOrBefore || undefined} onChange={(event) => { setStartsOnOrAfter(event.target.value); setPage(0) }} /></label>
       <label>Starts on or before<input type="date" value={startsOnOrBefore} min={startsOnOrAfter || undefined} onChange={(event) => { setStartsOnOrBefore(event.target.value); setPage(0) }} /></label>
       {(startsOnOrAfter || startsOnOrBefore) && <button type="button" className="button outline" onClick={() => { setStartsOnOrAfter(''); setStartsOnOrBefore(''); setPage(0) }}>Clear dates</button>}
@@ -294,7 +294,7 @@ export function SkEventsPage({ focusId, focusPage, focusStatus, onFocusHandled }
     {(startsOnOrAfter || startsOnOrBefore) && !dateRangeInvalid && <p className="field-hint">Dates use your local timezone. Search results, overview counts, and CSV exports use this same start-date window.</p>}
     {summary.error && <ErrorNotice message="Unable to load the SK event overview." onRetry={() => void summary.refetch()} retrying={summary.isFetching} />}
     {summary.data && <section className="health-outreach-summary sk-event-summary" aria-label="SK event schedule overview">
-      <article className="ops-panel"><span>Matching events</span><strong>{summary.data.totalCount.toLocaleString()}</strong></article>
+      <article className="ops-panel"><span>Matching events</span><strong>{(statusFilter === 'review_queue' || statusFilter === 'my_drafts' ? events.data?.totalCount ?? 0 : summary.data.totalCount).toLocaleString()}</strong></article>
       <button type="button" className="ops-panel health-outreach-summary-action" aria-label={`Show ${summary.data.awaitingReviewCount} SK events awaiting review`} onClick={() => { setPage(0); setStatusFilter('draft') }}><span>Awaiting review</span><strong>{summary.data.awaitingReviewCount.toLocaleString()}</strong><small>View review queue</small></button>
       <button type="button" className="ops-panel health-outreach-summary-action" aria-label={`Show ${summary.data.changesRequestedCount} SK events with changes requested`} onClick={() => { setPage(0); setStatusFilter('changes_requested') }}><span>Changes requested</span><strong>{summary.data.changesRequestedCount.toLocaleString()}</strong><small>View returned schedules</small></button>
       <button type="button" className="ops-panel health-outreach-summary-action" aria-label={`Show ${summary.data.publishedCount} published SK events`} onClick={() => { setPage(0); setStatusFilter('published') }}><span>Published</span><strong>{summary.data.publishedCount.toLocaleString()}</strong><small>View published events</small></button>

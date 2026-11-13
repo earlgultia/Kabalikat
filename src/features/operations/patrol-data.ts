@@ -19,23 +19,24 @@ function client() {
   return supabase
 }
 
-export async function listPatrolShifts(tenantId: string, page: number, search: string, status: 'all' | 'scheduled' | 'active' | 'completed' | 'cancelled', pageSize = PATROL_SHIFT_PAGE_SIZE): Promise<PatrolShiftPage> {
+export async function listPatrolShifts(tenantId: string, page: number, search: string, status: 'all' | 'scheduled' | 'active' | 'completed' | 'cancelled', pageSize = PATROL_SHIFT_PAGE_SIZE, assignedTo?: string): Promise<PatrolShiftPage> {
   const { data, error } = await client().rpc('list_patrol_shifts_filtered_page', {
     p_barangay_id: tenantId,
     p_page: page,
     p_page_size: pageSize,
     p_search: search.trim().slice(0, 100) || null,
     p_status: status,
+    p_assigned_to: assignedTo ?? null,
   })
   if (error) throw new Error(error.message)
   const rows = (data ?? []) as Array<PatrolShift & { total_count: number }>
   return { rows, totalCount: Number(rows[0]?.total_count ?? 0) }
 }
 
-export async function listUpcomingPatrolShifts(tenantId: string, page: number, pageSize = PATROL_SHIFT_PAGE_SIZE): Promise<PatrolShiftPage> {
+export async function listUpcomingPatrolShifts(tenantId: string, page: number, pageSize = PATROL_SHIFT_PAGE_SIZE, assignedTo?: string): Promise<PatrolShiftPage> {
   const now = new Date().toISOString()
   const from = Math.max(0, page) * pageSize
-  const { data, error, count } = await client().from('patrol_shifts')
+  let query = client().from('patrol_shifts')
     .select('id,title,patrol_area,starts_at,ends_at,status,assigned_to,started_at,completed_at,cancellation_note,created_at', { count: 'exact' })
     .eq('barangay_id', tenantId)
     .eq('status', 'scheduled')
@@ -43,6 +44,8 @@ export async function listUpcomingPatrolShifts(tenantId: string, page: number, p
     .order('starts_at', { ascending: true })
     .order('id', { ascending: true })
     .range(from, from + pageSize - 1)
+  if (assignedTo) query = query.eq('assigned_to', assignedTo)
+  const { data, error, count } = await query
   if (error) throw new Error(error.message)
   return { rows: (data ?? []) as PatrolShift[], totalCount: count ?? 0 }
 }

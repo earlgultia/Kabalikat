@@ -97,14 +97,14 @@ export function IncidentsPage({ focusId, focusAssignedActive, focusOpenReports, 
     onFocusHandled?.()
   }, [enabled, focusAssignedActive, onFocusHandled, tenantId])
   useEffect(() => {
-    if (!focusOpenReports || !tenantId || !enabled || canManage.data) return
+    if (!focusOpenReports || !tenantId || !enabled) return
     setPage(0); setSearch(''); setDebouncedSearch(''); setStatusFilter('all'); setCategoryFilter('all'); setSeverityFilter('all'); setAssignmentFilter('all'); setActiveOnly(true); setCreatedAfter(''); setCreatedBefore('')
     const frame = window.requestAnimationFrame(() => {
       document.getElementById('incident-list')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
       onFocusHandled?.()
     })
     return () => window.cancelAnimationFrame(frame)
-  }, [canManage.data, enabled, focusOpenReports, onFocusHandled, tenantId])
+  }, [enabled, focusOpenReports, onFocusHandled, tenantId])
 
   useEffect(() => {
     if (!focusId || focusReadyId !== focusId || !incidents.data?.rows.some((incident) => incident.id === focusId)) return

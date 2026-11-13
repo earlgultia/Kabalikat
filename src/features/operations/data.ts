@@ -665,26 +665,28 @@ export function verifyResident(residentId: string, status: 'verified' | 'rejecte
 
 export const RESIDENT_CORRECTION_PAGE_SIZE = 20
 
-export async function listResidentProfileChangeRequests(tenantId: string, page: number, pendingOnly: boolean) {
+export async function listResidentProfileChangeRequests(tenantId: string, page: number, pendingOnly: boolean, excludeRequestedBy?: string) {
   const from = Math.max(0, page) * RESIDENT_CORRECTION_PAGE_SIZE
   let query = client().from('resident_profile_change_requests')
     .select('id,resident_id,proposed_first_name,proposed_last_name,proposed_phone,request_note,status,review_reason,created_at,reviewed_at,resident:residents(first_name,last_name)', { count: 'exact' })
     .eq('barangay_id', tenantId)
   if (pendingOnly) query = query.eq('status', 'pending')
+  if (excludeRequestedBy) query = query.neq('requested_by', excludeRequestedBy)
   const { data, count, error } = await query.order('created_at', { ascending: false }).order('id', { ascending: false })
     .range(from, from + RESIDENT_CORRECTION_PAGE_SIZE - 1)
   if (error) throw new Error(error.message)
   return { requests: (data ?? []) as unknown as ResidentProfileChangeRequest[], totalCount: count ?? 0 }
 }
 
-export async function findResidentProfileChangePage(tenantId: string, requestId: string, pendingOnly = false) {
+export async function findResidentProfileChangePage(tenantId: string, requestId: string, pendingOnly = false, excludeRequestedBy?: string) {
   const { data: target, error: targetError } = await client().from('resident_profile_change_requests')
-    .select('created_at,id,status').eq('barangay_id', tenantId).eq('id', requestId).maybeSingle()
+    .select('created_at,id,status,requested_by').eq('barangay_id', tenantId).eq('id', requestId).maybeSingle()
   if (targetError) throw new Error(targetError.message)
-  if (!target || (pendingOnly && target.status !== 'pending')) return null
+  if (!target || (pendingOnly && target.status !== 'pending') || (excludeRequestedBy && target.requested_by === excludeRequestedBy)) return null
   const base = () => {
     let query = client().from('resident_profile_change_requests').select('id', { count: 'exact', head: true }).eq('barangay_id', tenantId)
     if (pendingOnly) query = query.eq('status', 'pending')
+    if (excludeRequestedBy) query = query.neq('requested_by', excludeRequestedBy)
     return query
   }
   const [newerTime, sameTime] = await Promise.all([
@@ -725,11 +727,13 @@ export function listResidencyVerifications(tenantId: string, residentIds?: strin
 
 export const INVITATION_PAGE_SIZE = 20
 
-export async function listInvitationPage(tenantId: string, page: number) {
+export async function listInvitationPage(tenantId: string, page: number, pendingUnexpiredOnly = false) {
   const from = Math.max(0, page) * INVITATION_PAGE_SIZE
-  const { data, error, count } = await client().from('invitations')
+  let query = client().from('invitations')
     .select('id,invited_email,status,expires_at,created_at', { count: 'exact' })
-    .eq('barangay_id', tenantId).order('created_at', { ascending: false }).order('id', { ascending: false })
+    .eq('barangay_id', tenantId)
+  if (pendingUnexpiredOnly) query = query.eq('status', 'pending').gt('expires_at', new Date().toISOString())
+  const { data, error, count } = await query.order('created_at', { ascending: false }).order('id', { ascending: false })
     .range(from, from + INVITATION_PAGE_SIZE - 1)
   if (error) throw new Error(error.message)
   return { invitations: (data ?? []) as InvitationRow[], total: count ?? 0 }
@@ -1090,9 +1094,11 @@ export function approveMeetingResolution(resolutionId: string) {
 
 export const FINANCE_BUDGET_PAGE_SIZE = 20
 
-export async function listFinanceBudgetPage(tenantId: string, page: number) {
+export async function listFinanceBudgetPage(tenantId: string, page: number, minePendingOnly = false, captainReviewOnly = false) {
   const { data, error } = await client().rpc('list_finance_budget_page', {
     p_barangay_id: tenantId, p_page: Math.max(page, 0), p_page_size: FINANCE_BUDGET_PAGE_SIZE,
+    p_mine_pending_only: minePendingOnly,
+    p_captain_review_only: captainReviewOnly,
   })
   if (error) throw new Error(error.message)
   const rows = (data ?? []) as Array<FinanceBudgetRow & { has_pending_amendment: boolean; total_count: number }>
@@ -1116,9 +1122,11 @@ export async function listFinanceBudgetUsageForPage(tenantId: string, budgetIds:
 
 export const FINANCE_BUDGET_AMENDMENT_PAGE_SIZE = 25
 
-export async function listFinanceBudgetAmendmentPage(tenantId: string, page: number) {
+export async function listFinanceBudgetAmendmentPage(tenantId: string, page: number, minePendingOnly = false, captainReviewOnly = false) {
   const { data, error } = await client().rpc('list_finance_budget_amendment_page', {
     p_barangay_id: tenantId, p_page: Math.max(page, 0), p_page_size: FINANCE_BUDGET_AMENDMENT_PAGE_SIZE,
+    p_mine_pending_only: minePendingOnly,
+    p_captain_review_only: captainReviewOnly,
   })
   if (error) throw new Error(error.message)
   const rows = (data ?? []) as Array<FinanceBudgetAmendmentRow & { budget_name: string; fiscal_year: number; total_count: number }>
@@ -1142,14 +1150,47 @@ export const FINANCIAL_TRANSACTION_PAGE_SIZE = 25
 const financialTransactionColumns = 'id,budget_id,transaction_type,category,description,amount,transaction_date,status,submitted_by,reviewed_by,review_note,created_at,void_reason,voided_at,budget:finance_budgets(name,fiscal_year)'
 const financialAdjustmentColumns = 'id,transaction_id,amount_change,reason,status,requested_by,reviewed_by,review_note,created_at'
 
-export async function listFinancialTransactionPage(tenantId: string, page: number) {
+export async function listFinancialTransactionPage(tenantId: string, page: number, submittedBy?: string, transactionIds?: string[], captainReviewOnly = false, currentUserId?: string) {
+  if (transactionIds?.length === 0 && !captainReviewOnly) return { transactions: [] as FinancialTransactionRow[], total: 0 }
   const from = Math.max(0, page) * FINANCIAL_TRANSACTION_PAGE_SIZE
-  const { data, error, count } = await client().from('financial_transactions')
+  let query = client().from('financial_transactions')
     .select(financialTransactionColumns, { count: 'exact' }).eq('barangay_id', tenantId)
     .order('transaction_date', { ascending: false }).order('id', { ascending: false })
-    .range(from, from + FINANCIAL_TRANSACTION_PAGE_SIZE - 1)
+  if (submittedBy) query = query.eq('submitted_by', submittedBy).eq('status', 'submitted')
+  if (captainReviewOnly && currentUserId) {
+    query = transactionIds?.length
+      ? query.or(`and(status.eq.submitted,submitted_by.neq.${currentUserId}),id.in.(${transactionIds.join(',')})`)
+      : query.eq('status', 'submitted').neq('submitted_by', currentUserId)
+  } else if (transactionIds) query = query.in('id', transactionIds)
+  const { data, error, count } = await query.range(from, from + FINANCIAL_TRANSACTION_PAGE_SIZE - 1)
   if (error) throw new Error(error.message)
   return { transactions: (data ?? []) as unknown as FinancialTransactionRow[], total: count ?? 0 }
+}
+
+export async function listMyPendingFinancialAdjustmentTransactionIds(tenantId: string, userId: string): Promise<string[]> {
+  return listPendingFinancialAdjustmentTransactionIds(tenantId, userId, true)
+}
+
+export async function listOtherPendingFinancialAdjustmentTransactionIds(tenantId: string, userId: string): Promise<string[]> {
+  return listPendingFinancialAdjustmentTransactionIds(tenantId, userId, false)
+}
+
+async function listPendingFinancialAdjustmentTransactionIds(tenantId: string, userId: string, mineOnly: boolean): Promise<string[]> {
+  const pageSize = 500
+  const transactionIds = new Set<string>()
+  for (let page = 0; ; page += 1) {
+    let query = client().from('financial_adjustments').select('transaction_id')
+      .eq('barangay_id', tenantId).eq('status', 'pending')
+    query = mineOnly ? query.eq('requested_by', userId) : query.neq('requested_by', userId)
+    const { data, error } = await query
+      .order('created_at', { ascending: false }).order('id', { ascending: false })
+      .range(page * pageSize, (page + 1) * pageSize - 1)
+    if (error) throw new Error(error.message)
+    const batch = data ?? []
+    for (const row of batch) transactionIds.add(row.transaction_id)
+    if (batch.length < pageSize) break
+  }
+  return [...transactionIds]
 }
 
 export async function listFinancialAdjustmentsForTransactions(tenantId: string, transactionIds: string[]): Promise<FinancialAdjustmentRow[]> {

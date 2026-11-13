@@ -478,7 +478,7 @@ function CommitteeWorkspaceCard({
   </article>
 }
 
-export function CommitteesPage({ focusId, focusDueDateRequestStatus, focusDueDateReviewQueue, focusTaskFilter, onFocusHandled }: { focusId?: string; focusDueDateRequestStatus?: 'pending' | 'reviewed'; focusDueDateReviewQueue?: boolean; focusTaskFilter?: 'open' | 'in_progress' | 'blocked' | 'overdue' | 'due_soon' | 'completed_work'; onFocusHandled?: () => void }) {
+export function CommitteesPage({ focusId, focusDueDateRequestStatus, focusDueDateReviewQueue, focusTaskFilter, onFocusHandled }: { focusId?: string; focusDueDateRequestStatus?: 'pending' | 'reviewed' | 'reviewed_last_30_days'; focusDueDateReviewQueue?: boolean; focusTaskFilter?: 'open' | 'in_progress' | 'blocked' | 'overdue' | 'due_soon' | 'completed_work'; onFocusHandled?: () => void }) {
   const { membership, user } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
   const queryClient = useQueryClient()
@@ -797,7 +797,7 @@ export function CommitteesPage({ focusId, focusDueDateRequestStatus, focusDueDat
         setDueDateHistoryFilters({ ...dueDateHistoryDraft, search: dueDateHistoryDraft.search.trim() })
       }}>
         <label>Search requests<input type="search" maxLength={100} placeholder="Task, committee, or reason" value={dueDateHistoryDraft.search} onChange={(event) => setDueDateHistoryDraft((current) => ({ ...current, search: event.target.value }))} /></label>
-        <label>Status<select value={dueDateHistoryDraft.status} onChange={(event) => setDueDateHistoryDraft((current) => ({ ...current, status: event.target.value }))}><option value="all">All statuses</option><option value="pending">Awaiting review</option><option value="reviewed">Reviewed</option><option value="approved">Approved</option><option value="declined">Declined</option><option value="withdrawn">Withdrawn</option></select></label>
+        <label>Status<select value={dueDateHistoryDraft.status} onChange={(event) => setDueDateHistoryDraft((current) => ({ ...current, status: event.target.value }))}><option value="all">All statuses</option><option value="pending">Awaiting review</option><option value="reviewed_last_30_days">Reviewed in the last 30 days</option><option value="reviewed">Reviewed</option><option value="approved">Approved</option><option value="declined">Declined</option><option value="withdrawn">Withdrawn</option></select></label>
         <label>Submitted on or after<input type="date" max={dueDateHistoryDraft.createdBefore || undefined} value={dueDateHistoryDraft.createdAfter} onChange={(event) => setDueDateHistoryDraft((current) => ({ ...current, createdAfter: event.target.value }))} /></label>
         <label>Submitted on or before<input type="date" min={dueDateHistoryDraft.createdAfter || undefined} value={dueDateHistoryDraft.createdBefore} onChange={(event) => setDueDateHistoryDraft((current) => ({ ...current, createdBefore: event.target.value }))} /></label>
         <label>Reviewed on or after<input type="date" max={dueDateHistoryDraft.reviewedBefore || undefined} value={dueDateHistoryDraft.reviewedAfter} onChange={(event) => setDueDateHistoryDraft((current) => ({ ...current, reviewedAfter: event.target.value }))} /></label>

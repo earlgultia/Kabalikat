@@ -58,14 +58,15 @@ export function PatrolPage({ focusId, focusStatus, onFocusHandled }: { focusId?:
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'scheduled' | 'active' | 'completed' | 'cancelled'>('all')
   const [upcomingOnly, setUpcomingOnly] = useState(false)
+  const [assignedToMeOnly, setAssignedToMeOnly] = useState(false)
   const [coverageFrom, setCoverageFrom] = useState(() => `${getManilaDateInputValue().slice(0, 7)}-01`)
   const [coverageTo, setCoverageTo] = useState(() => getManilaDateInputValue())
   const [focusReadyId, setFocusReadyId] = useState('')
   const [reschedulingId, setReschedulingId] = useState('')
-  useEffect(() => { setPage(0); setSearchInput(''); setSearch(''); setStatusFilter('all'); setUpcomingOnly(false) }, [tenantId])
+  useEffect(() => { setPage(0); setSearchInput(''); setSearch(''); setStatusFilter('all'); setUpcomingOnly(false); setAssignedToMeOnly(false) }, [tenantId])
   useEffect(() => {
     if (!focusStatus || !enabled) return
-    setPage(0); setSearchInput(''); setSearch(''); setStatusFilter(focusStatus); setUpcomingOnly(focusStatus === 'scheduled')
+    setPage(0); setSearchInput(''); setSearch(''); setStatusFilter(focusStatus); setUpcomingOnly(focusStatus === 'scheduled'); setAssignedToMeOnly(true)
     window.requestAnimationFrame(() => document.getElementById('patrol-shift-list')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
     onFocusHandled?.()
   }, [enabled, focusStatus, onFocusHandled])
@@ -73,7 +74,7 @@ export function PatrolPage({ focusId, focusStatus, onFocusHandled }: { focusId?:
     const timeout = window.setTimeout(() => { setSearch(searchInput.trim()); setPage(0) }, 250)
     return () => window.clearTimeout(timeout)
   }, [searchInput])
-  const shifts = useQuery({ queryKey: ['patrol-shifts', tenantId, page, search, statusFilter, upcomingOnly], queryFn: () => upcomingOnly ? listUpcomingPatrolShifts(tenantId, page) : listPatrolShifts(tenantId, page, search, statusFilter), enabled })
+  const shifts = useQuery({ queryKey: ['patrol-shifts', tenantId, page, search, statusFilter, upcomingOnly, assignedToMeOnly, user?.id], queryFn: () => upcomingOnly ? listUpcomingPatrolShifts(tenantId, page, PATROL_SHIFT_PAGE_SIZE, assignedToMeOnly ? user?.id : undefined) : listPatrolShifts(tenantId, page, search, statusFilter, PATROL_SHIFT_PAGE_SIZE, assignedToMeOnly ? user?.id : undefined), enabled })
   const coverage = useQuery({
     queryKey: ['patrol-coverage-summary', tenantId, coverageFrom, coverageTo],
     queryFn: () => getPatrolCoverageSummary(tenantId, coverageFrom, coverageTo),
@@ -120,8 +121,8 @@ export function PatrolPage({ focusId, focusStatus, onFocusHandled }: { focusId?:
       let totalCount = 0
       for (let exportPage = 0; exportPage === 0 || rows.length < totalCount; exportPage += 1) {
         const result = upcomingOnly
-          ? await listUpcomingPatrolShifts(tenantId, exportPage, 100)
-          : await listPatrolShifts(tenantId, exportPage, search, statusFilter, 100)
+          ? await listUpcomingPatrolShifts(tenantId, exportPage, 100, assignedToMeOnly ? user?.id : undefined)
+          : await listPatrolShifts(tenantId, exportPage, search, statusFilter, 100, assignedToMeOnly ? user?.id : undefined)
         rows.push(...result.rows)
         totalCount = result.totalCount
         if (result.rows.length === 0) break
@@ -218,6 +219,7 @@ export function PatrolPage({ focusId, focusStatus, onFocusHandled }: { focusId?:
       <label className="span-two">Patrol area<input name="area" maxLength={240} placeholder="General area or route description" required /></label>
       <label>Starts<input type="datetime-local" name="start" required /></label><label>Ends<input type="datetime-local" name="end" required /></label>
     </div><div className="ops-form-actions"><button className="button primary" disabled={busy || !assigneeId}>Schedule shift</button></div></form>}
+    {assignedToMeOnly && <div className="ops-success" role="status"><span>Showing patrol shifts assigned to you.</span><button type="button" className="text-action" onClick={() => { setAssignedToMeOnly(false); setUpcomingOnly(false); setStatusFilter('all'); setPage(0) }}>Show all shifts</button></div>}
     {enabled && <div className="health-outreach-filters">
       <label className="archive-search"><Search size={16} /><input type="search" aria-label="Search patrol shifts" maxLength={100} placeholder="Search shift title or patrol area" value={searchInput} onChange={(event) => { setUpcomingOnly(false); setSearchInput(event.target.value) }} /></label>
       <label>Status<select value={statusFilter} onChange={(event) => { setUpcomingOnly(false); setStatusFilter(event.target.value as typeof statusFilter); setPage(0) }}><option value="all">All statuses</option><option value="scheduled">Scheduled</option><option value="active">Active</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></label>

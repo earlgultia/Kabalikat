@@ -6,7 +6,7 @@ import { useAuth } from '../../auth/AuthProvider'
 import {
   approveFinanceBudget, createFinanceBudget, createFinancialTransaction, createFinancialReceiptDownloadUrl, hasPermission,
   FINANCE_BUDGET_AMENDMENT_PAGE_SIZE, FINANCE_BUDGET_PAGE_SIZE, FINANCE_REPORT_EXPORT_PAGE_SIZE, FINANCIAL_TRANSACTION_PAGE_SIZE, listFinanceBudgetAmendmentPage, listFinanceBudgetPage, listFinanceBudgetUsageForPage, listFinanceReportExportPage, listFinancialAdjustmentsForTransactions, listFinancialReceiptsForTransactions, listFinancialReportRows, listFinancialTransactionPage, reviewFinanceBudgetAmendment, reviewFinancialAdjustment, reviewFinancialTransaction,
-  cleanupExpiredFinancialReceiptUploads, recordFinanceReportExport, requestFinanceBudgetAmendment, requestFinancialAdjustment, uploadFinancialReceipt, voidFinancialTransaction,
+  cleanupExpiredFinancialReceiptUploads, listMyPendingFinancialAdjustmentTransactionIds, listOtherPendingFinancialAdjustmentTransactionIds, recordFinanceReportExport, requestFinanceBudgetAmendment, requestFinancialAdjustment, uploadFinancialReceipt, voidFinancialTransaction,
 } from './data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 import { formatDateTime, formatManilaDate, getManilaDateInputValue } from './format'
@@ -31,7 +31,7 @@ const allowedReceiptTypes = new Set(['application/pdf', 'image/jpeg', 'image/png
 const receiptLimitBytes = 10 * 1024 * 1024
 const manilaDate = getManilaDateInputValue()
 
-export function FinancePage({ focusQueue, onFocusHandled }: { focusQueue?: 'budgets' | 'transactions' | 'budget_changes' | 'transaction_changes'; onFocusHandled?: () => void }) {
+export function FinancePage({ focusQueue, onFocusHandled }: { focusQueue?: 'budgets' | 'transactions' | 'budget_changes' | 'transaction_changes' | 'captain_review'; onFocusHandled?: () => void }) {
   const { membership, user } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
   const queryClient = useQueryClient()
@@ -40,16 +40,19 @@ export function FinancePage({ focusQueue, onFocusHandled }: { focusQueue?: 'budg
   const [budgetPage, setBudgetPage] = useState(0)
   const [budgetPickerPage, setBudgetPickerPage] = useState(0)
   const [amendmentPage, setAmendmentPage] = useState(0)
+  const [followUpQueueFilter, setFollowUpQueueFilter] = useState<typeof focusQueue>()
   const [transactionForm, setTransactionForm] = useState(false)
   const canRead = useQuery({ queryKey: ['permission', tenantId, 'finance.read'], queryFn: () => hasPermission(tenantId, 'finance.read'), enabled: Boolean(tenantId) })
   const canManage = useQuery({ queryKey: ['permission', tenantId, 'finance.manage'], queryFn: () => hasPermission(tenantId, 'finance.manage'), enabled: Boolean(tenantId) })
   const canApprove = useQuery({ queryKey: ['permission', tenantId, 'finance.approve'], queryFn: () => hasPermission(tenantId, 'finance.approve'), enabled: Boolean(tenantId) })
-  const budgets = useQuery({ queryKey: ['finance-budgets', tenantId, budgetPage], queryFn: () => listFinanceBudgetPage(tenantId, budgetPage), enabled: Boolean(tenantId && canRead.data) })
+  const budgets = useQuery({ queryKey: ['finance-budgets', tenantId, budgetPage, followUpQueueFilter === 'budgets', followUpQueueFilter === 'captain_review'], queryFn: () => listFinanceBudgetPage(tenantId, budgetPage, followUpQueueFilter === 'budgets', followUpQueueFilter === 'captain_review'), enabled: Boolean(tenantId && canRead.data) })
   const budgetPicker = useQuery({ queryKey: ['finance-budget-picker', tenantId, budgetPickerPage], queryFn: () => listFinanceBudgetPage(tenantId, budgetPickerPage), enabled: Boolean(tenantId && canRead.data && transactionForm) })
   const visibleBudgetIds = budgets.data?.budgets.map((budget) => budget.id) ?? []
   const budgetUsage = useQuery({ queryKey: ['finance-budget-usage', tenantId, visibleBudgetIds], queryFn: () => listFinanceBudgetUsageForPage(tenantId, visibleBudgetIds), enabled: Boolean(tenantId && canRead.data && visibleBudgetIds.length) })
-  const amendments = useQuery({ queryKey: ['finance-budget-amendments', tenantId, amendmentPage], queryFn: () => listFinanceBudgetAmendmentPage(tenantId, amendmentPage), enabled: Boolean(tenantId && canRead.data) })
-  const transactions = useQuery({ queryKey: ['financial-transactions', tenantId, transactionPage], queryFn: () => listFinancialTransactionPage(tenantId, transactionPage), enabled: Boolean(tenantId && canRead.data) })
+  const amendments = useQuery({ queryKey: ['finance-budget-amendments', tenantId, amendmentPage, followUpQueueFilter === 'budget_changes', followUpQueueFilter === 'captain_review'], queryFn: () => listFinanceBudgetAmendmentPage(tenantId, amendmentPage, followUpQueueFilter === 'budget_changes', followUpQueueFilter === 'captain_review'), enabled: Boolean(tenantId && canRead.data) })
+  const pendingAdjustmentTransactions = useQuery({ queryKey: ['finance-my-pending-adjustment-transaction-ids', tenantId, user?.id], queryFn: () => listMyPendingFinancialAdjustmentTransactionIds(tenantId, user!.id), enabled: Boolean(tenantId && user?.id && canRead.data && followUpQueueFilter === 'transaction_changes') })
+  const captainPendingAdjustmentTransactions = useQuery({ queryKey: ['finance-captain-pending-adjustment-transaction-ids', tenantId, user?.id], queryFn: () => listOtherPendingFinancialAdjustmentTransactionIds(tenantId, user!.id), enabled: Boolean(tenantId && user?.id && canRead.data && followUpQueueFilter === 'captain_review') })
+  const transactions = useQuery({ queryKey: ['financial-transactions', tenantId, transactionPage, followUpQueueFilter === 'transactions', followUpQueueFilter === 'transaction_changes' ? pendingAdjustmentTransactions.data : undefined, followUpQueueFilter === 'captain_review' ? captainPendingAdjustmentTransactions.data : undefined], queryFn: () => listFinancialTransactionPage(tenantId, transactionPage, followUpQueueFilter === 'transactions' ? user?.id : undefined, followUpQueueFilter === 'transaction_changes' ? pendingAdjustmentTransactions.data ?? [] : followUpQueueFilter === 'captain_review' ? captainPendingAdjustmentTransactions.data ?? [] : undefined, followUpQueueFilter === 'captain_review', user?.id), enabled: Boolean(tenantId && canRead.data && (followUpQueueFilter !== 'transaction_changes' || pendingAdjustmentTransactions.isSuccess) && (followUpQueueFilter !== 'captain_review' || captainPendingAdjustmentTransactions.isSuccess)) })
   const transactionIds = transactions.data?.transactions.map((item) => item.id) ?? []
   const adjustments = useQuery({ queryKey: ['financial-adjustments', tenantId, transactionIds], queryFn: () => listFinancialAdjustmentsForTransactions(tenantId, transactionIds), enabled: Boolean(tenantId && canRead.data && transactionIds.length) })
   const receipts = useQuery({ queryKey: ['financial-receipts', tenantId, transactionIds], queryFn: () => listFinancialReceiptsForTransactions(tenantId, transactionIds), enabled: Boolean(tenantId && canRead.data && transactionIds.length) })
@@ -66,11 +69,15 @@ export function FinancePage({ focusQueue, onFocusHandled }: { focusQueue?: 'budg
 
   useEffect(() => {
     if (!focusQueue) return
+    setFollowUpQueueFilter(focusQueue)
+    setBudgetPage(0)
+    setAmendmentPage(0)
+    setTransactionPage(0)
     const target = focusQueue === 'budgets'
       ? 'finance-annual-budgets'
       : focusQueue === 'budget_changes'
         ? 'finance-budget-amendment-reviews'
-        : focusQueue === 'transaction_changes'
+      : focusQueue === 'transaction_changes' || focusQueue === 'captain_review'
           ? 'finance-transaction-changes'
           : 'finance-transactions'
     const frame = window.requestAnimationFrame(() => {
@@ -79,6 +86,12 @@ export function FinancePage({ focusQueue, onFocusHandled }: { focusQueue?: 'budg
     })
     return () => window.cancelAnimationFrame(frame)
   }, [focusQueue, onFocusHandled])
+
+  useEffect(() => {
+    setBudgetPage(0)
+    setAmendmentPage(0)
+    setTransactionPage(0)
+  }, [followUpQueueFilter])
 
   async function refresh() {
     await Promise.all([
@@ -297,12 +310,14 @@ export function FinancePage({ focusQueue, onFocusHandled }: { focusQueue?: 'budg
     <PageHeading title="Budgets & finance" description="Submit annual budgets and financial entries with separate review and approval controls.">
       {canManage.data && <><button className="button outline" disabled={busy} onClick={() => void cleanupExpiredReceipts()}><Trash2 size={16} />Clean expired uploads</button><button className="button outline" onClick={() => setBudgetForm((open) => !open)}>New budget</button><button className="button primary" disabled={!budgets.data?.total} onClick={() => setTransactionForm((open) => !open)}><ReceiptText size={16} />Add transaction</button></>}
     </PageHeading>
+    {followUpQueueFilter && <div className="ops-success" role="status"><span>{followUpQueueFilter === 'captain_review' ? 'Showing finance items awaiting your review from other users.' : followUpQueueFilter === 'budgets' ? 'Showing your budgets awaiting approval.' : followUpQueueFilter === 'transactions' ? 'Showing your transactions awaiting review.' : followUpQueueFilter === 'budget_changes' ? 'Showing your pending budget changes.' : 'Showing your pending transaction changes.'}</span><button type="button" className="text-action" onClick={() => setFollowUpQueueFilter(undefined)}>Show all finance records</button></div>}
     {message && <div className="ops-success"><CheckCircle2 size={16} />{message}</div>}{error && <ErrorNotice message={error} />}
     {!tenantId && <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to view budgets and financial records." />}
     {Boolean(tenantId) && canRead.isPending && <LoadingNotice compact />}
     {canRead.error && <ErrorNotice message="Your finance access could not be checked. Refresh the page or contact your barangay administrator." onRetry={() => void canRead.refetch()} retrying={canRead.isFetching} />}
     {canManage.error && <ErrorNotice message="Budget management access could not be checked. Management controls are unavailable until access can be verified." onRetry={() => void canManage.refetch()} retrying={canManage.isFetching} />}
     {canApprove.error && <ErrorNotice message="Budget approval access could not be checked. Approval controls are unavailable until access can be verified." onRetry={() => void canApprove.refetch()} retrying={canApprove.isFetching} />}
+    {pendingAdjustmentTransactions.error && <ErrorNotice message="Your pending transaction changes could not be loaded." onRetry={() => void pendingAdjustmentTransactions.refetch()} retrying={pendingAdjustmentTransactions.isFetching} />}
     {Boolean(tenantId) && !canRead.isPending && !canRead.error && !canRead.data && <div className="ops-panel archive-access"><ShieldCheck size={20} /><div><strong>Financial records are restricted</strong><p>Your current role cannot read this barangay’s budgets or transactions. Contact your barangay administrator if you need access.</p></div></div>}
     {canRead.data && <>
       <section className="ops-panel finance-report" aria-labelledby="finance-report-title">
@@ -364,7 +379,7 @@ export function FinancePage({ focusQueue, onFocusHandled }: { focusQueue?: 'budg
         <div className="finance-transaction-main"><div><strong>{item.description}</strong><p>{item.category} · {item.budget?.name ?? 'Budget'} · {formatManilaDate(item.transaction_date)}</p></div><div className="finance-transaction-amount"><strong className={item.transaction_type === 'income' ? 'finance-income' : ''}>{item.transaction_type === 'expense' ? '−' : '+'}{currency.format(Number(item.amount))}</strong><StatusPill status={item.status} /></div></div>
         {item.review_note && <p className="finance-review-note">Review note: {item.review_note}</p>}
         {item.void_reason && <p className="finance-review-note">Voided {item.voided_at ? formatDateTime(item.voided_at) : ''}: {item.void_reason}</p>}
-        {adjustments.data?.filter((adjustment) => adjustment.transaction_id === item.id).map((adjustment) => <div className="finance-adjustment" key={adjustment.id}><div><StatusPill status={adjustment.status} /><strong>{Number(adjustment.amount_change) > 0 ? '+' : '−'}{currency.format(Math.abs(Number(adjustment.amount_change)))}</strong></div><p>{adjustment.reason}</p>{adjustment.review_note && <small>Review: {adjustment.review_note}</small>}{canApprove.data && adjustment.status === 'pending' && adjustment.requested_by !== user?.id && <div className="finance-review-actions"><button className="button outline" disabled={busy} onClick={() => void reviewAdjustment(adjustment.id, false)}>Reject adjustment</button><button className="button primary" disabled={busy} onClick={() => void reviewAdjustment(adjustment.id, true)}>Approve adjustment</button></div>}</div>)}
+        {adjustments.data?.filter((adjustment) => adjustment.transaction_id === item.id && (followUpQueueFilter === 'transaction_changes' ? adjustment.status === 'pending' && adjustment.requested_by === user?.id : followUpQueueFilter === 'captain_review' ? adjustment.status === 'pending' && adjustment.requested_by !== user?.id : true)).map((adjustment) => <div className="finance-adjustment" key={adjustment.id}><div><StatusPill status={adjustment.status} /><strong>{Number(adjustment.amount_change) > 0 ? '+' : '−'}{currency.format(Math.abs(Number(adjustment.amount_change)))}</strong></div><p>{adjustment.reason}</p>{adjustment.review_note && <small>Review: {adjustment.review_note}</small>}{canApprove.data && adjustment.status === 'pending' && adjustment.requested_by !== user?.id && <div className="finance-review-actions"><button className="button outline" disabled={busy} onClick={() => void reviewAdjustment(adjustment.id, false)}>Reject adjustment</button><button className="button primary" disabled={busy} onClick={() => void reviewAdjustment(adjustment.id, true)}>Approve adjustment</button></div>}</div>)}
         {canManage.data && item.status === 'posted' && !adjustments.data?.some((adjustment) => adjustment.transaction_id === item.id && adjustment.status === 'pending') && <button className="button outline finance-adjustment-toggle" disabled={busy} onClick={() => setAdjustmentTransaction(adjustmentTransaction === item.id ? '' : item.id)}>Request correction</button>}
         {adjustmentTransaction === item.id && <form className="finance-amendment-form" onSubmit={(event) => void submitAdjustment(item.id, event)}><label>Amount change (PHP)<input name="amountChange" type="number" min="-999999999999.99" max="999999999999.99" step="0.01" required /><span className="field-hint">Positive increases the entry; negative reduces it.</span></label><label>Reason<textarea name="reason" minLength={3} maxLength={1000} required /></label><button className="button primary" disabled={busy}>Submit correction for approval</button></form>}
         {receipts.data?.filter((receipt) => receipt.transaction_id === item.id).map((receipt) => <button className="finance-receipt-link" key={receipt.id} onClick={() => void openReceipt(receipt.storage_path)}><ReceiptText size={14} />{receipt.file_name}<small>{(Number(receipt.file_size) / 1024).toFixed(0)} KB</small></button>)}

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
 import { Clipboard, UserPlus, XCircle } from 'lucide-react'
@@ -12,17 +12,29 @@ const invitationSchema = z.object({
   role: z.enum(['secretary','treasurer','kagawad','sk_chairperson','bhw','tanod','resident']),
 })
 
-export function InvitationsPage() {
+export function InvitationsPage({ focusPending, onFocusHandled }: { focusPending?: boolean; onFocusHandled?: () => void } = {}) {
   const { membership } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
   const queryClient = useQueryClient()
   const [page, setPage] = useState(0)
-  const invitations = useQuery({ queryKey: ['invitations', tenantId, page], queryFn: () => listInvitationPage(tenantId, page), enabled: Boolean(tenantId) })
+  const [pendingUnexpiredOnly, setPendingUnexpiredOnly] = useState(false)
+  const invitations = useQuery({ queryKey: ['invitations', tenantId, page, pendingUnexpiredOnly], queryFn: () => listInvitationPage(tenantId, page, pendingUnexpiredOnly), enabled: Boolean(tenantId) })
   const canInvite = useQuery({ queryKey: ['permission', tenantId, 'membership.invite'], queryFn: () => hasPermission(tenantId, 'membership.invite'), enabled: Boolean(tenantId) })
   const [inviteUrl, setInviteUrl] = useState('')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    if (!focusPending) return
+    setPendingUnexpiredOnly(true)
+    setPage(0)
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById('invitation-list')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      onFocusHandled?.()
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [focusPending, onFocusHandled])
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setError(''); setSuccess(''); setInviteUrl('')
@@ -80,14 +92,14 @@ export function InvitationsPage() {
       {inviteUrl && <div className="invite-link-box"><label>One-time invitation link<input readOnly value={inviteUrl} /></label><button type="button" className="button outline" onClick={() => void copyLink()}><Clipboard size={15} />Copy link</button></div>}
     </form>}
     {error && !canInvite.data && <ErrorNotice message={error} />}
-    <div className="ops-section-title"><h2>Recent invitations</h2><p>Invitation tokens are never listed or shown again after creation.</p></div>
+    <div className="ops-section-title" id="invitation-list"><div><h2>{pendingUnexpiredOnly ? 'Invitations awaiting acceptance' : 'Recent invitations'}</h2><p>{pendingUnexpiredOnly ? 'Active, unexpired links that have not been accepted yet.' : 'Invitation tokens are never listed or shown again after creation.'}</p></div>{pendingUnexpiredOnly && <button type="button" className="text-action" onClick={() => { setPendingUnexpiredOnly(false); setPage(0) }}>Show all invitations</button>}</div>
     {!tenantId ? null : invitations.isPending ? <LoadingNotice /> : invitations.error ? <ErrorNotice message={invitations.error.message} onRetry={() => void invitations.refetch()} retrying={invitations.isFetching} /> : invitations.data?.total ? invitations.data.invitations.length ?
       <div className="ops-table-wrap"><table className="ops-table"><thead><tr><th>Email</th><th>Status</th><th>Expires</th><th>Actions</th></tr></thead><tbody>
         {invitations.data.invitations.map((invite) => {
           const expired = invite.status === 'pending' && new Date(invite.expires_at).getTime() <= Date.now()
           return <tr key={invite.id}><td>{invite.invited_email}</td><td><StatusPill status={expired ? 'expired' : invite.status} /></td><td>{formatDateTime(invite.expires_at)}</td><td>{canInvite.data && invite.status === 'pending' && !expired && <button className="text-action danger-action" onClick={() => void revoke(invite.id, invite.invited_email)}><XCircle size={13} />Revoke</button>}</td></tr>
         })}
-      </tbody></table></div> : <EmptyNotice title="No invitations on this page" detail="Move to another page to see more invitations." /> : <EmptyNotice title="No invitations yet" detail="New invitation records will appear here." />}
+      </tbody></table></div> : <EmptyNotice title={pendingUnexpiredOnly ? 'No invitations awaiting acceptance' : 'No invitations on this page'} detail={pendingUnexpiredOnly ? 'New active invitation links will appear here.' : 'Move to another page to see more invitations.'} /> : <EmptyNotice title={pendingUnexpiredOnly ? 'No invitations awaiting acceptance' : 'No invitations yet'} detail={pendingUnexpiredOnly ? 'New active invitation links will appear here.' : 'New invitation records will appear here.'} />}
     {invitations.data && invitations.data.total > INVITATION_PAGE_SIZE && <nav className="ops-form-actions" aria-label="Invitation pages">
       <button className="button outline" disabled={page === 0 || invitations.isFetching} onClick={() => setPage((current) => Math.max(0, current - 1))}>Previous</button>
       <span className="field-hint">Page {page + 1} of {Math.ceil(invitations.data.total / INVITATION_PAGE_SIZE)}</span>

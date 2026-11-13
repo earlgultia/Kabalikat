@@ -40,7 +40,7 @@ function client() {
   return supabase
 }
 
-export async function listHealthCampaigns(barangayId: string, page: number, search: string, status: 'all' | HealthCampaign['status'], window: HealthCampaignDateWindow): Promise<HealthCampaignPage> {
+export async function listHealthCampaigns(barangayId: string, page: number, search: string, status: 'all' | HealthCampaign['status'] | 'review_queue', window: HealthCampaignDateWindow, ownOnly = false): Promise<HealthCampaignPage> {
   const { data, error } = await client().rpc('list_health_outreach_campaigns_in_window', {
     p_barangay_id: barangayId,
     p_page: page,
@@ -49,28 +49,30 @@ export async function listHealthCampaigns(barangayId: string, page: number, sear
     p_status: status,
     p_starts_after: window.startsAfter,
     p_starts_before: window.startsBefore,
+    p_own_only: ownOnly,
   })
   if (error) throw new Error(error.message)
   const rows = (data ?? []) as (HealthCampaign & { total_count: number })[]
   return { rows, totalCount: Number(rows[0]?.total_count ?? 0) }
 }
 
-export async function listAllHealthCampaigns(barangayId: string, search: string, status: 'all' | HealthCampaign['status'], window: HealthCampaignDateWindow): Promise<HealthCampaign[]> {
+export async function listAllHealthCampaigns(barangayId: string, search: string, status: 'all' | HealthCampaign['status'] | 'review_queue', window: HealthCampaignDateWindow, ownOnly = false): Promise<HealthCampaign[]> {
   const allRows: HealthCampaign[] = []
   for (let page = 0; ; page += 1) {
-    const result = await listHealthCampaigns(barangayId, page, search, status, window)
+    const result = await listHealthCampaigns(barangayId, page, search, status, window, ownOnly)
     allRows.push(...result.rows)
     if (allRows.length >= result.totalCount || result.rows.length === 0) return allRows
   }
 }
 
-export async function getHealthCampaignSummary(barangayId: string, search: string, status: 'all' | HealthCampaign['status'], window: HealthCampaignDateWindow): Promise<HealthCampaignSummary> {
+export async function getHealthCampaignSummary(barangayId: string, search: string, status: 'all' | HealthCampaign['status'], window: HealthCampaignDateWindow, ownOnly = false): Promise<HealthCampaignSummary> {
   const { data, error } = await client().rpc('get_health_outreach_campaign_window_summary', {
     p_barangay_id: barangayId,
     p_search: search.trim().slice(0, 100) || null,
     p_status: status,
     p_starts_after: window.startsAfter,
     p_starts_before: window.startsBefore,
+    p_own_only: ownOnly,
   })
   if (error) throw new Error(error.message)
   const row = data?.[0] as { total_count: number; completed_count: number; total_attendance: number; awaiting_review_count: number; changes_requested_count: number } | undefined
