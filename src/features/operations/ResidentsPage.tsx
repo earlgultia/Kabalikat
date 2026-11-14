@@ -18,6 +18,26 @@ const residentSchema = z.object({
   purok: z.string().max(100).optional(),
 }).refine((value) => value.householdId || (value.address?.length ?? 0) >= 3, { message: 'Provide a household address or select an existing household.' })
 
+function residentRequestFailure(error: unknown, fallback: string) {
+  const detail = error instanceof Error ? error.message.toLowerCase() : ''
+  if (detail.includes('not authorized') || detail.includes('permission') || detail.includes('row-level security')) {
+    return 'Your account does not have permission to complete this resident action. Ask an authorized Captain or staff member for access.'
+  }
+  if (detail.includes('network') || detail.includes('fetch')) {
+    return 'The service could not be reached. Check your connection and try again.'
+  }
+  if (detail.includes('household not found')) {
+    return 'That household is no longer available. Refresh the household list and choose it again.'
+  }
+  if (detail.includes('valid household address') || detail.includes('household assignment is required')) {
+    return 'Enter a valid household address or select an existing household.'
+  }
+  if (detail.includes('invalid resident details')) {
+    return 'Check the resident’s name, phone number, and date of birth, then try again.'
+  }
+  return fallback
+}
+
 export function ResidentsPage({ focusId, focusOwnCorrections, focusResidentProfile, focusActiveResidents, focusReviewQueue, onFocusHandled }: { focusId?: string; focusOwnCorrections?: boolean; focusResidentProfile?: boolean; focusActiveResidents?: boolean; focusReviewQueue?: 'residency' | 'profile-corrections'; onFocusHandled?: () => void } = {}) {
   const { membership, user } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
@@ -221,7 +241,7 @@ export function ResidentsPage({ focusId, focusOwnCorrections, focusResidentProfi
       setHouseholdPage(0)
       setMessage('Resident record saved. Residency is pending official verification.')
       setFormOpen(false); form.reset()
-    } catch (error) { setErrorMessage(error instanceof Error ? error.message : 'Unable to save this resident.') }
+    } catch (error) { setErrorMessage(residentRequestFailure(error, 'The resident record could not be saved. Refresh the resident list and try again.')) }
     finally { setBusy(false) }
   }
 
@@ -279,7 +299,7 @@ export function ResidentsPage({ focusId, focusOwnCorrections, focusResidentProfi
       ])
       setMessage('Correction request sent for barangay staff review.')
       form.reset()
-    } catch (error) { setErrorMessage(error instanceof Error ? error.message : 'Unable to submit this correction.') }
+    } catch (error) { setErrorMessage(residentRequestFailure(error, 'The profile correction request could not be sent. Refresh and try again.')) }
     finally { setBusy(false) }
   }
 
@@ -291,7 +311,7 @@ export function ResidentsPage({ focusId, focusOwnCorrections, focusResidentProfi
       await queryClient.invalidateQueries({ queryKey: ['resident-profile-changes', tenantId] })
       await queryClient.invalidateQueries({ queryKey: ['residents', tenantId] })
       setMessage(decision === 'approved' ? 'Resident profile correction approved.' : 'Correction request declined.')
-    } catch (error) { setErrorMessage(error instanceof Error ? error.message : 'Unable to review this correction.') }
+    } catch (error) { setErrorMessage(residentRequestFailure(error, 'The profile correction decision could not be saved. Refresh the request and try again.')) }
   }
 
   async function cancelCorrection(id: string) {
@@ -304,7 +324,7 @@ export function ResidentsPage({ focusId, focusOwnCorrections, focusResidentProfi
         queryClient.invalidateQueries({ queryKey: ['resident-profile-changes-pending-own', tenantId] }),
       ])
       setMessage('Your correction request has been withdrawn.')
-    } catch (error) { setErrorMessage(error instanceof Error ? error.message : 'Unable to withdraw this correction.') }
+    } catch (error) { setErrorMessage(residentRequestFailure(error, 'The correction request could not be withdrawn. Refresh and try again.')) }
     finally { setBusy(false) }
   }
 
@@ -320,7 +340,7 @@ export function ResidentsPage({ focusId, focusOwnCorrections, focusResidentProfi
       link.click()
       window.setTimeout(() => URL.revokeObjectURL(url), 1000)
       setMessage('Your data copy has been downloaded. Keep the file somewhere private.')
-    } catch (error) { setErrorMessage(error instanceof Error ? error.message : 'Unable to download your data.') }
+    } catch (error) { setErrorMessage(residentRequestFailure(error, 'Your data copy could not be prepared. Check your connection and try again.')) }
     finally { setExportBusy(false); setExportProgress('') }
   }
 
@@ -331,19 +351,19 @@ export function ResidentsPage({ focusId, focusOwnCorrections, focusResidentProfi
     </PageHeading>
     {exportBusy && <p className="field-hint" role="status" aria-live="polite">{exportProgress} The file will download when it is ready.</p>}
     {message && <div className="ops-success"><Check size={16} />{message}</div>}
-    {errorMessage && <ErrorNotice message={errorMessage} />}
+    {errorMessage && <ErrorNotice message={errorMessage} userFacingMessage />}
     {residentActionError && <div className="ops-error" role="alert"><span>{residentActionError}</span></div>}
     {focusError && <p className="account-security-error" role="status">{focusError}</p>}
     {role === 'resident' && ownResident && <section className="ops-panel resident-correction-panel" id="resident-own-correction-history">
       <div className="ops-panel-heading"><div><h2>Request a profile correction</h2><p>Changes are sent to authorized barangay staff. Your official record changes only after approval.</p></div><UserRoundPen size={19} /></div>
-      {ownPendingProfileChanges.isPending ? <LoadingNotice compact /> : ownPendingProfileChanges.error ? <ErrorNotice message="Your pending request status could not be checked. Refresh before submitting another correction." onRetry={() => void ownPendingProfileChanges.refetch()} retrying={ownPendingProfileChanges.isFetching} /> : (ownPendingProfileChanges.data?.totalCount ?? 0) > 0 ? <p className="field-hint">You already have a pending request. You can submit another after staff review.</p> : <form className="ops-form" onSubmit={(event) => void submitCorrection(event)}>
+      {ownPendingProfileChanges.isPending ? <LoadingNotice compact /> : ownPendingProfileChanges.error ? <ErrorNotice message="Your pending request status could not be checked. Refresh before submitting another correction." userFacingMessage onRetry={() => void ownPendingProfileChanges.refetch()} retrying={ownPendingProfileChanges.isFetching} /> : (ownPendingProfileChanges.data?.totalCount ?? 0) > 0 ? <p className="field-hint">You already have a pending request. You can submit another after staff review.</p> : <form className="ops-form" onSubmit={(event) => void submitCorrection(event)}>
         <div className="ops-form-grid"><label>First name<input name="firstName" maxLength={100} placeholder={`Current: ${ownResident.first_name}`} autoComplete="given-name" /></label>
           <label>Last name<input name="lastName" maxLength={100} placeholder={`Current: ${ownResident.last_name}`} autoComplete="family-name" /></label>
           <label>Phone<input name="phone" type="tel" maxLength={40} placeholder={`Current: ${ownResident.phone || 'Not provided'}`} autoComplete="tel" /></label>
           <label className="span-two">Note for the reviewer <span className="field-hint">Optional</span><textarea name="note" maxLength={500} rows={2} placeholder="Briefly explain the correction" /></label>
         </div><div className="ops-form-actions"><span className="field-hint">Only enter fields that need correction.</span><button className="button primary" disabled={busy}>{busy ? 'Sending…' : 'Send for review'}</button></div>
       </form>}
-      {profileChanges.error && <ErrorNotice message="Your correction request history could not be loaded." onRetry={() => void profileChanges.refetch()} retrying={profileChanges.isFetching} />}
+      {profileChanges.error && <ErrorNotice message="Your correction request history could not be loaded. Retry, or contact your workspace administrator if it continues." userFacingMessage onRetry={() => void profileChanges.refetch()} retrying={profileChanges.isFetching} />}
       {correctionRequests.length ? <div className="resident-correction-history"><h3>Your requests</h3><ul>{correctionRequests.map((request) => {
         const proposedChanges = [
           request.proposed_first_name && `First name: ${request.proposed_first_name}`,
@@ -353,8 +373,8 @@ export function ResidentsPage({ focusId, focusOwnCorrections, focusResidentProfi
         return <li id={`resident-correction-${request.id}`} tabIndex={-1} key={request.id}><span><strong>{request.status === 'pending' ? 'Awaiting review' : request.status === 'approved' ? 'Approved' : request.status === 'cancelled' ? 'Withdrawn' : 'Declined'}</strong><small>{formatManilaCalendarDate(request.created_at)}</small><small className="resident-correction-proposal">{proposedChanges}</small>{request.request_note && <small>Note: {request.request_note}</small>}{request.status === 'rejected' && request.review_reason && <small>Review note: {request.review_reason}</small>}</span><div className="row-actions"><StatusPill status={request.status} />{request.status === 'pending' && <button disabled={busy} onClick={() => void cancelCorrection(request.id)}>Withdraw</button>}</div></li>
       })}</ul>{correctionTotalPages > 1 && <nav className="ops-form-actions" aria-label="Your correction request pages"><span className="field-hint">Page {correctionPage + 1} of {correctionTotalPages}</span><div className="finance-review-actions"><button className="button outline" disabled={correctionPage === 0 || profileChanges.isFetching} onClick={() => setCorrectionPage((current) => current - 1)}><ChevronLeft size={15} />Previous</button><button className="button outline" disabled={correctionPage + 1 >= correctionTotalPages || profileChanges.isFetching} onClick={() => setCorrectionPage((current) => current + 1)}>Next<ChevronRight size={15} /></button></div></nav>}</div> : null}
     </section>}
-    {canReviewChanges.error && role !== 'resident' && <ErrorNotice message="Profile correction review access could not be checked. Review actions are hidden until access can be verified." onRetry={() => void canReviewChanges.refetch()} retrying={canReviewChanges.isFetching} />}
-    {profileChanges.error && role !== 'resident' && <ErrorNotice message="Profile correction requests could not be loaded." onRetry={() => void profileChanges.refetch()} retrying={profileChanges.isFetching} />}
+    {canReviewChanges.error && role !== 'resident' && <ErrorNotice message="Profile correction access could not be checked. Refresh to retry; review actions stay hidden until access is confirmed." userFacingMessage onRetry={() => void canReviewChanges.refetch()} retrying={canReviewChanges.isFetching} />}
+    {profileChanges.error && role !== 'resident' && <ErrorNotice message="Profile correction requests could not be loaded. Retry, or contact your workspace administrator if it continues." userFacingMessage onRetry={() => void profileChanges.refetch()} retrying={profileChanges.isFetching} />}
     {canReviewChanges.data && correctionRequests.some((request) => request.status === 'pending') && <section id="resident-profile-corrections-section" className="ops-panel resident-correction-panel">
       <div className="ops-panel-heading"><div><h2>Profile correction requests</h2><p>Confirm each correction before updating the official resident record.</p></div><UserRoundPen size={19} /></div>
       <div className="ops-table-wrap"><table className="ops-table"><thead><tr><th>Resident</th><th>Requested changes</th><th>Submitted</th><th>Decision</th></tr></thead><tbody>
@@ -374,7 +394,7 @@ export function ResidentsPage({ focusId, focusOwnCorrections, focusResidentProfi
           <input type="hidden" name="householdId" value={selectedHousehold?.id ?? ''} />
           {selectedHousehold ? <div className="resident-household-selected"><span>{selectedHousehold.household_code} · {selectedHousehold.address_line}</span><button type="button" className="button outline" onClick={() => setSelectedHousehold(null)}>Choose another household</button></div> : <>
             <input type="search" aria-label="Search existing households" value={householdSearch} onChange={(event) => setHouseholdSearch(event.target.value)} placeholder="Search household code or address" maxLength={80} />
-            {households.isPending ? <p className="field-hint" role="status">Loading households…</p> : households.error ? <ErrorNotice message="Households could not be loaded. You can still enter an address for a new household." onRetry={() => void households.refetch()} retrying={households.isFetching} /> : <>
+            {households.isPending ? <p className="field-hint" role="status">Loading households…</p> : households.error ? <ErrorNotice message="Households could not be loaded. You can still enter an address for a new household." userFacingMessage onRetry={() => void households.refetch()} retrying={households.isFetching} /> : <>
               <select aria-label="Existing households on this page" value="" onChange={(event) => setSelectedHousehold(households.data?.households.find((household) => household.id === event.target.value) ?? null)}><option value="">Create a new household or choose one below</option>{households.data?.households.map((household) => <option key={household.id} value={household.id}>{household.household_code} · {household.address_line}</option>)}</select>
               {households.data?.totalCount === 0 && <p className="field-hint">No matching households. Enter an address below to create a new household.</p>}
               {householdTotalPages > 1 && <nav className="finance-review-actions" aria-label="Household selection pages"><span className="field-hint">Page {householdPage + 1} of {householdTotalPages} · {households.data?.totalCount} households</span><button type="button" className="button outline" disabled={householdPage === 0 || households.isFetching} onClick={() => setHouseholdPage((current) => current - 1)}><ChevronLeft size={15} />Previous</button><button type="button" className="button outline" disabled={householdPage + 1 >= householdTotalPages || households.isFetching} onClick={() => setHouseholdPage((current) => current + 1)}>Next<ChevronRight size={15} /></button></nav>}
@@ -385,9 +405,9 @@ export function ResidentsPage({ focusId, focusOwnCorrections, focusResidentProfi
       </div>
       <div className="ops-form-actions"><span className="field-hint">A household record is created with residency status set to pending.</span><button className="button primary" disabled={busy}>{busy ? 'Saving…' : 'Save resident'}</button></div>
     </form>}
-    {canVerify.error && role !== 'resident' && <ErrorNotice message="Residency verification access could not be checked. Verification actions are hidden until access can be verified." onRetry={() => void canVerify.refetch()} retrying={canVerify.isFetching} />}
-    {canCreate.error && <ErrorNotice message="Resident registration access could not be checked." onRetry={() => void canCreate.refetch()} retrying={canCreate.isFetching} />}
-    {residents.isPending ? <LoadingNotice /> : residents.error ? <ErrorNotice message={residents.error.message} onRetry={() => void residents.refetch()} retrying={residents.isFetching} /> : !residentRows.length && (role === 'resident' || !residents.data?.total) ?
+    {canVerify.error && role !== 'resident' && <ErrorNotice message="Residency verification access could not be checked. Verification actions are hidden until access can be verified." userFacingMessage onRetry={() => void canVerify.refetch()} retrying={canVerify.isFetching} />}
+    {canCreate.error && <ErrorNotice message="Resident registration access could not be checked. Refresh to retry; registration stays unavailable until access is confirmed." userFacingMessage onRetry={() => void canCreate.refetch()} retrying={canCreate.isFetching} />}
+    {residents.isPending ? <LoadingNotice /> : residents.error ? <ErrorNotice message="Resident records could not be loaded. Check your connection and retry; if the issue continues, contact your workspace administrator." userFacingMessage onRetry={() => void residents.refetch()} retrying={residents.isFetching} /> : !residentRows.length && (role === 'resident' || !residents.data?.total) ?
       <div className="ops-empty"><Home size={22} /><strong>{role !== 'resident' && (debouncedSearch || residencyFilter !== 'all') ? 'No matching residents' : 'No resident records available'}</strong><p>{role !== 'resident' && (debouncedSearch || residencyFilter !== 'all') ? 'Try another search or residency status.' : 'Records appear here when they are registered for this barangay.'}</p></div> :
       <>
       {role !== 'resident' && <div id="resident-directory-section" className="community-calendar-filters">
