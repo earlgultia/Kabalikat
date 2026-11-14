@@ -2,7 +2,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
 import { useQueryClient } from '@tanstack/react-query'
-import { supabase } from '../lib/supabase'
+import { clearLocalSupabaseSession, supabase } from '../lib/supabase'
 import { resolveActiveMembership, type Membership } from '../lib/membership'
 
 type AuthValue = {
@@ -160,10 +160,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (authError) throw authError
     },
     signOut: async () => {
-      if (supabase) {
-        const { error: signOutError } = await supabase.auth.signOut()
-        if (signOutError) throw signOutError
-      }
+      // Clear this browser first so logout never waits for the Auth API.
+      clearLocalSupabaseSession()
       queryClient.clear()
       knownTenantIds.current = []
       currentUserId.current = null
@@ -173,6 +171,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsPlatformAdmin(false)
       setError(null)
       setLoading(false)
+      if (supabase) {
+        void supabase.auth.signOut({ scope: 'local' }).then(({ error: signOutError }) => {
+          if (signOutError) clearLocalSupabaseSession()
+        }).catch(() => clearLocalSupabaseSession())
+      }
     },
   }), [session, membership, memberships, isPlatformAdmin, loading, error, clearTenantData, queryClient])
 
