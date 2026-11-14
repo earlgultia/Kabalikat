@@ -41,7 +41,7 @@ export function LandingPage() {
     const heartbeatNow = () => {
       if (!document.hidden) void trackPublicSiteHeartbeat(visitorId).catch(() => undefined)
     }
-    const heartbeat = window.setInterval(heartbeatNow, 30_000)
+    const heartbeat = window.setInterval(heartbeatNow, 60_000)
     const observer = typeof IntersectionObserver === 'undefined' ? null : new IntersectionObserver((entries) => {
       for (const entry of entries) {
         if (entry.isIntersecting && publicSiteSections.includes(entry.target.id as PublicSiteSection)) track(entry.target.id as PublicSiteSection)
@@ -61,17 +61,16 @@ export function LandingPage() {
     }
     document.addEventListener('visibilitychange', handleVisibilityChange)
     refresh()
-    const channel = supabase.channel('public-site-visitor-metrics')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'site_visitor_public_metrics' }, refresh)
-      .subscribe()
-    const poll = window.setInterval(refresh, 30_000)
+    // Public traffic uses lightweight polling instead of one Realtime socket
+    // per anonymous visitor. The authenticated analytics dashboard retains its
+    // Realtime subscription for staff who actively monitor the metrics.
+    const poll = window.setInterval(refresh, 60_000)
     return () => {
       active = false
       window.clearInterval(heartbeat)
       window.clearInterval(poll)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       observer?.disconnect()
-      void supabase?.removeChannel(channel)
     }
   }, [analyticsOptedOut])
 

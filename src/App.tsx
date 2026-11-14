@@ -32,7 +32,9 @@ const PlatformSupportPage = lazy(() => import('./features/operations/SupportPage
 const PlatformSubscriptionsPage = lazy(() => import('./features/operations/SubscriptionsPage').then((module) => ({ default: module.SubscriptionsPage })))
 const PlatformActivityPage = lazy(() => import('./features/operations/PlatformActivityPage').then((module) => ({ default: module.PlatformActivityPage })))
 const SiteAnalyticsPage = lazy(() => import('./features/operations/SiteAnalyticsPage').then((module) => ({ default: module.SiteAnalyticsPage })))
-const overviewRefreshOptions = { staleTime: 0, refetchInterval: 60_000, refetchIntervalInBackground: false } as const
+// Dashboard data is also refreshed on a one-minute interval. Keep a short cache
+// window so returning to the overview does not immediately duplicate that work.
+const overviewRefreshOptions = { staleTime: 45_000, refetchInterval: 60_000, refetchIntervalInBackground: false, refetchOnWindowFocus: false } as const
 
 function SignIn() {
   const { user, signIn } = useAuth()

@@ -27,6 +27,7 @@ export function ResidentsPage({ focusId, focusOwnCorrections, focusResidentProfi
   const [formOpen, setFormOpen] = useState(false)
   const [message, setMessage] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
+  const [residentActionError, setResidentActionError] = useState('')
   const [focusError, setFocusError] = useState('')
   const [busy, setBusy] = useState(false)
   const [exportBusy, setExportBusy] = useState(false)
@@ -225,6 +226,9 @@ export function ResidentsPage({ focusId, focusOwnCorrections, focusResidentProfi
   }
 
   async function verify(id: string, status: 'verified' | 'rejected') {
+    setResidentActionError('')
+    setErrorMessage('')
+    setMessage('')
     const reason = status === 'rejected' ? window.prompt('Reason for rejecting residency verification:') : ''
     if (status === 'rejected' && !reason?.trim()) return
     try {
@@ -232,7 +236,22 @@ export function ResidentsPage({ focusId, focusOwnCorrections, focusResidentProfi
       await queryClient.invalidateQueries({ queryKey: ['residents', tenantId] })
       await queryClient.invalidateQueries({ queryKey: ['residency-verifications', tenantId] })
       setMessage(status === 'verified' ? 'Residency verified.' : 'Verification decision recorded.')
-    } catch (error) { setErrorMessage(error instanceof Error ? error.message : 'Unable to update verification.') }
+    } catch (error) {
+      const detail = error instanceof Error ? error.message.toLowerCase() : ''
+      setResidentActionError(
+        detail.includes('not authorized') || detail.includes('permission') || detail.includes('row-level security')
+          ? 'You do not have permission to review this resident. Ask an authorized Captain or staff member for access.'
+          : detail.includes('another authorized staff member')
+            ? 'A different authorized staff member must review a resident record you created.'
+            : detail.includes('already been reviewed') || detail.includes('already verified')
+              ? 'This resident already has a final verification decision. Refresh the resident list to see the latest status.'
+              : detail.includes('reason is required')
+                ? 'Enter a rejection reason with at least three characters.'
+                : detail.includes('network') || detail.includes('fetch')
+                  ? 'The service could not be reached. Check your connection and retry the resident decision.'
+                  : 'The residency decision could not be saved. Refresh the resident list and try again.'
+      )
+    }
   }
 
   async function submitCorrection(event: FormEvent<HTMLFormElement>) {
@@ -313,6 +332,7 @@ export function ResidentsPage({ focusId, focusOwnCorrections, focusResidentProfi
     {exportBusy && <p className="field-hint" role="status" aria-live="polite">{exportProgress} The file will download when it is ready.</p>}
     {message && <div className="ops-success"><Check size={16} />{message}</div>}
     {errorMessage && <ErrorNotice message={errorMessage} />}
+    {residentActionError && <div className="ops-error" role="alert"><span>{residentActionError}</span></div>}
     {focusError && <p className="account-security-error" role="status">{focusError}</p>}
     {role === 'resident' && ownResident && <section className="ops-panel resident-correction-panel" id="resident-own-correction-history">
       <div className="ops-panel-heading"><div><h2>Request a profile correction</h2><p>Changes are sent to authorized barangay staff. Your official record changes only after approval.</p></div><UserRoundPen size={19} /></div>
@@ -376,7 +396,21 @@ export function ResidentsPage({ focusId, focusOwnCorrections, focusResidentProfi
       </div>}
       {role !== 'resident' && <p className="field-hint" aria-live="polite">Showing {filteredResidents.length} resident {filteredResidents.length === 1 ? 'record' : 'records'} on this page. {residents.data?.total ?? 0} records match these filters.</p>}
       {filteredResidents.length ? <div className="ops-table-wrap"><table className="ops-table"><thead><tr><th>Resident</th><th>Household</th><th>Contact</th><th>Residency</th><th>Record</th></tr></thead><tbody>
-        {filteredResidents.map((resident) => { const ownRecord = residentAuthors.data?.has(resident.id) ?? false; const verificationStatus = latestVerificationByResident.get(resident.id); return <tr id={`resident-record-${resident.id}`} tabIndex={role === 'resident' ? -1 : undefined} key={resident.id}><td><strong>{resident.first_name} {resident.last_name}</strong><small>{resident.birth_date ? formatManilaDate(resident.birth_date) : 'Birth date not recorded'}</small></td><td>{resident.household?.household_code ?? '—'}<small>{resident.household?.purok ?? resident.household?.address_line ?? 'Address unavailable'}</small></td><td>{resident.phone ?? '—'}</td><td>{verificationStatus ? <StatusPill status={verificationStatus} /> : role === 'resident' ? <span className="field-hint">Status unavailable</span> : <StatusPill status="pending" />}{canVerify.data && (residentAuthors.isPending ? <small>Checking reviewer eligibility…</small> : residentAuthors.error ? <><small>Reviewer eligibility unavailable. Refresh before making a decision.</small><button type="button" className="text-action" disabled={residentAuthors.isFetching} onClick={() => void residentAuthors.refetch()}>{residentAuthors.isFetching ? 'Checking…' : 'Retry check'}</button></> : ownRecord ? <small>Another authorized reviewer must verify this record.</small> : <div className="row-actions"><button onClick={() => void verify(resident.id, 'verified')}>Verify</button><button onClick={() => void verify(resident.id, 'rejected')}>Reject</button></div>)}</td><td><StatusPill status={resident.record_status} /></td></tr>})}
+        {filteredResidents.map((resident) => {
+          const ownRecord = residentAuthors.data?.has(resident.id) ?? false
+          const verificationStatus = latestVerificationByResident.get(resident.id) ?? 'pending'
+          const eligibleForReview = resident.record_status === 'active' && verificationStatus === 'pending'
+          return <tr id={`resident-record-${resident.id}`} tabIndex={role === 'resident' ? -1 : undefined} key={resident.id}>
+            <td><strong>{resident.first_name} {resident.last_name}</strong><small>{resident.birth_date ? formatManilaDate(resident.birth_date) : 'Birth date not recorded'}</small></td>
+            <td>{resident.household?.household_code ?? '—'}<small>{resident.household?.purok ?? resident.household?.address_line ?? 'Address unavailable'}</small></td>
+            <td>{resident.phone ?? '—'}</td>
+            <td>
+              {role === 'resident' && !latestVerificationByResident.has(resident.id) ? <span className="field-hint">Status unavailable</span> : <StatusPill status={verificationStatus} />}
+              {canVerify.data && eligibleForReview && (residentAuthors.isPending ? <small>Checking reviewer eligibility…</small> : residentAuthors.error ? <><small>Reviewer eligibility unavailable. Refresh before making a decision.</small><button type="button" className="text-action" disabled={residentAuthors.isFetching} onClick={() => void residentAuthors.refetch()}>{residentAuthors.isFetching ? 'Checking…' : 'Retry check'}</button></> : ownRecord ? <small>Another authorized reviewer must verify this record.</small> : <div className="row-actions"><button onClick={() => void verify(resident.id, 'verified')}>Verify</button><button onClick={() => void verify(resident.id, 'rejected')}>Reject</button></div>)}
+            </td>
+            <td><StatusPill status={resident.record_status} /></td>
+          </tr>
+        })}
       </tbody></table></div> : <div className="ops-empty"><Search size={22} /><strong>No residents on this page match that status</strong><p>Choose another status or move to another page.</p></div>}
       {role !== 'resident' && (residents.data?.total ?? 0) > RESIDENT_PAGE_SIZE && <nav className="ops-form-actions" aria-label="Resident directory pages">
         <button className="button outline" disabled={page === 0 || residents.isFetching} onClick={() => setPage((current) => Math.max(0, current - 1))}>Previous</button>
