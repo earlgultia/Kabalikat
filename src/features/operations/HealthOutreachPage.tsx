@@ -67,7 +67,7 @@ export function HealthOutreachPage({ focusId, focusPage, focusStatus, focusUpcom
   const [page, setPage] = useState(0)
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<'all' | HealthCampaign['status'] | 'review_queue'>('all')
+  const [statusFilter, setStatusFilter] = useState<'all' | HealthCampaign['status'] | 'review_queue' | 'upcoming'>('all')
   const [startsFrom, setStartsFrom] = useState('')
   const [startsThrough, setStartsThrough] = useState('')
   const [upcomingStartsAfter, setUpcomingStartsAfter] = useState('')
@@ -78,7 +78,7 @@ export function HealthOutreachPage({ focusId, focusPage, focusStatus, focusUpcom
   useEffect(() => {
     if (!focusId && !focusStatus && !focusUpcoming && focusMine === undefined) return
     const todayInManila = getManilaDateInputValue()
-    setPage(focusPage ?? 0); setSearchInput(''); setSearch(''); setOwnOnly(Boolean(focusMine)); setStatusFilter(focusStatus ?? (focusUpcoming ? 'published' : 'cancelled')); setStartsFrom(focusUpcoming || !focusId && focusStatus === 'published' ? todayInManila : ''); setStartsThrough(''); setUpcomingStartsAfter(focusUpcoming ? new Date().toISOString() : '')
+    setPage(focusPage ?? 0); setSearchInput(''); setSearch(''); setOwnOnly(Boolean(focusMine)); setStatusFilter(focusUpcoming ? 'upcoming' : focusStatus ?? 'cancelled'); setStartsFrom(!focusUpcoming && !focusId && focusStatus === 'published' ? todayInManila : ''); setStartsThrough(''); setUpcomingStartsAfter('')
     if (!focusId) onFocusHandled?.()
   }, [focusId, focusPage, focusStatus, focusUpcoming, focusMine, onFocusHandled])
   useEffect(() => {
@@ -263,7 +263,7 @@ export function HealthOutreachPage({ focusId, focusPage, focusStatus, focusUpcom
     </form>}
     {Boolean(tenantId) && <div className="health-outreach-filters">
       <label className="archive-search"><Search size={16} /><input type="search" aria-label="Search outreach schedules" maxLength={100} placeholder="Search title, location, or details" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} /></label>
-      <label>Status<select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value as typeof statusFilter); setPage(0) }}><option value="all">All statuses</option><option value="review_queue">Review queue</option><option value="draft">Awaiting review</option><option value="changes_requested">Changes requested</option><option value="published">Published</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></label>
+      <label>Status<select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value as typeof statusFilter); setPage(0) }}><option value="all">All statuses</option><option value="review_queue">Review queue</option><option value="draft">Awaiting review</option><option value="changes_requested">Changes requested</option><option value="published">Published</option><option value="upcoming">Upcoming published</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></label>
       {canManage.data && <label className="health-outreach-own-filter"><input type="checkbox" checked={ownOnly} onChange={(event) => { setOwnOnly(event.target.checked); setPage(0) }} />Only schedules I created</label>}
       <label>Starts from<input type="date" value={startsFrom} max={startsThrough || undefined} onChange={(event) => { setStartsFrom(event.target.value); setPage(0) }} /></label>
       <label>Starts through<input type="date" value={startsThrough} min={startsFrom || undefined} onChange={(event) => { setStartsThrough(event.target.value); setPage(0) }} /></label>
@@ -273,10 +273,12 @@ export function HealthOutreachPage({ focusId, focusPage, focusStatus, focusUpcom
     {exportError && <ErrorNotice message={exportError} />}
     {summary.data && <section className="health-outreach-summary" aria-label="Outreach schedule overview">
       <article className="ops-panel"><span>Matching schedules</span><strong>{(statusFilter === 'review_queue' ? campaigns.data?.totalCount ?? 0 : summary.data.totalCount).toLocaleString()}</strong></article>
+      {statusFilter !== 'upcoming' && <>
       <button type="button" className="ops-panel health-outreach-summary-action" aria-label={`Show ${summary.data.awaitingReviewCount} schedules awaiting review`} onClick={() => { setPage(0); setStatusFilter('draft') }}><span>Awaiting review</span><strong>{summary.data.awaitingReviewCount.toLocaleString()}</strong><small>View review queue</small></button>
       <button type="button" className="ops-panel health-outreach-summary-action" aria-label={`Show ${summary.data.changesRequestedCount} schedules with changes requested`} onClick={() => { setPage(0); setStatusFilter('changes_requested') }}><span>Changes requested</span><strong>{summary.data.changesRequestedCount.toLocaleString()}</strong><small>View returned schedules</small></button>
       <article className="ops-panel"><span>Completed</span><strong>{summary.data.completedCount.toLocaleString()}</strong></article>
       <article className="ops-panel"><span>Total attendance</span><strong>{summary.data.totalAttendance.toLocaleString()}</strong></article>
+      </>}
     </section>}
     {!dateRangeInvalid && campaigns.isPending && tenantId && <LoadingNotice />}{campaigns.error && <ErrorNotice message="Unable to load outreach schedules." onRetry={() => void campaigns.refetch()} retrying={campaigns.isFetching} />}
     {campaigns.data?.totalCount === 0 && <div className="ops-empty"><CalendarHeart size={22} /><strong>{search || statusFilter !== 'all' || startsFrom || startsThrough ? 'No matching outreach schedules' : 'No outreach schedules yet'}</strong><p>{search || statusFilter !== 'all' || startsFrom || startsThrough ? 'Try another search, status, or date range.' : 'Published community events will appear here.'}</p></div>}

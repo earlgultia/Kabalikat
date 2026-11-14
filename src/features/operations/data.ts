@@ -18,7 +18,7 @@ export type ResidentProfileChangeRequest = {
   resident: { first_name: string; last_name: string } | null
 }
 export type ResidentPersonalDataExport = {
-  export_version: 1
+  export_version: 2
   exported_at: string
   profile: {
     first_name: string; middle_name: string | null; last_name: string; suffix: string | null
@@ -43,6 +43,12 @@ export type ResidentPersonalDataExport = {
     category: string; subject: string; message: string; status: string; staff_response: string | null
     submitted_at: string; updated_at: string
     history: Array<{ action: string; note: string; created_at: string }>
+  }>
+  support_requests: Array<{
+    category: string; subject: string; description: string; status: string
+    submitted_at: string; updated_at: string
+    conversation: Array<{ sender: 'you' | 'support team'; message: string; sent_at: string }>
+    status_history: Array<{ action: string; from_status: string | null; to_status: string | null; changed_at: string }>
   }>
 }
 export type HouseholdRow = { id: string; household_code: string; address_line: string; purok: string | null }
@@ -123,6 +129,7 @@ export type CaptainReviewQueueSummary = {
   pending_referrals?: number | null
   pending_invitations?: number | null
   pending_meeting_resolutions?: number | null
+  pending_attendance_corrections?: number | null
   generated_at: string
 }
 export type SecretaryReviewQueueSummary = {
@@ -131,6 +138,7 @@ export type SecretaryReviewQueueSummary = {
   pending_documents: number | null
   pending_meeting_resolutions: number | null
   meeting_minutes_to_review: number | null
+  pending_attendance_corrections?: number | null
   generated_at: string
 }
 export type TreasurerFollowUpSummary = {
@@ -143,6 +151,7 @@ export type TreasurerFollowUpSummary = {
 export type SkChairpersonSubmissionFollowUp = {
   project_proposals_awaiting_review: number | null
   event_schedules_awaiting_review: number | null
+  event_schedules_to_revise?: number | null
   accomplishments_awaiting_review: number | null
   returned_accomplishments: number | null
   generated_at: string
@@ -347,9 +356,7 @@ export async function getResidentDashboardFollowUp(tenantId: string, includeCore
         .eq('barangay_id', tenantId).eq('submitted_by', userId).in('status', ['submitted', 'in_review'])
       : Promise.resolve({ count: null, data: null, error: null }),
     includeCoreServices
-      ? supabaseClient.from('meetings').select('id,title,location,starts_at,meeting_attendees!inner(user_id)')
-        .eq('barangay_id', tenantId).eq('meeting_attendees.user_id', userId).eq('status', 'scheduled')
-        .gte('starts_at', new Date().toISOString()).order('starts_at', { ascending: true }).limit(3)
+      ? supabaseClient.rpc('list_resident_upcoming_meetings', { p_barangay_id: tenantId })
       : Promise.resolve({ data: null, error: null }),
   ])
   const failed = [verification, corrections, documents, incidents, feedback, meetings].find((result) => result.error)
@@ -586,9 +593,41 @@ export async function getOwnResidentDataExport(tenantId: string, onProgress?: (m
     if (!rows.length || ownFeedback.length >= Number(rows[0]?.total_count ?? 0)) break
   }
 
+  onProgress?.('Gathering your support requests and replies…')
+  const ownSupportRequests = await readAllPages<{
+    id: string; category: string; subject: string; description: string; status: string; created_at: string; updated_at: string
+  }>((from, to) => supabaseClient.from('support_tickets')
+    .select('id,category,subject,description,status,created_at,updated_at')
+    .eq('barangay_id', tenantId).eq('requester_id', userData.user.id)
+    .order('created_at', { ascending: false }).order('id', { ascending: false }).range(from, to))
+  const ownSupportTicketIds = ownSupportRequests.map((ticket) => ticket.id)
+  const supportMessages: Array<{ ticket_id: string; author_id: string; body: string; created_at: string }> = []
+  const supportEvents: Array<{ ticket_id: string; action: string; from_status: string | null; to_status: string | null; created_at: string }> = []
+  for (let start = 0; start < ownSupportTicketIds.length; start += 100) {
+    const ticketIds = ownSupportTicketIds.slice(start, start + 100)
+    supportMessages.push(...await readAllPages<{ ticket_id: string; author_id: string; body: string; created_at: string }>((from, to) => supabaseClient.from('support_messages')
+      .select('ticket_id,author_id,body,created_at').in('ticket_id', ticketIds).eq('visibility', 'requester')
+      .order('created_at', { ascending: true }).order('id', { ascending: true }).range(from, to)))
+    supportEvents.push(...await readAllPages<{ ticket_id: string; action: string; from_status: string | null; to_status: string | null; created_at: string }>((from, to) => supabaseClient.from('support_ticket_events')
+      .select('ticket_id,action,from_status,to_status,created_at').in('ticket_id', ticketIds)
+      .order('created_at', { ascending: true }).order('id', { ascending: true }).range(from, to)))
+  }
+  const messagesByTicket = new Map<string, typeof supportMessages>()
+  for (const entry of supportMessages) {
+    const messages = messagesByTicket.get(entry.ticket_id) ?? []
+    messages.push(entry)
+    messagesByTicket.set(entry.ticket_id, messages)
+  }
+  const eventsByTicket = new Map<string, typeof supportEvents>()
+  for (const entry of supportEvents) {
+    const events = eventsByTicket.get(entry.ticket_id) ?? []
+    events.push(entry)
+    eventsByTicket.set(entry.ticket_id, events)
+  }
+
   const household = Array.isArray(resident.household) ? resident.household[0] : resident.household
   return {
-    export_version: 1,
+    export_version: 2,
     exported_at: new Date().toISOString(),
     profile: {
       first_name: resident.first_name, middle_name: resident.middle_name, last_name: resident.last_name,
@@ -627,6 +666,18 @@ export async function getOwnResidentDataExport(tenantId: string, onProgress?: (m
       status: feedback.status, staff_response: feedback.staff_response,
       submitted_at: feedback.created_at, updated_at: feedback.updated_at,
       history: feedback.history,
+    })),
+    support_requests: ownSupportRequests.map((ticket) => ({
+      category: ticket.category, subject: ticket.subject, description: ticket.description,
+      status: ticket.status, submitted_at: ticket.created_at, updated_at: ticket.updated_at,
+      conversation: (messagesByTicket.get(ticket.id) ?? []).map((entry) => ({
+        sender: entry.author_id === userData.user.id ? 'you' as const : 'support team' as const,
+        message: entry.body, sent_at: entry.created_at,
+      })),
+      status_history: (eventsByTicket.get(ticket.id) ?? []).map((entry) => ({
+        action: entry.action, from_status: entry.from_status, to_status: entry.to_status,
+        changed_at: entry.created_at,
+      })),
     })),
   }
 }

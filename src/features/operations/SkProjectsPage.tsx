@@ -14,19 +14,23 @@ const updateSchema = z.object({ type: z.enum(['milestone','progress']), title: z
 const accomplishmentSchema = z.object({ title: z.string().trim().min(3).max(180), summary: z.string().trim().min(20).max(2000) })
 const currency = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' })
 
-export function SkProjectsPage({ focusStatus, focusReviewQueue, focusReturnedAccomplishment, onFocusHandled }: { focusStatus?: SkProjectRow['status'] | 'all'; focusReviewQueue?: boolean; focusReturnedAccomplishment?: boolean; onFocusHandled?: () => void } = {}) {
+export function SkProjectsPage({ focusStatus, focusReviewQueue, focusReturnedAccomplishment, onFocusHandled }: { focusStatus?: SkProjectRow['status'] | 'all' | 'open' | 'my_submitted'; focusReviewQueue?: boolean; focusReturnedAccomplishment?: boolean; onFocusHandled?: () => void } = {}) {
   const { membership, user } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
   const queryClient = useQueryClient()
   const [page, setPage] = useState(0)
-  const [projectStatus, setProjectStatus] = useState<SkProjectRow['status'] | 'all'>('all')
+  const [projectStatus, setProjectStatus] = useState<SkProjectRow['status'] | 'all' | 'open'>('all')
   const [captainReviewOnly, setCaptainReviewOnly] = useState(false)
+  const [mySubmittedProjectsOnly, setMySubmittedProjectsOnly] = useState(false)
   const [focusReturnedProjectId, setFocusReturnedProjectId] = useState('')
   const [focusError, setFocusError] = useState('')
-  useEffect(() => { setPage(0); setProjectStatus('all') }, [tenantId])
+  useEffect(() => { setPage(0); setProjectStatus('all'); setMySubmittedProjectsOnly(false) }, [tenantId])
   useEffect(() => {
     if (!focusStatus) return
-    setProjectStatus(focusStatus)
+    const ownSubmissionsOnly = focusStatus === 'my_submitted'
+    setProjectStatus(ownSubmissionsOnly ? 'submitted' : focusStatus)
+    setCaptainReviewOnly(false)
+    setMySubmittedProjectsOnly(ownSubmissionsOnly)
     setPage(0)
     onFocusHandled?.()
   }, [focusStatus, onFocusHandled])
@@ -40,7 +44,7 @@ export function SkProjectsPage({ focusStatus, focusReviewQueue, focusReturnedAcc
   const canManage = useQuery({ queryKey: ['permission', tenantId, 'sk.manage'], queryFn: () => hasPermission(tenantId, 'sk.manage'), enabled: Boolean(tenantId) })
   const canReview = useQuery({ queryKey: ['permission', tenantId, 'sk.review'], queryFn: () => hasPermission(tenantId, 'sk.review'), enabled: Boolean(tenantId) })
   const enabled = Boolean(tenantId && (canManage.data || canReview.data))
-  const projects = useQuery({ queryKey: ['sk-projects', tenantId, projectStatus, captainReviewOnly, page], queryFn: () => captainReviewOnly ? listCaptainSkProjectReviewPage(tenantId, page) : listSkProjects(tenantId, page, projectStatus), enabled })
+  const projects = useQuery({ queryKey: ['sk-projects', tenantId, projectStatus, captainReviewOnly, mySubmittedProjectsOnly, page, user?.id], queryFn: () => captainReviewOnly ? listCaptainSkProjectReviewPage(tenantId, page) : listSkProjects(tenantId, page, projectStatus, mySubmittedProjectsOnly ? user?.id : undefined), enabled: enabled && (!mySubmittedProjectsOnly || Boolean(user?.id)) })
   const projectIds = projects.data?.rows.map((project) => project.id) ?? []
   const accomplishments = useQuery({ queryKey: ['sk-accomplishments', tenantId, projectIds], queryFn: () => listSkAccomplishmentsForProjects(tenantId, projectIds), enabled: enabled && projectIds.length > 0 })
   useEffect(() => {
@@ -55,6 +59,7 @@ export function SkProjectsPage({ focusStatus, focusReviewQueue, focusReturnedAcc
         return
       }
       setProjectStatus('completed')
+      setMySubmittedProjectsOnly(false)
       setPage(target.page_number)
       setFocusReturnedProjectId(target.project_id)
     }).catch((reason: unknown) => {
@@ -167,11 +172,11 @@ export function SkProjectsPage({ focusStatus, focusReviewQueue, focusReturnedAcc
     {canReview.error && <ErrorNotice message="SK project review access could not be checked." onRetry={() => void canReview.refetch()} retrying={canReview.isFetching} />}
     {message && <div className="ops-success"><CheckCircle2 size={16} />{message}</div>}{error && <ErrorNotice message={error} />}
     {Boolean(tenantId) && !canManage.data && !canReview.data && !canManage.isPending && !canReview.isPending && !canManage.error && !canReview.error && <EmptyNotice title="SK project access is restricted" detail="Access is limited to the SK Chairperson and authorized Captain reviewers. Contact your barangay administrator if you need access." />}
-    {enabled && <div className="ops-filter-row">{captainReviewOnly && <span className="ops-filter-context">Showing submitted proposals from other users.</span>}<label>Project status<select aria-label="Filter SK projects by status" value={projectStatus} onChange={(event) => { setProjectStatus(event.target.value as SkProjectRow['status'] | 'all'); setCaptainReviewOnly(false); setPage(0) }}><option value="all">All statuses</option><option value="submitted">Awaiting review</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="active">Active</option><option value="completed">Completed</option></select></label></div>}
+    {enabled && <div className="ops-filter-row">{captainReviewOnly && <span className="ops-filter-context">Showing submitted proposals from other users.</span>}{mySubmittedProjectsOnly && <span className="ops-filter-context">Showing your submitted proposals awaiting review.</span>}<label>Project status<select aria-label="Filter SK projects by status" value={projectStatus} onChange={(event) => { setProjectStatus(event.target.value as SkProjectRow['status'] | 'all' | 'open'); setCaptainReviewOnly(false); setMySubmittedProjectsOnly(false); setPage(0) }}><option value="all">All statuses</option><option value="open">Open projects</option><option value="submitted">Awaiting review</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="active">Active</option><option value="completed">Completed</option></select></label></div>}
     {showForm && canManage.data && <form className="ops-panel ops-form" onSubmit={(event) => void createProject(event)}><div className="ops-panel-heading"><div><h2>Submit an SK project proposal</h2><p>The barangay Captain must review proposals independently.</p></div><FileCheck2 size={19} /></div><div className="ops-form-grid"><label>Project title<input name="title" maxLength={180} required /></label><label>Proposed budget (PHP)<input name="budget" type="number" min="0" max="999999999999.99" step="0.01" defaultValue="0" required /><span className="field-hint">Proposal only; this does not approve or post a financial transaction.</span></label><label>Planned start<input name="start" type="date" /></label><label>Planned end<input name="end" type="date" /></label><label className="span-two">Project description<textarea name="description" minLength={3} maxLength={4000} required /></label></div><div className="ops-form-actions"><button className="button primary" disabled={busy}>Submit for review</button></div></form>}
     {projects.isPending && enabled && <LoadingNotice />}{projects.error && <ErrorNotice message={projects.error.message} onRetry={() => void projects.refetch()} retrying={projects.isFetching} />}
     {accomplishments.error && <ErrorNotice message="Project accomplishment summaries could not be loaded." onRetry={() => void accomplishments.refetch()} retrying={accomplishments.isFetching} />}
-    {projects.data?.totalCount === 0 && <div className="ops-empty"><FolderKanban size={22} /><strong>{projectStatus === 'all' ? 'No SK projects yet' : `No ${projectStatus === 'submitted' ? 'proposals awaiting review' : `${projectStatus} projects`} found`}</strong><p>{projectStatus === 'all' ? 'Submitted proposals and their review status will appear here.' : 'Choose another status to see more SK projects.'}</p></div>}
+    {projects.data?.totalCount === 0 && <div className="ops-empty"><FolderKanban size={22} /><strong>{projectStatus === 'all' ? 'No SK projects yet' : `No ${projectStatus === 'open' ? 'open' : projectStatus === 'submitted' ? 'proposals awaiting review' : projectStatus} projects found`}</strong><p>{projectStatus === 'all' ? 'Submitted proposals and their review status will appear here.' : 'Choose another status to see more SK projects.'}</p></div>}
     <div className="sk-project-list">{projects.data?.rows.map((project) => {
       return <article id={`sk-project-${project.id}`} tabIndex={-1} className="ops-panel sk-project-card" key={project.id}>
         <div className="sk-project-header"><div><StatusPill status={project.status} /><h2>{project.title}</h2><p>{project.description}</p></div><strong className="sk-project-budget">{currency.format(Number(project.proposed_budget))}<small> proposed</small></strong></div>

@@ -18,11 +18,11 @@ const residentSchema = z.object({
   purok: z.string().max(100).optional(),
 }).refine((value) => value.householdId || (value.address?.length ?? 0) >= 3, { message: 'Provide a household address or select an existing household.' })
 
-export function ResidentsPage({ focusId, focusOwnCorrections, focusResidentProfile, focusReviewQueue, onFocusHandled }: { focusId?: string; focusOwnCorrections?: boolean; focusResidentProfile?: boolean; focusReviewQueue?: 'residency' | 'profile-corrections'; onFocusHandled?: () => void } = {}) {
+export function ResidentsPage({ focusId, focusOwnCorrections, focusResidentProfile, focusActiveResidents, focusReviewQueue, onFocusHandled }: { focusId?: string; focusOwnCorrections?: boolean; focusResidentProfile?: boolean; focusActiveResidents?: boolean; focusReviewQueue?: 'residency' | 'profile-corrections'; onFocusHandled?: () => void } = {}) {
   const { membership, user } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
   const role = membership?.role?.key
-  const excludeOwnProfileCorrections = role === 'secretary' && focusReviewQueue === 'profile-corrections' ? user?.id : undefined
+  const excludeOwnProfileCorrections = role !== 'resident' ? user?.id : undefined
   const queryClient = useQueryClient()
   const [formOpen, setFormOpen] = useState(false)
   const [message, setMessage] = useState('')
@@ -56,6 +56,11 @@ export function ResidentsPage({ focusId, focusOwnCorrections, focusResidentProfi
     setResidencyFilter('review_queue')
     setPage(0)
   }, [focusReviewQueue])
+  useEffect(() => {
+    if (!focusActiveResidents || role === 'resident') return
+    setResidencyFilter('active_records')
+    setPage(0)
+  }, [focusActiveResidents, role])
   useEffect(() => {
     const timeout = window.setTimeout(() => { setDebouncedSearch(residentSearch); setPage(0) }, 250)
     return () => window.clearTimeout(timeout)
@@ -168,6 +173,14 @@ export function ResidentsPage({ focusId, focusOwnCorrections, focusResidentProfi
     })
     return () => window.cancelAnimationFrame(frame)
   }, [focusReviewQueue, onFocusHandled, residents.isError, residents.isPending, residencyFilter])
+  useEffect(() => {
+    if (!focusActiveResidents || role === 'resident' || residents.isPending || residents.isError || residencyFilter !== 'active_records') return
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById('resident-directory-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      onFocusHandled?.()
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [focusActiveResidents, onFocusHandled, residents.isError, residents.isPending, residencyFilter, role])
   useEffect(() => {
     if (focusReviewQueue !== 'profile-corrections' || !canReviewChanges.data || profileChanges.isPending || profileChanges.isError) return
     const frame = window.requestAnimationFrame(() => {
@@ -359,7 +372,7 @@ export function ResidentsPage({ focusId, focusOwnCorrections, focusResidentProfi
       <>
       {role !== 'resident' && <div id="resident-directory-section" className="community-calendar-filters">
         <label className="community-calendar-search"><Search size={16} /><input type="search" aria-label="Search resident records" value={residentSearch} onChange={(event) => setResidentSearch(event.target.value)} placeholder="Search name, phone, household, or address" /></label>
-        <label>Residency status<select value={residencyFilter} onChange={(event) => { setResidencyFilter(event.target.value); setPage(0) }}><option value="all">All statuses</option><option value="pending">Pending</option>{role !== 'resident' && <option value="review_queue">Needs review · eligible records</option>}<option value="verified">Verified</option><option value="rejected">Rejected</option></select></label>
+        <label>Resident filter<select value={residencyFilter} onChange={(event) => { setResidencyFilter(event.target.value); setPage(0) }}><option value="all">All records</option><option value="active_records">Active resident records</option><option value="pending">Pending residency</option>{role !== 'resident' && <option value="review_queue">Needs review · eligible records</option>}<option value="verified">Verified residency</option><option value="rejected">Rejected residency</option></select></label>
       </div>}
       {role !== 'resident' && <p className="field-hint" aria-live="polite">Showing {filteredResidents.length} resident {filteredResidents.length === 1 ? 'record' : 'records'} on this page. {residents.data?.total ?? 0} records match these filters.</p>}
       {filteredResidents.length ? <div className="ops-table-wrap"><table className="ops-table"><thead><tr><th>Resident</th><th>Household</th><th>Contact</th><th>Residency</th><th>Record</th></tr></thead><tbody>

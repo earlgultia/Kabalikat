@@ -16,7 +16,9 @@ export const SK_EVENT_SCHEDULE_HISTORY_PAGE_SIZE = 10
 
 function client() { if (!supabase) throw new Error('Supabase is not configured.'); return supabase }
 
-export async function listSkEvents(barangayId: string, page: number, search: string, status: 'all' | SkEvent['status'] | 'review_queue' | 'my_drafts', startsAfter: string | null = null, startsBefore: string | null = null) {
+export type SkEventFilter = 'all' | SkEvent['status'] | 'review_queue' | 'my_drafts' | 'my_changes_requested' | 'upcoming'
+
+export async function listSkEvents(barangayId: string, page: number, search: string, status: SkEventFilter, startsAfter: string | null = null, startsBefore: string | null = null) {
   const { data, error } = await client().rpc('list_sk_event_page_in_window', {
     p_barangay_id: barangayId,
     p_page: page,
@@ -31,7 +33,7 @@ export async function listSkEvents(barangayId: string, page: number, search: str
   return { rows, totalCount: Number(rows[0]?.total_count ?? 0) }
 }
 
-export async function listAllSkEvents(barangayId: string, search: string, status: 'all' | SkEvent['status'] | 'review_queue' | 'my_drafts', startsAfter: string | null = null, startsBefore: string | null = null, onProgress?: (loaded: number, total: number) => void) {
+export async function listAllSkEvents(barangayId: string, search: string, status: SkEventFilter, startsAfter: string | null = null, startsBefore: string | null = null, onProgress?: (loaded: number, total: number) => void) {
   const first = await listSkEvents(barangayId, 0, search, status, startsAfter, startsBefore)
   const rows = [...first.rows]
   onProgress?.(rows.length, first.totalCount)
@@ -44,7 +46,7 @@ export async function listAllSkEvents(barangayId: string, search: string, status
   return rows
 }
 
-export async function getSkEventQueueSummary(barangayId: string, search: string, status: 'all' | SkEvent['status'], startsAfter: string | null = null, startsBefore: string | null = null): Promise<SkEventQueueSummary> {
+export async function getSkEventQueueSummary(barangayId: string, search: string, status: 'all' | SkEvent['status'] | 'upcoming', startsAfter: string | null = null, startsBefore: string | null = null): Promise<SkEventQueueSummary> {
   const { data, error } = await client().rpc('get_sk_event_queue_window_summary', {
     p_barangay_id: barangayId,
     p_search: search.trim().slice(0, 100) || null,

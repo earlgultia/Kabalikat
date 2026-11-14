@@ -34,20 +34,15 @@ export async function listPatrolShifts(tenantId: string, page: number, search: s
 }
 
 export async function listUpcomingPatrolShifts(tenantId: string, page: number, pageSize = PATROL_SHIFT_PAGE_SIZE, assignedTo?: string): Promise<PatrolShiftPage> {
-  const now = new Date().toISOString()
-  const from = Math.max(0, page) * pageSize
-  let query = client().from('patrol_shifts')
-    .select('id,title,patrol_area,starts_at,ends_at,status,assigned_to,started_at,completed_at,cancellation_note,created_at', { count: 'exact' })
-    .eq('barangay_id', tenantId)
-    .eq('status', 'scheduled')
-    .gte('starts_at', now)
-    .order('starts_at', { ascending: true })
-    .order('id', { ascending: true })
-    .range(from, from + pageSize - 1)
-  if (assignedTo) query = query.eq('assigned_to', assignedTo)
-  const { data, error, count } = await query
+  const { data, error } = await client().rpc('list_upcoming_patrol_shifts_page', {
+    p_barangay_id: tenantId,
+    p_page: Math.max(page, 0),
+    p_page_size: pageSize,
+    p_assigned_to: assignedTo ?? null,
+  })
   if (error) throw new Error(error.message)
-  return { rows: (data ?? []) as PatrolShift[], totalCount: count ?? 0 }
+  const rows = (data ?? []) as Array<PatrolShift & { total_count: number }>
+  return { rows, totalCount: Number(rows[0]?.total_count ?? 0) }
 }
 
 export async function getPatrolCoverageSummary(tenantId: string, from: string, to: string): Promise<PatrolCoverageSummary> {

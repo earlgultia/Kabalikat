@@ -28,12 +28,14 @@ function rpc<T>(name: string, args: Record<string, unknown>) {
   })
 }
 
-export async function listSkProjects(tenantId: string, page: number, status: SkProjectRow['status'] | 'all' = 'all') {
+export async function listSkProjects(tenantId: string, page: number, status: SkProjectRow['status'] | 'all' | 'open' = 'all', createdBy?: string) {
   const from = Math.max(0, page) * SK_PROJECT_PAGE_SIZE
   let query = client().from('sk_projects')
     .select('id,title,description,proposed_budget,planned_start,planned_end,status,created_by,reviewed_by,review_note,created_at', { count: 'exact' })
       .eq('barangay_id', tenantId)
-  if (status !== 'all') query = query.eq('status', status)
+  if (status === 'open') query = query.in('status', ['submitted', 'approved', 'active'])
+  else if (status !== 'all') query = query.eq('status', status)
+  if (createdBy) query = query.eq('created_by', createdBy)
   const { data, count, error } = await query.order('created_at', { ascending: false }).order('id', { ascending: false })
       .range(from, from + SK_PROJECT_PAGE_SIZE - 1)
   if (error) throw new Error(error.message)

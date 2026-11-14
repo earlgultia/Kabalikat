@@ -79,7 +79,7 @@ function KagawadMeetingAgenda({ meetingId }: { meetingId: string }) {
   </details>
 }
 
-export function MeetingsPage({ focusId, focusPage, focusCorrectionRequestId, focusCorrectionPage, focusCorrectionQueue, focusMeetingRecords, focusRsvpNeeded, focusMeetingInvitations, focusMeetingAttendance, onFocusHandled }: { focusId?: string; focusPage?: number; focusCorrectionRequestId?: string; focusCorrectionPage?: number; focusCorrectionQueue?: boolean; focusMeetingRecords?: 'minutes' | 'resolutions'; focusRsvpNeeded?: boolean; focusMeetingInvitations?: 'upcoming' | 'check_in'; focusMeetingAttendance?: 'present' | 'absent' | 'excused'; onFocusHandled?: () => void }) {
+export function MeetingsPage({ focusId, focusPage, focusCorrectionRequestId, focusCorrectionPage, focusCorrectionQueue, focusUpcomingMeetings, focusMeetingRecords, focusRsvpNeeded, focusMeetingInvitations, focusMeetingAttendance, onFocusHandled }: { focusId?: string; focusPage?: number; focusCorrectionRequestId?: string; focusCorrectionPage?: number; focusCorrectionQueue?: boolean; focusUpcomingMeetings?: boolean; focusMeetingRecords?: 'minutes' | 'resolutions'; focusRsvpNeeded?: boolean; focusMeetingInvitations?: 'upcoming' | 'check_in'; focusMeetingAttendance?: 'present' | 'absent' | 'excused'; onFocusHandled?: () => void }) {
   const { membership, user } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
   const isKagawad = membership?.role?.key === 'kagawad'
@@ -108,9 +108,10 @@ export function MeetingsPage({ focusId, focusPage, focusCorrectionRequestId, foc
   const [correctionReviewNotes, setCorrectionReviewNotes] = useState<Record<string, string>>({})
   const [meetingSearchInput, setMeetingSearchInput] = useState('')
   const [meetingSearch, setMeetingSearch] = useState('')
-  const [meetingStatus, setMeetingStatus] = useState<'all' | 'draft' | 'scheduled' | 'completed' | 'cancelled'>('all')
+  const [meetingStatus, setMeetingStatus] = useState<'all' | 'draft' | 'scheduled' | 'upcoming' | 'completed' | 'cancelled'>('all')
   const [startsOnOrAfter, setStartsOnOrAfter] = useState('')
   const [startsOnOrBefore, setStartsOnOrBefore] = useState('')
+  const [upcomingMeetingsCutoff, setUpcomingMeetingsCutoff] = useState('')
   const [selectedAttendees, setSelectedAttendees] = useState<string[]>([])
   const [memberPage, setMemberPage] = useState(0)
   const [memberSearch, setMemberSearch] = useState('')
@@ -146,6 +147,7 @@ export function MeetingsPage({ focusId, focusPage, focusCorrectionRequestId, foc
     setMeetingStatus('all')
     setStartsOnOrAfter('')
     setStartsOnOrBefore('')
+    setUpcomingMeetingsCutoff('')
     setSelectedMeeting('')
     setEditingMeeting('')
     setSelectedAttendees([])
@@ -168,13 +170,28 @@ export function MeetingsPage({ focusId, focusPage, focusCorrectionRequestId, foc
     const date = new Date(year, month - 1, day + dayOffset)
     return Number.isNaN(date.getTime()) ? null : date.toISOString()
   }
-  const startsAfter = localDateBoundary(startsOnOrAfter)
+  const startsAfter = upcomingMeetingsCutoff || localDateBoundary(startsOnOrAfter)
   const startsBefore = localDateBoundary(startsOnOrBefore, 1)
   const meetings = useQuery({ queryKey: ['meetings', tenantId, page, meetingSearch, meetingStatus, startsOnOrAfter, startsOnOrBefore], queryFn: () => listMeetingPage(tenantId, page, meetingSearch, meetingStatus, startsAfter, startsBefore), enabled: Boolean(tenantId && !dateRangeInvalid) })
   const invitedMeetings = useQuery({ queryKey: ['kagawad-invited-meetings', tenantId, invitedMeetingPage, invitedMeetingFilters], queryFn: () => listKagawadInvitedMeetings(tenantId, invitedMeetingPage, invitedMeetingFilters), enabled: Boolean(tenantId && isKagawad) })
   const meetingHistory = useQuery({ queryKey: ['kagawad-meeting-attendance-history', tenantId, meetingHistoryPage, meetingHistoryFilters], queryFn: () => listKagawadMeetingAttendanceHistory(tenantId, meetingHistoryPage, meetingHistoryFilters), enabled: Boolean(tenantId && isKagawad) })
   const rsvpHistory = useQuery({ queryKey: ['kagawad-meeting-rsvp-history', tenantId, rsvpHistoryPage, rsvpHistoryFilters], queryFn: () => listKagawadMeetingInvitationResponseHistory(tenantId, rsvpHistoryPage, rsvpHistoryFilters), enabled: Boolean(tenantId && isKagawad) })
   const correctionRequests = useQuery({ queryKey: ['kagawad-attendance-correction-requests', tenantId, correctionRequestPage, correctionRequestFilters], queryFn: () => listKagawadAttendanceCorrectionRequests(tenantId, correctionRequestPage, correctionRequestFilters), enabled: Boolean(tenantId && isKagawad) })
+  useEffect(() => {
+    if (!focusUpcomingMeetings) return
+    setMeetingSearchInput('')
+    setMeetingSearch('')
+    setMeetingStatus('upcoming')
+    setStartsOnOrAfter('')
+    setStartsOnOrBefore('')
+    setUpcomingMeetingsCutoff('')
+    setPage(0)
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById('meeting-schedule-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      onFocusHandled?.()
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [focusUpcomingMeetings, onFocusHandled])
   useEffect(() => {
     if (!focusId) return
     if (meetingSearchInput) skipNextMeetingSearchReset.current = true
@@ -263,6 +280,15 @@ export function MeetingsPage({ focusId, focusPage, focusCorrectionRequestId, foc
   const canManage = useQuery({ queryKey: ['permission', tenantId, 'meeting.manage'], queryFn: () => hasPermission(tenantId, 'meeting.manage'), enabled: Boolean(tenantId) })
   const canManageAttendance = useQuery({ queryKey: ['permission', tenantId, 'attendance.manage'], queryFn: () => hasPermission(tenantId, 'attendance.manage'), enabled: Boolean(tenantId) })
   const correctionQueue = useQuery({ queryKey: ['meeting-attendance-correction-queue', tenantId, correctionQueuePage], queryFn: () => listMeetingAttendanceCorrectionQueue(tenantId, correctionQueuePage), enabled: Boolean(tenantId && canManageAttendance.data) })
+  useEffect(() => {
+    if (!focusCorrectionQueue || !canManageAttendance.data) return
+    setCorrectionQueuePage(0)
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById('meeting-attendance-correction-review')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      onFocusHandled?.()
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [focusCorrectionQueue, canManageAttendance.data, onFocusHandled])
   useEffect(() => {
     if (!focusCorrectionRequestId) return
     if (focusCorrectionQueue) setCorrectionQueuePage(focusCorrectionPage ?? 0)
@@ -766,7 +792,7 @@ export function MeetingsPage({ focusId, focusPage, focusCorrectionRequestId, foc
         </> : <p className="field-hint">{correctionRequestFilters.search || correctionRequestFilters.status !== 'all' || correctionRequestFilters.requestedAttendance !== 'all' || correctionRequestFilters.submittedAfter || correctionRequestFilters.submittedBefore ? 'No attendance correction requests match these filters.' : 'You have not requested an attendance correction.'}</p>}
       </div>
     </section>}
-    {canManageAttendance.data && <section className="ops-panel kagawad-invited-meetings" aria-labelledby="attendance-correction-queue-title">
+    {canManageAttendance.data && <section id="meeting-attendance-correction-review" className="ops-panel kagawad-invited-meetings" aria-labelledby="attendance-correction-queue-title">
       <div className="ops-panel-heading"><div><h2 id="attendance-correction-queue-title">Attendance corrections</h2><p>Review corrections submitted by invited Kagawads.</p></div><ClipboardList size={19} /></div>
       {correctionQueue.isPending ? <LoadingNotice compact /> : correctionQueue.error ? <ErrorNotice message="Attendance correction requests could not be loaded." onRetry={() => void correctionQueue.refetch()} retrying={correctionQueue.isFetching} /> : correctionQueue.data?.length ? <>
         <ul className="kagawad-invited-meeting-list">{correctionQueue.data.map((request) => <li id={`attendance-correction-review-${request.id}`} tabIndex={-1} key={request.id} className="attendance-correction-review-item">
@@ -793,9 +819,10 @@ export function MeetingsPage({ focusId, focusPage, focusCorrectionRequestId, foc
       <div className="ops-form-actions"><span className="field-hint">Attendance self-check-in opens 30 minutes before start and closes 30 minutes after end.</span><button className="button primary" disabled={busy}>{busy ? 'Saving…' : 'Create meeting'}</button></div>
     </form>}
     <div className="ops-section-title" id="meeting-schedule-section"><h2>Scheduled meetings</h2><p>Meeting lists and attendance are tenant- and role-scoped.</p></div>
-    {tenantId && <div className="incident-filters meeting-schedule-filters"><label className="archive-search"><Search size={16} /><input type="search" aria-label="Search meetings" maxLength={100} placeholder="Search title, location, or agenda" value={meetingSearchInput} onChange={(event) => setMeetingSearchInput(event.target.value)} /></label><label>Meeting status<select value={meetingStatus} onChange={(event) => { setMeetingStatus(event.target.value as typeof meetingStatus); setPage(0) }}><option value="all">All statuses</option><option value="draft">Draft</option><option value="scheduled">Scheduled</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></label><label>Starts on or after<input type="date" value={startsOnOrAfter} max={startsOnOrBefore || undefined} onChange={(event) => { setStartsOnOrAfter(event.target.value); setPage(0) }} /></label><label>Starts on or before<input type="date" value={startsOnOrBefore} min={startsOnOrAfter || undefined} onChange={(event) => { setStartsOnOrBefore(event.target.value); setPage(0) }} /></label>{(startsOnOrAfter || startsOnOrBefore) && <button type="button" className="button outline" onClick={() => { setStartsOnOrAfter(''); setStartsOnOrBefore(''); setPage(0) }}>Clear dates</button>}</div>}
+    {tenantId && <div className="incident-filters meeting-schedule-filters"><label className="archive-search"><Search size={16} /><input type="search" aria-label="Search meetings" maxLength={100} placeholder="Search title, location, or agenda" value={meetingSearchInput} onChange={(event) => setMeetingSearchInput(event.target.value)} /></label><label>Meeting status<select value={meetingStatus} onChange={(event) => { setMeetingStatus(event.target.value as typeof meetingStatus); setPage(0) }}><option value="all">All statuses</option><option value="draft">Draft</option><option value="scheduled">Scheduled</option><option value="upcoming">Upcoming scheduled</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></label><label>Starts on or after<input type="date" value={startsOnOrAfter} max={startsOnOrBefore || undefined} onChange={(event) => { setStartsOnOrAfter(event.target.value); setPage(0) }} /></label><label>Starts on or before<input type="date" value={startsOnOrBefore} min={startsOnOrAfter || undefined} onChange={(event) => { setStartsOnOrBefore(event.target.value); setPage(0) }} /></label>{(startsOnOrAfter || startsOnOrBefore) && <button type="button" className="button outline" onClick={() => { setStartsOnOrAfter(''); setStartsOnOrBefore(''); setPage(0) }}>Clear dates</button>}</div>}
     {dateRangeInvalid && <p className="account-security-error" role="alert">The end date must be the same day or later than the start date.</p>}
     {scheduleExportError && <p className="account-security-error" role="alert">{scheduleExportError}</p>}
+    {upcomingMeetingsCutoff && <p className="field-hint">Showing scheduled meetings that start now or later. <button type="button" className="text-action" onClick={() => { setUpcomingMeetingsCutoff(''); setMeetingStatus('all'); setPage(0) }}>Clear upcoming filter</button></p>}
     {(startsOnOrAfter || startsOnOrBefore) && !dateRangeInvalid && <p className="field-hint">Dates use your local timezone. The queue and schedule CSV use this same start-date window.</p>}
     {!tenantId ? null : dateRangeInvalid ? null : meetings.isPending ? <LoadingNotice /> : meetings.error ? <ErrorNotice message={meetings.error.message} onRetry={() => void meetings.refetch()} retrying={meetings.isFetching} /> : meetings.data?.total ? meetings.data.meetings.length ?
       <div className="ops-meeting-list">{meetings.data.meetings.map((meeting) => <article id={`meeting-card-${meeting.id}`} tabIndex={-1} className="ops-panel meeting-card" key={meeting.id}>

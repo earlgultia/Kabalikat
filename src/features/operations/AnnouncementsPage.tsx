@@ -16,14 +16,14 @@ const announcementSchema = z.object({
   if (value.audience === 'role' && !value.audience_role_id) context.addIssue({ code: 'custom', path: ['audience_role_id'], message: 'Choose which role should receive this announcement.' })
 })
 
-export function AnnouncementsPage({ focusId, onFocusHandled }: { focusId?: string; onFocusHandled?: () => void }) {
+export function AnnouncementsPage({ focusId, focusCurrent, onFocusHandled }: { focusId?: string; focusCurrent?: boolean; onFocusHandled?: () => void }) {
   const { membership, user } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
   const queryClient = useQueryClient()
   const [page, setPage] = useState(0)
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<'all' | 'draft' | 'published' | 'archived'>('all')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'draft' | 'published' | 'archived' | 'current'>('all')
   const [createdFrom, setCreatedFrom] = useState('')
   const [createdThrough, setCreatedThrough] = useState('')
   const localDateBoundary = (value: string, dayOffset = 0) => {
@@ -40,11 +40,24 @@ export function AnnouncementsPage({ focusId, onFocusHandled }: { focusId?: strin
     return () => window.clearTimeout(timeout)
   }, [searchInput])
   useEffect(() => { setPage(0); setSearchInput(''); setSearch(''); setStatusFilter('all'); setCreatedFrom(''); setCreatedThrough('') }, [tenantId])
+  useEffect(() => {
+    if (!focusCurrent) return
+    setPage(0)
+    setSearchInput(''); setSearch(''); setStatusFilter('current'); setCreatedFrom(''); setCreatedThrough('')
+  }, [focusCurrent])
   const announcements = useQuery({
     queryKey: ['announcements', tenantId, page, search, statusFilter, createdFrom, createdThrough],
     queryFn: () => listAnnouncementPage(tenantId, page, search, statusFilter, createdAfter, createdBefore),
     enabled: Boolean(tenantId && !dateRangeInvalid),
   })
+  useEffect(() => {
+    if (!focusCurrent || announcements.isPending || announcements.isError || statusFilter !== 'current') return
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById('announcements-list-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      onFocusHandled?.()
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [announcements.isError, announcements.isPending, focusCurrent, onFocusHandled, statusFilter])
   const [focusReadyId, setFocusReadyId] = useState('')
   const [focusError, setFocusError] = useState('')
   useEffect(() => {
@@ -140,10 +153,10 @@ export function AnnouncementsPage({ focusId, onFocusHandled }: { focusId?: strin
         <label className="span-two">Message<textarea name="body" rows={5} maxLength={10000} required /></label></div>
       <div className="ops-form-actions"><span className="field-hint">Keep sensitive resident or health details out of public messages.</span><button className="button primary" disabled={busy}>{busy ? 'Saving…' : 'Save announcement'}</button></div>
     </form>}
-    <div className="ops-section-title"><h2>Community updates</h2><p>Published messages are visible according to their audience and tenant membership.</p></div>
+    <div id="announcements-list-section" className="ops-section-title"><h2>Community updates</h2><p>Published messages are visible according to their audience and tenant membership.</p></div>
     {tenantId && <div className="incident-filters announcement-filters">
       <label className="archive-search"><Search size={16} /><input type="search" aria-label="Search announcements" maxLength={100} placeholder="Search announcement title or message" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} /></label>
-      <label>Status<select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value as typeof statusFilter); setPage(0) }}><option value="all">All statuses</option><option value="published">Published</option><option value="draft">Drafts</option><option value="archived">Archived</option></select></label>
+      <label>Status<select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value as typeof statusFilter); setPage(0) }}><option value="all">All statuses</option><option value="current">Current · published and unexpired</option><option value="published">Published, including expired</option><option value="draft">Drafts</option><option value="archived">Archived</option></select></label>
       <div className="announcement-date-filter"><label htmlFor="announcement-created-after">Created on or after</label><input id="announcement-created-after" type="date" value={createdFrom} max={createdThrough || undefined} onChange={(event) => { setCreatedFrom(event.target.value); setPage(0) }} /></div>
       <div className="announcement-date-filter"><label htmlFor="announcement-created-before">Created on or before</label><input id="announcement-created-before" type="date" value={createdThrough} min={createdFrom || undefined} onChange={(event) => { setCreatedThrough(event.target.value); setPage(0) }} /></div>
       {(createdFrom || createdThrough) && <button type="button" className="button outline" onClick={() => { setCreatedFrom(''); setCreatedThrough(''); setPage(0) }}>Clear dates</button>}

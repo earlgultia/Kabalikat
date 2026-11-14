@@ -40,7 +40,7 @@ function client() {
   return supabase
 }
 
-export async function listHealthCampaigns(barangayId: string, page: number, search: string, status: 'all' | HealthCampaign['status'] | 'review_queue', window: HealthCampaignDateWindow, ownOnly = false): Promise<HealthCampaignPage> {
+export async function listHealthCampaigns(barangayId: string, page: number, search: string, status: 'all' | HealthCampaign['status'] | 'review_queue' | 'upcoming', window: HealthCampaignDateWindow, ownOnly = false): Promise<HealthCampaignPage> {
   const { data, error } = await client().rpc('list_health_outreach_campaigns_in_window', {
     p_barangay_id: barangayId,
     p_page: page,
@@ -56,7 +56,7 @@ export async function listHealthCampaigns(barangayId: string, page: number, sear
   return { rows, totalCount: Number(rows[0]?.total_count ?? 0) }
 }
 
-export async function listAllHealthCampaigns(barangayId: string, search: string, status: 'all' | HealthCampaign['status'] | 'review_queue', window: HealthCampaignDateWindow, ownOnly = false): Promise<HealthCampaign[]> {
+export async function listAllHealthCampaigns(barangayId: string, search: string, status: 'all' | HealthCampaign['status'] | 'review_queue' | 'upcoming', window: HealthCampaignDateWindow, ownOnly = false): Promise<HealthCampaign[]> {
   const allRows: HealthCampaign[] = []
   for (let page = 0; ; page += 1) {
     const result = await listHealthCampaigns(barangayId, page, search, status, window, ownOnly)
@@ -65,7 +65,7 @@ export async function listAllHealthCampaigns(barangayId: string, search: string,
   }
 }
 
-export async function getHealthCampaignSummary(barangayId: string, search: string, status: 'all' | HealthCampaign['status'], window: HealthCampaignDateWindow, ownOnly = false): Promise<HealthCampaignSummary> {
+export async function getHealthCampaignSummary(barangayId: string, search: string, status: 'all' | HealthCampaign['status'] | 'upcoming', window: HealthCampaignDateWindow, ownOnly = false): Promise<HealthCampaignSummary> {
   const { data, error } = await client().rpc('get_health_outreach_campaign_window_summary', {
     p_barangay_id: barangayId,
     p_search: search.trim().slice(0, 100) || null,
