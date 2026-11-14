@@ -16,8 +16,13 @@ const queryClient = new QueryClient({ defaultOptions: { queries: {
     const status = typeof error === 'object' && error !== null && 'status' in error
       ? Number(error.status)
       : undefined
-    return status === undefined || !Number.isFinite(status) || status === 0 || status >= 500
+    if (status !== undefined) return Number.isFinite(status) && (status === 0 || status === 408 || status === 429 || status >= 500)
+    const message = error instanceof Error ? error.message : String(error)
+    return error instanceof TypeError || /network|failed to fetch|fetch failed|load failed|timed? ?out|connection reset|too many requests|rate limit|status(?: code)? 408|status(?: code)? 429/i.test(message)
   },
+  // Spread transient retries across clients so a short outage does not cause
+  // every open dashboard to retry at the exact same moment.
+  retryDelay: (attemptIndex) => Math.min(1_000 * 2 ** attemptIndex, 10_000) + Math.random() * 750,
   refetchOnWindowFocus: true,
 } } })
 

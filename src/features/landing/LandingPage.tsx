@@ -92,7 +92,7 @@ export function LandingPage() {
       <section className="landing-hero" id="home">
         <div className="landing-hero-copy">
           <div className="landing-hero-kicker">
-            <span className="landing-ai-badge"><Sparkles size={16} aria-hidden="true" /> Powered by AI</span>
+            <a className="landing-ai-badge" href="#ai-smart-scan"><Sparkles size={16} aria-hidden="true" /> Smart Scan · coming soon</a>
             <span className="landing-eyebrow"><Building2 size={15} /> A connected workspace for barangays</span>
           </div>
           <h1>Stronger barangays start with <em>working together.</em></h1>
@@ -109,7 +109,7 @@ export function LandingPage() {
         </div>
       </section>
 
-      <section className="landing-ai-feature" aria-labelledby="landing-ai-title">
+      <section className="landing-ai-feature" id="ai-smart-scan" aria-labelledby="landing-ai-title">
         <div className="landing-ai-feature-copy">
           <span className="landing-ai-feature-label"><Sparkles size={15} aria-hidden="true" /> Featured AI feature <span>Coming soon</span></span>
           <h2 id="landing-ai-title">AI Smart Scan</h2>

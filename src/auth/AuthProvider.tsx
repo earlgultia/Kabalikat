@@ -127,6 +127,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     document.addEventListener('visibilitychange', refreshProfile)
     const { data: listener } = client.auth.onAuthStateChange((event, nextSession) => {
       const nextUserId = nextSession?.user.id ?? null
+      // Token rotation does not change a user's memberships or platform role.
+      // Keep the new session but avoid two extra database reads on every refresh.
+      if (event === 'TOKEN_REFRESHED' && currentUserId.current === nextUserId) {
+        setSession(nextSession)
+        return
+      }
       if (currentUserId.current !== nextUserId) {
         queryClient.clear()
         knownTenantIds.current = []
