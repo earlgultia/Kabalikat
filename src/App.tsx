@@ -28,6 +28,7 @@ import { countOwnOpenSupportTickets, getPlatformSupportAttentionCount } from './
 import { getPendingPlatformPlanRequestCount } from './features/operations/subscription-requests-data'
 import { LandingPage } from './features/landing/LandingPage'
 import { TermsPage } from './features/landing/TermsPage'
+import { PrivacyPolicyPage } from './features/landing/PrivacyPolicyPage'
 
 const PlatformSupportPage = lazy(() => import('./features/operations/SupportPage').then((module) => ({ default: module.SupportPage })))
 const PlatformSubscriptionsPage = lazy(() => import('./features/operations/SubscriptionsPage').then((module) => ({ default: module.SubscriptionsPage })))
@@ -86,7 +87,6 @@ function SignIn() {
       <button type="button" className="auth-text-button" onClick={() => void requestPasswordReset()} disabled={busy || !supabaseConfigured}>Forgot password?</button>
       <p className="auth-legal">By signing in, you agree to our <Link to="/terms">Terms and Conditions</Link> and <Link to="/privacy">Data Privacy Policy</Link>.</p>
       {recoveryMessage && <div className="notice recovery-inline" role="status"><ShieldCheck size={17} />{recoveryMessage}</div>}
-      <div className="auth-foot"><ShieldCheck size={15} />Secure access for authorized community members</div>
     </section>
     <p className="auth-caption">One Barangay. One Connected Community.</p>
   </main>
@@ -814,5 +814,5 @@ export function App() {
   if (error && !user) return <main className="center-state"><section className="auth-card"><div className="eyebrow">SECURE SESSION</div><h1>We couldn’t verify your session</h1><p className="muted">{error}</p><button type="button" className="button primary full" disabled={loading} onClick={retryAccessProfile}>{loading ? 'Checking…' : 'Try again'}<ArrowRight size={17} /></button></section></main>
   const lguPage = <Suspense fallback={<div className="center-state"><span className="spinner" />Loading municipality workspace…</div>}><LguWorkspace /></Suspense>
   const home = isPlatformAdmin ? <Navigate to="/platform" replace /> : lguMembership ? lguPage : user ? <Workspace /> : <LandingPage />
-  return <Routes><Route path="/" element={home} /><Route path="/sign-in" element={<SignIn />} /><Route path="/terms" element={<TermsPage />} /><Route path="/privacy" element={<LandingPage />} /><Route path="/reset-password" element={<PasswordRecoveryPage />} /><Route path="/accept-invitation" element={<AcceptInvitationPage />} /><Route path="/attendance/check-in" element={<AttendanceQrCheckInPage />} /><Route path="/verify-document" element={<PublicDocumentVerificationPage />} /><Route path="/platform" element={isPlatformAdmin ? <PlatformWorkspace /> : <Navigate to="/" replace />} /><Route path="/lgu" element={lguMembership ? lguPage : <Navigate to="/" replace />} /><Route path="*" element={home} /></Routes>
+  return <Routes><Route path="/" element={home} /><Route path="/sign-in" element={<SignIn />} /><Route path="/terms" element={<TermsPage />} /><Route path="/privacy" element={<PrivacyPolicyPage />} /><Route path="/reset-password" element={<PasswordRecoveryPage />} /><Route path="/accept-invitation" element={<AcceptInvitationPage />} /><Route path="/attendance/check-in" element={<AttendanceQrCheckInPage />} /><Route path="/verify-document" element={<PublicDocumentVerificationPage />} /><Route path="/platform" element={isPlatformAdmin ? <PlatformWorkspace /> : <Navigate to="/" replace />} /><Route path="/lgu" element={lguMembership ? lguPage : <Navigate to="/" replace />} /><Route path="*" element={home} /></Routes>
 }
