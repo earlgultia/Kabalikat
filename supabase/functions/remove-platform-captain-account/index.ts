@@ -59,7 +59,7 @@ Deno.serve(async (request: Request) => {
   if (lookupError && lookupError.status !== 404) {
     return json({ error: `Access was suspended, but the Auth account status could not be checked. Retry this action. Details: ${lookupError.message}` }, 500)
   }
-  if (!targetResult.user || targetResult.user.deleted_at) {
+  if (!targetResult.user) {
     // A prior request may have removed the Auth identity but failed before it
     // could mark the audit row complete. Finish that step safely on retry.
     const { error: completeError } = await admin.rpc('complete_platform_captain_account_removal', { p_user_id: userId })
@@ -67,7 +67,9 @@ Deno.serve(async (request: Request) => {
     return json({ success: true, alreadyRemoved: true })
   }
 
-  const { error: deleteError } = await admin.auth.admin.deleteUser(userId, true)
+  // Use a hard Auth delete so login identifiers, identities, and sessions are
+  // removed. The database trigger anonymizes retained tenant/audit records.
+  const { error: deleteError } = await admin.auth.admin.deleteUser(userId)
   if (deleteError) {
     return json({ error: `All barangay memberships were suspended, but Auth account removal did not finish. Retry this action to complete it. Details: ${deleteError.message}` }, 500)
   }

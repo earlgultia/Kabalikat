@@ -5,6 +5,7 @@ import { useAuth } from '../../auth/AuthProvider'
 import { ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 import { formatDateTime } from './format'
 import { getTenantSubscriptionStatus, listAvailableSubscriptionPlans, listTenantPlanRequests, requestTenantSubscriptionPlan } from './subscription-requests-data'
+import { getBarangayMonthlySubscriptionPeriod } from './subscriptions-data'
 
 export function TenantSubscriptionPage() {
   const { membership } = useAuth()
@@ -12,6 +13,7 @@ export function TenantSubscriptionPage() {
   const queryClient = useQueryClient()
   const plans = useQuery({ queryKey: ['available-subscription-plans'], queryFn: listAvailableSubscriptionPlans })
   const current = useQuery({ queryKey: ['tenant-subscription-status', barangayId], queryFn: () => getTenantSubscriptionStatus(barangayId), enabled: Boolean(barangayId) })
+  const period = useQuery({ queryKey: ['barangay-monthly-subscription-period', barangayId], queryFn: () => getBarangayMonthlySubscriptionPeriod(barangayId), enabled: Boolean(barangayId) })
   const requests = useQuery({ queryKey: ['tenant-subscription-plan-requests', barangayId], queryFn: () => listTenantPlanRequests(barangayId), enabled: Boolean(barangayId) })
   const pendingRequest = requests.data?.find((request) => request.status === 'pending')
   const [selectedPlan, setSelectedPlan] = useState('')
@@ -28,6 +30,7 @@ export function TenantSubscriptionPage() {
       await requestTenantSubscriptionPlan(barangayId, selectedPlan, requestNote.trim())
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['tenant-subscription-plan-requests', barangayId] }),
+        queryClient.invalidateQueries({ queryKey: ['barangay-monthly-subscription-period', barangayId] }),
         queryClient.invalidateQueries({ queryKey: ['platform-plan-requests'] }),
       ])
       setSelectedPlan(''); setRequestNote('')
@@ -38,16 +41,16 @@ export function TenantSubscriptionPage() {
   }
 
   return <section className="operation-page">
-    <PageHeading title="Plans & subscription" description="Choose a plan for your barangay. Payment is handled directly with ArkByte; there is no online checkout." />
+    <PageHeading title="Plans & subscription" description="Request a monthly plan for this barangay. Each barangay has its own subscription and payment arrangement." />
     {message && <div className="ops-success" role="status"><BadgeCheck size={17} />{message}</div>}
     {error && <ErrorNotice message={error} />}
     {current.isPending && <LoadingNotice compact />}
     {current.error && <ErrorNotice message="Unable to load your current subscription." onRetry={() => void current.refetch()} retrying={current.isFetching} />}
     {current.data && <section className="ops-panel tenant-subscription-current" aria-label="Current subscription">
       <span className="tenant-subscription-icon"><ShieldCheck size={19} /></span>
-      <div><span className="field-hint">CURRENT BARANGAY PLAN</span><h2>{current.data.plan_name}</h2><p><StatusPill status={current.data.subscription_status} /> <span>Updated {formatDateTime(current.data.updated_at)}</span></p></div>
+      <div><span className="field-hint">CURRENT BARANGAY PLAN</span><h2>{current.data.plan_name}</h2><p><StatusPill status={period.data?.billing_period_ends_at && new Date(period.data.billing_period_ends_at).getTime() <= Date.now() ? 'past_due' : current.data.subscription_status} /> <span>{period.data?.billing_period_ends_at ? `Monthly period ends ${formatDateTime(period.data.billing_period_ends_at)}` : `Updated ${formatDateTime(current.data.updated_at)}`}</span></p></div>
     </section>}
-    <section className="ops-panel manual-payment-notice"><CircleDollarSign size={20} /><div><h2>Manual payment by arrangement</h2><p>Submit your chosen plan here, then contact ArkByte directly to arrange the plan. A Super Admin will activate it when the arrangement is complete.</p><p className="field-hint">This request does not collect payment information or change your current access.</p></div></section>
+    <section className="ops-panel manual-payment-notice"><CircleDollarSign size={20} /><div><h2>Monthly plan, paid by arrangement</h2><p>Submit the plan for this barangay, then contact ArkByte to arrange its monthly payment. A Super Admin reviews and activates the request after confirming the arrangement.</p><p className="field-hint">Each barangay has a separate monthly subscription. This request does not collect payment information or change current access.</p></div></section>
     {requests.isPending && <LoadingNotice compact />}
     {requests.error && <ErrorNotice message="Your plan request history could not be loaded." onRetry={() => void requests.refetch()} retrying={requests.isFetching} />}
     {pendingRequest && <section className="ops-panel tenant-subscription-pending" aria-live="polite"><Clock3 size={19} /><div><strong>Plan request awaiting review</strong><p>{pendingRequest.plan_name} requested {formatDateTime(pendingRequest.created_at)}. Your current subscription stays in place until an administrator confirms the payment and activates the plan.</p></div><StatusPill status="pending" /></section>}
@@ -57,7 +60,7 @@ export function TenantSubscriptionPage() {
       {plans.data?.length === 0 && !plans.isPending && <p className="field-hint">There are no paid plans currently open for requests. Contact ArkByte for assistance.</p>}
       {plans.data && plans.data.length > 0 && <div className="tenant-plan-options">{plans.data.map((plan) => <label className={`tenant-plan-option ${selectedPlan === plan.plan_key ? 'selected' : ''}`} key={plan.plan_key}>
         <input type="radio" name="plan" value={plan.plan_key} checked={selectedPlan === plan.plan_key} onChange={() => setSelectedPlan(plan.plan_key)} />
-        <span><strong>{plan.plan_name}</strong><small>{plan.plan_description || 'Plan details and pricing are provided by ArkByte.'}</small><small>Price and payment instructions are confirmed directly with ArkByte.</small></span>
+        <span><strong>{plan.plan_name}</strong><small>{plan.plan_description || 'Plan details and pricing are provided by ArkByte.'}</small><small>{plan.plan_key === 'pro' ? '₱1,000 per month' : plan.plan_key === 'enterprise' ? '₱2,500 per month' : 'Monthly price confirmed directly with ArkByte'}</small><small>Payment arrangements are confirmed directly with ArkByte.</small></span>
       </label>)}</div>}
       <label className="tenant-plan-note">Note for ArkByte (optional)<textarea value={requestNote} onChange={(event) => setRequestNote(event.target.value)} maxLength={500} placeholder="Share a question or a good time to contact you." /></label>
       <div className="ops-form-actions"><button className="button primary" disabled={busy || plans.isPending || !plans.data?.length || !selectedPlan}>{busy ? 'Submitting request…' : 'Request this plan'}</button></div>

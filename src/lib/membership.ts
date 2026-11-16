@@ -3,7 +3,7 @@ export type Membership = {
   barangay_id: string
   status: string
   role: { key: string; label: string; scope?: string } | null
-  barangay: { id: string; name: string; municipality: string; province: string } | null
+  barangay: { id: string; name: string; municipality: string; province: string; lgu_id?: string | null } | null
 }
 
 export function resolveActiveMembership(memberships: Membership[]): Membership | null {

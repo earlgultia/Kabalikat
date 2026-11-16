@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Download, FileDown, Paperclip, Siren, Upload } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
 import { hasPermission } from './data'
-import { addIncidentUpdate, assignIncident, createIncidentEvidenceDownloadUrl, escalateIncident, findVisibleIncidentPage, INCIDENT_HISTORY_PAGE_SIZE, INCIDENT_PAGE_SIZE, listIncidentBreakdown, listIncidentEvents, listIncidentEvidence, listIncidents, listIncidentSummary, submitIncident, transitionIncident, uploadIncidentEvidence } from './incident-data'
+import { addIncidentUpdate, assignIncident, createIncidentEvidenceDownloadUrl, escalateIncident, escalateIncidentToLgu, findVisibleIncidentPage, getCaptainLguIncidentFollowUpSummary, INCIDENT_HISTORY_PAGE_SIZE, INCIDENT_PAGE_SIZE, listCaptainLguIncidentFollowUpPage, listCaptainLguIncidentHistory, listCaptainLguIncidentUpdates, listIncidentBreakdown, listIncidentEvents, listIncidentEvidence, listIncidents, listIncidentSummary, submitIncident, transitionIncident, uploadIncidentEvidence } from './incident-data'
 import { TanodPicker } from './TanodPicker'
 import { IncidentResolutionDialog } from './IncidentResolutionDialog'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
@@ -13,6 +13,17 @@ import { formatDateTime, getManilaDateBoundary, getManilaDateInputValue } from '
 const incidentSchema = z.object({ category: z.enum(['safety','hazard','disturbance','property','disaster','other']), severity: z.enum(['low','moderate','high','urgent']), location: z.string().trim().min(2).max(240), summary: z.string().trim().min(3).max(180), details: z.string().max(3000) })
 const escalationSchema = z.object({ destination: z.string().trim().min(3).max(180), note: z.string().trim().min(3).max(1000), confirm: z.literal('yes') })
 const statusLabels: Record<string, string> = { submitted: 'Submitted', acknowledged: 'Acknowledged', in_progress: 'In progress', resolved: 'Resolved', closed: 'Closed' }
+
+function CaptainLguEscalationHistory({ tenantId, incidentId }: { tenantId: string; incidentId: string }) {
+  const [open, setOpen] = useState(false)
+  const history = useQuery({ queryKey: ['captain-lgu-incident-history', tenantId, incidentId], queryFn: () => listCaptainLguIncidentHistory(tenantId, incidentId), enabled: open })
+  return <details className="incident-history" onToggle={(event: SyntheticEvent<HTMLDetailsElement>) => setOpen(event.currentTarget.open)}>
+    <summary>LGU handoff history{history.data ? ` (${history.data.length})` : ''}</summary>
+    {open && history.isPending && <LoadingNotice compact />}
+    {history.error && <ErrorNotice message="Unable to load LGU handoff history." onRetry={() => void history.refetch()} retrying={history.isFetching} />}
+    {history.data?.length ? <ol>{history.data.map((event) => <li key={event.id}><strong>{event.action.replace('_', ' ')}</strong><span>{event.actor_name} · {formatDateTime(event.created_at)}</span>{event.note && <p>{event.note}</p>}</li>)}</ol> : open && !history.isPending && !history.error ? <p>No LGU handoff history is available.</p> : null}
+  </details>
+}
 
 function IncidentHistory({ tenantId, incidentId, ownStatusOnly }: { tenantId: string; incidentId: string; ownStatusOnly: boolean }) {
   const [open, setOpen] = useState(false)
@@ -44,8 +55,14 @@ export function IncidentsPage({ focusId, focusAssignedActive, focusOpenReports, 
   const [page, setPage] = useState(0)
   const [showForm, setShowForm] = useState(false)
   const [escalationId, setEscalationId] = useState('')
+  const [lguEscalationId, setLguEscalationId] = useState('')
+  const [lguEscalationNote, setLguEscalationNote] = useState('')
   const [resolutionRequest, setResolutionRequest] = useState<{ incidentId: string; status: 'resolved' | 'closed' } | null>(null)
   const [focusReadyId, setFocusReadyId] = useState('')
+  const [captainFollowUpStatus, setCaptainFollowUpStatus] = useState<'all' | 'pending' | 'acknowledged'>('all')
+  const [captainFollowUpPage, setCaptainFollowUpPage] = useState(0)
+  const [captainFollowUpFocusId, setCaptainFollowUpFocusId] = useState('')
+  const [captainFollowUpOpeningId, setCaptainFollowUpOpeningId] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [severityFilter, setSeverityFilter] = useState('all')
@@ -71,10 +88,15 @@ export function IncidentsPage({ focusId, focusAssignedActive, focusOpenReports, 
     enabled: enabled && validDateRange,
   })
   const summary = useQuery({ queryKey: ['incident-summary', tenantId, user?.id, createdAfter, createdBefore], queryFn: () => listIncidentSummary(tenantId, user?.id ?? '', getManilaDateBoundary(createdAfter), getManilaDateBoundary(createdBefore, 1)), enabled: Boolean(enabled && user?.id && validDateRange) })
+  const captainLguFollowUp = useQuery({ queryKey: ['captain-lgu-incident-follow-up-summary', tenantId], queryFn: () => getCaptainLguIncidentFollowUpSummary(tenantId), enabled: Boolean(tenantId && membership?.role?.key === 'captain' && membership.barangay?.lgu_id), refetchInterval: 30_000, refetchIntervalInBackground: false })
+  const showCaptainFollowUp = Boolean(tenantId && membership?.role?.key === 'captain' && membership.barangay?.lgu_id && canManage.data)
+  const captainLguFollowUpQueue = useQuery({ queryKey: ['captain-lgu-incident-follow-up-queue', tenantId, captainFollowUpStatus, captainFollowUpPage], queryFn: () => listCaptainLguIncidentFollowUpPage(tenantId, captainFollowUpStatus, captainFollowUpPage), enabled: showCaptainFollowUp, refetchInterval: 30_000, refetchIntervalInBackground: false })
+  const captainFollowUpTotalPages = Math.ceil((captainLguFollowUpQueue.data?.totalCount ?? 0) / 10)
   const breakdown = useQuery({ queryKey: ['incident-breakdown', tenantId, createdAfter, createdBefore], queryFn: () => listIncidentBreakdown(tenantId, getManilaDateBoundary(createdAfter), getManilaDateBoundary(createdBefore, 1)), enabled: Boolean(canManage.data && validDateRange) })
   const ownStatusOnly = Boolean(canReport.data && !canCreate.data && !canManage.data)
   const incidentIds = incidents.data?.rows.map((incident) => incident.id) ?? []
   const evidence = useQuery({ queryKey: ['incident-evidence', tenantId, incidentIds], queryFn: () => listIncidentEvidence(tenantId, incidentIds), enabled: Boolean(tenantId && incidents.data && (canCreate.data || canManage.data)) })
+  const lguEscalations = useQuery({ queryKey: ['incident-lgu-escalations', tenantId, incidentIds], queryFn: () => listCaptainLguIncidentUpdates(tenantId, incidentIds), enabled: Boolean(tenantId && membership?.barangay?.lgu_id && membership.role?.key === 'captain' && incidentIds.length), refetchInterval: 30_000, refetchIntervalInBackground: false })
   const totalPages = Math.ceil((incidents.data?.totalCount ?? 0) / INCIDENT_PAGE_SIZE)
 
   useEffect(() => {
@@ -114,8 +136,37 @@ export function IncidentsPage({ focusId, focusAssignedActive, focusOpenReports, 
     onFocusHandled?.()
   }, [focusId, focusReadyId, incidents.data, onFocusHandled])
 
+  useEffect(() => {
+    if (!captainFollowUpFocusId || !incidents.data?.rows.some((incident) => incident.id === captainFollowUpFocusId)) return
+    const target = document.getElementById(`incident-card-${captainFollowUpFocusId}`)
+    if (!target) return
+    target.focus({ preventScroll: true })
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    setCaptainFollowUpFocusId('')
+    setCaptainFollowUpOpeningId('')
+  }, [captainFollowUpFocusId, incidents.data])
+
+  useEffect(() => {
+    if (captainFollowUpTotalPages > 0 && captainFollowUpPage >= captainFollowUpTotalPages) setCaptainFollowUpPage(captainFollowUpTotalPages - 1)
+  }, [captainFollowUpPage, captainFollowUpTotalPages])
+
   async function refresh() {
-    await Promise.all([queryClient.invalidateQueries({ queryKey: ['incidents', tenantId] }), queryClient.invalidateQueries({ queryKey: ['incident-summary', tenantId] }), queryClient.invalidateQueries({ queryKey: ['incident-breakdown', tenantId] }), queryClient.invalidateQueries({ queryKey: ['incident-events', tenantId] }), queryClient.invalidateQueries({ queryKey: ['incident-evidence', tenantId] })])
+    await Promise.all([queryClient.invalidateQueries({ queryKey: ['incidents', tenantId] }), queryClient.invalidateQueries({ queryKey: ['incident-summary', tenantId] }), queryClient.invalidateQueries({ queryKey: ['incident-breakdown', tenantId] }), queryClient.invalidateQueries({ queryKey: ['incident-events', tenantId] }), queryClient.invalidateQueries({ queryKey: ['incident-evidence', tenantId] }), queryClient.invalidateQueries({ queryKey: ['incident-lgu-escalations', tenantId] }), queryClient.invalidateQueries({ queryKey: ['captain-lgu-incident-follow-up-summary', tenantId] }), queryClient.invalidateQueries({ queryKey: ['captain-lgu-incident-follow-up-queue', tenantId] })])
+  }
+
+  async function openCaptainFollowUpReport(incidentId: string) {
+    setCaptainFollowUpOpeningId(incidentId)
+    setError('')
+    setSearch(''); setDebouncedSearch(''); setStatusFilter('all'); setCategoryFilter('all'); setSeverityFilter('all'); setAssignmentFilter('all'); setActiveOnly(false); setCreatedAfter(''); setCreatedBefore('')
+    try {
+      const targetPage = await findVisibleIncidentPage(tenantId, incidentId)
+      if (targetPage === null) throw new Error('This incident is no longer available in the barangay queue.')
+      setPage(targetPage)
+      setCaptainFollowUpFocusId(incidentId)
+    } catch (err) {
+      setCaptainFollowUpOpeningId('')
+      setError(err instanceof Error ? err.message : 'Unable to open this incident report.')
+    }
   }
 
   async function create(event: FormEvent<HTMLFormElement>) {
@@ -169,6 +220,20 @@ export function IncidentsPage({ focusId, focusAssignedActive, focusOpenReports, 
     setBusy(true); setError(''); setMessage('')
     try { await escalateIncident(id, parsed.data.destination, parsed.data.note); await refresh(); form.reset(); setEscalationId(''); setMessage('Verified external handoff recorded in the incident history.') }
     catch { setError('Unable to record the escalation. Confirm the handoff happened and review the details.') }
+    finally { setBusy(false) }
+  }
+
+  async function escalateToLgu(id: string, event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const note = lguEscalationNote.trim()
+    if (note.length < 3 || note.length > 1000) { setError('Explain why municipal support is needed in 3 to 1000 characters.'); return }
+    setBusy(true); setError(''); setMessage('')
+    try {
+      await escalateIncidentToLgu(id, note)
+      setLguEscalationNote(''); setLguEscalationId('')
+      await refresh()
+      setMessage('Incident escalated to the LGU. The municipality can now acknowledge and follow up on it.')
+    } catch (err) { setError(err instanceof Error ? err.message : 'Unable to escalate this report to the LGU.') }
     finally { setBusy(false) }
   }
 
@@ -247,8 +312,23 @@ export function IncidentsPage({ focusId, focusAssignedActive, focusOpenReports, 
     {(canCreate.error || canReport.error || canManage.error) && <ErrorNotice message="Your incident workspace access could not be checked. Refresh the page or contact your barangay administrator." onRetry={() => { void canCreate.refetch(); void canReport.refetch(); void canManage.refetch() }} retrying={canCreate.isFetching || canReport.isFetching || canManage.isFetching} />}
     {Boolean(tenantId) && !canCreate.isPending && !canReport.isPending && !canManage.isPending && !canCreate.error && !canReport.error && !canManage.error && !enabled && <EmptyNotice title="Incident workspace access is not enabled" detail="Ask your barangay administrator for incident reporting or management access if you need this workspace." />}
     {message && <div className="ops-success"><CheckCircle2 size={16} />{message}</div>}{error && <ErrorNotice message={error} />}
+    {lguEscalations.error && membership?.role?.key === 'captain' && membership.barangay?.lgu_id && <ErrorNotice message="LGU escalation status could not be checked. Retry before sending another report to the municipality." onRetry={() => void lguEscalations.refetch()} retrying={lguEscalations.isFetching} />}
+    {captainLguFollowUp.error && membership?.role?.key === 'captain' && membership.barangay?.lgu_id && <ErrorNotice message="LGU incident follow-up totals could not be loaded." onRetry={() => void captainLguFollowUp.refetch()} retrying={captainLguFollowUp.isFetching} />}
+    {captainLguFollowUpQueue.error && showCaptainFollowUp && <ErrorNotice message="Municipal handoffs could not be loaded." onRetry={() => void captainLguFollowUpQueue.refetch()} retrying={captainLguFollowUpQueue.isFetching} />}
     {summary.error && <ErrorNotice message="Incident reports are available, but the workload summary could not be loaded." onRetry={() => void summary.refetch()} retrying={summary.isFetching} />}
-    {summary.data && <div className="incident-summary" aria-label="Incident workload summary"><div><strong>{summary.data.openCount}</strong><span>Open reports</span></div><div><strong>{summary.data.urgentOpenCount}</strong><span>High or urgent</span></div><div><strong>{canReport.data && !canCreate.data ? summary.data.myOpenCount : summary.data.assignedToMeCount}</strong><span>{canReport.data && !canCreate.data ? 'Your open reports' : 'Assigned to you'}</span></div></div>}
+    {summary.data && <div className="incident-summary" aria-label="Incident workload summary"><div><strong>{summary.data.openCount}</strong><span>Open reports</span></div><div><strong>{summary.data.urgentOpenCount}</strong><span>High or urgent</span></div><div><strong>{canReport.data && !canCreate.data ? summary.data.myOpenCount : summary.data.assignedToMeCount}</strong><span>{canReport.data && !canCreate.data ? 'Your open reports' : 'Assigned to you'}</span></div>{membership?.role?.key === 'captain' && membership.barangay?.lgu_id && captainLguFollowUp.data && <><div><strong>{Number(captainLguFollowUp.data.awaiting_lgu_response).toLocaleString()}</strong><span>Awaiting LGU response</span></div><div><strong>{Number(captainLguFollowUp.data.being_handled_by_lgu).toLocaleString()}</strong><span>LGU handling</span></div></>}</div>}
+    {showCaptainFollowUp && <section className="ops-panel" aria-label="Municipal incident follow-up">
+      <div className="ops-panel-heading"><div><h2>Municipal follow-up</h2><p>Track reports sent to the LGU and open the original report for local updates.</p></div><label>Handoff status<select value={captainFollowUpStatus} onChange={(event) => { setCaptainFollowUpStatus(event.target.value as typeof captainFollowUpStatus); setCaptainFollowUpPage(0) }}><option value="all">All active handoffs</option><option value="pending">Awaiting response</option><option value="acknowledged">LGU handling</option></select></label></div>
+      {captainLguFollowUpQueue.isPending && <LoadingNotice compact />}
+      {captainLguFollowUpQueue.data?.totalCount === 0 && <p className="muted">No active municipal handoffs match this status.</p>}
+      {captainLguFollowUpQueue.data?.rows.map((item) => <article className="lgu-escalation-reason" key={item.incident_id}>
+        <div className="incident-meta"><span className={`incident-severity severity-${item.severity}`}>{item.severity}</span><StatusPill status={item.escalation_status} /><StatusPill status={item.report_status} /><span>Updated {formatDateTime(item.escalation_updated_at)}</span></div>
+        <strong>{item.summary}</strong>
+        <p>{item.response_note || (item.escalation_status === 'pending' ? 'The LGU has not responded yet.' : 'The LGU acknowledged this report and is handling it.')}</p>
+        <button type="button" className="button outline" disabled={Boolean(captainFollowUpOpeningId)} onClick={() => void openCaptainFollowUpReport(item.incident_id)}>{captainFollowUpOpeningId === item.incident_id ? 'Opening report…' : 'Open report'}</button>
+      </article>)}
+      {captainFollowUpTotalPages > 1 && <nav className="ops-form-actions" aria-label="Municipal follow-up pages"><span className="muted">Page {captainFollowUpPage + 1} of {captainFollowUpTotalPages} · {captainLguFollowUpQueue.data?.totalCount ?? 0} handoffs</span><div className="finance-review-actions"><button type="button" className="button outline" disabled={captainFollowUpPage === 0 || captainLguFollowUpQueue.isFetching} onClick={() => setCaptainFollowUpPage((current) => current - 1)}><ChevronLeft size={16} />Previous</button><button type="button" className="button outline" disabled={captainFollowUpPage + 1 >= captainFollowUpTotalPages || captainLguFollowUpQueue.isFetching} onClick={() => setCaptainFollowUpPage((current) => current + 1)}>Next<ChevronRight size={16} /></button></div></nav>}
+    </section>}
     {canManage.data && breakdown.data && <section className="ops-panel incident-breakdown" aria-label="Incident queue overview"><div><h2>Queue overview</h2><p>Counts follow the selected report date range. Select a status or category to filter the queue.</p></div><button type="button" className="incident-unassigned-summary" aria-label="Show active reports without an assignee" aria-pressed={assignmentFilter === 'unassigned' && activeOnly} onClick={() => { const selected = assignmentFilter === 'unassigned' && activeOnly; setAssignmentFilter(selected ? 'all' : 'unassigned'); setActiveOnly(!selected); setStatusFilter('all'); setPage(0) }}><span>Active reports without an assignee</span><strong>{breakdown.data.find((item) => item.metric_type === 'assignment' && item.metric_value === 'unassigned_active')?.report_count ?? 0}</strong><small>Submitted, acknowledged, or in progress · Select to review</small></button><div className="incident-breakdown-groups"><div><h3>By status</h3><ul>{breakdown.data.filter((item) => item.metric_type === 'status').map((item) => <li key={item.metric_value}><button type="button" className="incident-status-shortcut" aria-pressed={statusFilter === item.metric_value && !activeOnly} onClick={() => { setStatusFilter((current) => current === item.metric_value && !activeOnly ? 'all' : item.metric_value); setActiveOnly(false); setPage(0) }}><span>{statusLabels[item.metric_value] ?? item.metric_value}</span><strong>{item.report_count}</strong></button></li>)}</ul></div><div><h3>By category</h3><ul>{breakdown.data.filter((item) => item.metric_type === 'category').map((item) => <li key={item.metric_value}><button type="button" className="incident-status-shortcut" aria-pressed={categoryFilter === item.metric_value} onClick={() => { setCategoryFilter((current) => current === item.metric_value ? 'all' : item.metric_value); setPage(0) }}><span>{item.metric_value}</span><strong>{item.report_count}</strong></button></li>)}</ul></div></div></section>}
     {showForm && canSubmit && <form className="ops-panel ops-form" onSubmit={(event) => void create(event)}><div className="ops-panel-heading"><div><h2>New incident report</h2><p>Share only the minimum details needed to respond. Do not include names or medical information.</p></div><Siren size={19} /></div><div className="ops-form-grid">
       <label>Category<select name="category"><option value="safety">Safety concern</option><option value="hazard">Hazard</option><option value="disturbance">Disturbance</option><option value="property">Property issue</option><option value="disaster">Disaster</option><option value="other">Other</option></select></label>
@@ -275,7 +355,10 @@ export function IncidentsPage({ focusId, focusAssignedActive, focusOpenReports, 
       {incident.resolution_note && <p className="finance-review-note">Resolution: {incident.resolution_note}</p>}
       {incident.assigned_to && <p className="incident-assigned">Assigned to {incident.assigned_to === user?.id ? 'you' : 'a Tanod'}</p>}
       {canManage.data && ['submitted','acknowledged','in_progress'].includes(incident.status) && <div className="incident-assign"><span>Assign or reassign to a Tanod</span><TanodPicker tenantId={tenantId} permission="incident.manage" selectedId={incident.assigned_to ?? ''} disabled={busy} label={`Tanod for ${incident.summary}`} onChange={(id) => void assign(incident.id, id)} /> </div>}
-      {(canManage.data || incident.assigned_to === user?.id) && <div className="finance-review-actions">{incident.status === 'submitted' && <button className="button primary" disabled={busy} onClick={() => void advance(incident.id, 'acknowledged')}>Acknowledge</button>}{incident.status === 'acknowledged' && <button className="button primary" disabled={busy} onClick={() => void advance(incident.id, 'in_progress')}>Start response</button>}{canManage.data && incident.status === 'in_progress' && <button className="button primary" disabled={busy} onClick={() => void advance(incident.id, 'resolved')}>Resolve with note</button>}{canManage.data && ['submitted','acknowledged','in_progress'].includes(incident.status) && <button className="button outline" disabled={busy} onClick={() => setEscalationId((current) => current === incident.id ? '' : incident.id)}><Upload size={15} />Record external handoff</button>}{canManage.data && incident.status === 'resolved' && <button className="button outline" disabled={busy} onClick={() => void advance(incident.id, 'closed')}>Close report</button>}</div>}
+      {(canManage.data || incident.assigned_to === user?.id) && <div className="finance-review-actions">{incident.status === 'submitted' && <button className="button primary" disabled={busy} onClick={() => void advance(incident.id, 'acknowledged')}>Acknowledge</button>}{incident.status === 'acknowledged' && <button className="button primary" disabled={busy} onClick={() => void advance(incident.id, 'in_progress')}>Start response</button>}{canManage.data && incident.status === 'in_progress' && <button className="button primary" disabled={busy} onClick={() => void advance(incident.id, 'resolved')}>Resolve with note</button>}{canManage.data && membership?.barangay?.lgu_id && ['submitted','acknowledged','in_progress'].includes(incident.status) && !lguEscalations.data?.some((item) => item.incident_id === incident.id) && <button className="button outline" disabled={busy || lguEscalations.isPending || lguEscalations.isError} onClick={() => { setLguEscalationId((current) => current === incident.id ? '' : incident.id); setEscalationId('') }}>Escalate to LGU</button>}{canManage.data && membership?.barangay?.lgu_id && lguEscalations.data?.some((item) => item.incident_id === incident.id) && <span className="field-hint">Sent to LGU</span>}{canManage.data && ['submitted','acknowledged','in_progress'].includes(incident.status) && <button className="button outline" disabled={busy} onClick={() => setEscalationId((current) => current === incident.id ? '' : incident.id)}><Upload size={15} />Record external handoff</button>}{canManage.data && incident.status === 'resolved' && <button className="button outline" disabled={busy} onClick={() => void advance(incident.id, 'closed')}>Close report</button>}</div>}
+      {canManage.data && lguEscalations.data?.filter((item) => item.incident_id === incident.id).map((item) => <div className="lgu-escalation-reason" key={item.incident_id}><strong>LGU response: {item.status}</strong><p>{item.response_note || (item.status === 'pending' ? 'The LGU has not responded yet.' : 'The LGU updated this report without a written note.')}</p><small>Updated {formatDateTime(item.updated_at)}</small></div>)}
+      {canManage.data && lguEscalations.data?.some((item) => item.incident_id === incident.id) && <CaptainLguEscalationHistory tenantId={tenantId} incidentId={incident.id} />}
+      {canManage.data && lguEscalationId === incident.id && <form className="incident-update-form" onSubmit={(event) => void escalateToLgu(incident.id, event)}><label>Why is municipal support needed?<textarea minLength={3} maxLength={1000} rows={3} required value={lguEscalationNote} onChange={(event) => setLguEscalationNote(event.target.value)} placeholder="Describe the support needed from the municipality." /></label><div className="field-hint">The LGU will see this report’s category, severity, location, summary, details, and your reason.</div><button className="button primary" disabled={busy}>Send report to LGU</button></form>}
       {canManage.data && escalationId === incident.id && <form className="incident-update-form" onSubmit={(event) => void escalate(incident.id, event)}><label>Receiving agency or responder<input name="destination" minLength={3} maxLength={180} required placeholder="Who accepted the handoff?" /></label><label>Handoff details<textarea name="note" minLength={3} maxLength={1000} rows={2} required placeholder="Record when and how the handoff was completed." /></label><label className="referral-confirm"><input name="confirm" type="checkbox" value="yes" required /><span>I confirm the external handoff already happened. KABALIKAT did not contact them.</span></label><button className="button primary" disabled={busy}>Record verified handoff</button></form>}
       {(canManage.data || incident.assigned_to === user?.id) && ['acknowledged','in_progress'].includes(incident.status) && <form className="incident-update-form" onSubmit={(event) => void addUpdate(incident.id, event)}><label>Add a response update<textarea name="note" minLength={3} maxLength={1000} rows={2} required placeholder="Record an action taken or a handoff." /></label><button className="button outline" disabled={busy}>Add update</button></form>}
       <IncidentHistory tenantId={tenantId} incidentId={incident.id} ownStatusOnly={ownStatusOnly} />

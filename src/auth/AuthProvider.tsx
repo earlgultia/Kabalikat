@@ -10,6 +10,7 @@ type AuthValue = {
   user: User | null
   membership: Membership | null
   memberships: Membership[]
+  lguMembership: LguMembership | null
   switchMembership: (membershipId: string) => void
   isPlatformAdmin: boolean
   loading: boolean
@@ -17,6 +18,13 @@ type AuthValue = {
   retryAccessProfile: () => void
   signIn: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
+}
+
+export type LguMembership = {
+  id: string
+  lgu_id: string
+  status: string
+  local_government: { id: string; municipality: string; province: string } | null
 }
 
 const AuthContext = createContext<AuthValue | null>(null)
@@ -37,6 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [membership, setMembership] = useState<Membership | null>(null)
   const [memberships, setMemberships] = useState<Membership[]>([])
+  const [lguMembership, setLguMembership] = useState<LguMembership | null>(null)
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -58,20 +67,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const loadMembership = async (userId: string | undefined) => {
       if (!userId) {
         clearTenantData(knownTenantIds.current); knownTenantIds.current = []
-        setError(null); setMembership(null); setMemberships([]); setIsPlatformAdmin(false); return
+      setError(null); setMembership(null); setMemberships([]); setLguMembership(null); setIsPlatformAdmin(false); return
       }
-      const [membershipResult, adminResult] = await Promise.all([
+      const [membershipResult, adminResult, lguMembershipResult] = await Promise.all([
         client.from('barangay_memberships')
-        .select('id, barangay_id, status, role:role_definitions(key,label,scope), barangay:barangays(id,name,municipality,province)')
+        .select('id, barangay_id, status, role:role_definitions(key,label,scope), barangay:barangays(id,name,municipality,province,lgu_id)')
         .eq('user_id', userId)
         .eq('status', 'active'),
         client.rpc('is_platform_administrator'),
+        client.from('lgu_memberships')
+          .select('id,lgu_id,status,local_government:local_government_units(id,municipality,province)')
+          .eq('user_id', userId).eq('status', 'active').limit(1),
       ])
       if (!alive || currentUserId.current !== userId) return
-      if (membershipResult.error || adminResult.error) {
+      if (membershipResult.error || adminResult.error || lguMembershipResult.error) {
         clearTenantData(knownTenantIds.current); knownTenantIds.current = []
         setError('We could not load your secure access profile. Please try again.')
-        setMembership(null); setMemberships([]); setIsPlatformAdmin(false); return
+        setMembership(null); setMemberships([]); setLguMembership(null); setIsPlatformAdmin(false); return
       }
       setError(null)
       const activeMemberships = ((membershipResult.data ?? []) as unknown as Membership[])
@@ -84,6 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       knownTenantIds.current = activeTenantIds
       setMemberships(activeMemberships)
       setMembership(selectedMembership)
+      setLguMembership(((lguMembershipResult.data ?? [])[0] ?? null) as unknown as LguMembership | null)
       storeSelectedMembership(userId, selectedMembership?.id ?? null)
       setIsPlatformAdmin(adminResult.data === true)
     }
@@ -95,7 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }).catch(() => {
       if (!alive) return
       currentUserId.current = null
-      setSession(null); setMembership(null); setMemberships([]); setIsPlatformAdmin(false)
+      setSession(null); setMembership(null); setMemberships([]); setLguMembership(null); setIsPlatformAdmin(false)
       setError('We could not verify your saved session. Check your connection and try again.')
     }).finally(() => {
       if (alive) setLoading(false)
@@ -150,7 +163,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [clearTenantData, queryClient])
 
   const value = useMemo<AuthValue>(() => ({
-    session, user: session?.user ?? null, membership, memberships, isPlatformAdmin, loading, error,
+    session, user: session?.user ?? null, membership, memberships, lguMembership, isPlatformAdmin, loading, error,
     retryAccessProfile: () => retryAccessProfileRef.current(),
     switchMembership: (membershipId) => {
       const selected = memberships.find((item) => item.id === membershipId)
@@ -174,6 +187,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(null)
       setMembership(null)
       setMemberships([])
+      setLguMembership(null)
       setIsPlatformAdmin(false)
       setError(null)
       setLoading(false)
@@ -183,7 +197,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }).catch(() => clearLocalSupabaseSession())
       }
     },
-  }), [session, membership, memberships, isPlatformAdmin, loading, error, clearTenantData, queryClient])
+  }), [session, membership, memberships, lguMembership, isPlatformAdmin, loading, error, clearTenantData, queryClient])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

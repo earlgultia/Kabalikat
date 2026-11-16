@@ -8,6 +8,23 @@ export type PlatformBarangayRow = {
 export type PlatformDirectorySummary = { registered_count: number; active_count: number; needs_attention_count: number }
 export const PLATFORM_DIRECTORY_PAGE_SIZE = 25
 
+export type PlatformLguRow = {
+  lgu_id: string; municipality: string; province: string; status: 'active' | 'suspended'
+  administrator_active: boolean; barangay_count: number; pending_invited_email: string | null
+  pending_invitation_expires_at: string | null; created_at: string
+}
+export type PlatformLguDirectoryPage = { rows: PlatformLguRow[]; total_count: number }
+export const PLATFORM_LGU_DIRECTORY_PAGE_SIZE = 25
+
+export async function listPlatformLguDirectory(page: number, search: string) {
+  if (!supabase) throw new Error('Supabase is not configured.')
+  const { data, error } = await supabase.rpc('list_platform_lgu_directory_page', {
+    p_page: Math.max(0,page), p_page_size: PLATFORM_LGU_DIRECTORY_PAGE_SIZE, p_search: search.trim() || null,
+  })
+  if (error) throw new Error(error.message)
+  return data as PlatformLguDirectoryPage
+}
+
 export type PlatformCaptainAccount = {
   user_id: string; display_name: string; email: string; barangays: string
   membership_count: number; active_membership_count: number
@@ -15,6 +32,17 @@ export type PlatformCaptainAccount = {
   removal_reason: string | null
 }
 export const PLATFORM_CAPTAIN_PAGE_SIZE = 10
+
+export async function createLguAdministratorInvitation(input: { municipality: string; province: string; email: string }) {
+  if (!supabase) throw new Error('Supabase is not configured.')
+  const { data, error } = await supabase.rpc('create_lgu_administrator_invitation', {
+    p_municipality: input.municipality.trim(), p_province: input.province.trim(), p_email: input.email.trim(),
+  })
+  if (error) throw new Error(error.message)
+  const result = (data ?? [])[0] as { lgu_id: string; invitation_token: string; expires_at: string } | undefined
+  if (!result?.invitation_token) throw new Error('The LGU administrator invitation could not be created.')
+  return result
+}
 
 export async function listPlatformCaptainAccounts(page: number, search: string) {
   if (!supabase) throw new Error('Supabase is not configured.')
@@ -86,16 +114,4 @@ export async function listPlatformBarangays() {
   const { data, error } = await supabase.rpc('get_platform_barangay_directory')
   if (error) throw new Error(error.message)
   return (data ?? []) as PlatformBarangayRow[]
-}
-
-export async function createExistingBarangayCaptainInvitation(barangayCode: string, captainEmail: string) {
-  if (!supabase) throw new Error('Supabase is not configured.')
-  const { data, error } = await supabase.rpc('create_platform_captain_invitation', {
-    p_barangay_code: barangayCode.trim(),
-    p_captain_email: captainEmail.trim(),
-  })
-  if (error) throw new Error(error.message)
-  const result = (data ?? [])[0] as { invitation_token: string; expires_at: string } | undefined
-  if (!result?.invitation_token) throw new Error('The Captain invitation could not be created.')
-  return result
 }

@@ -9,6 +9,9 @@ export type IncidentEventPage = { rows: IncidentEventRow[]; totalCount: number }
 export type IncidentEvidenceRow = { id: string; incident_id: string; file_name: string; mime_type: string; file_size: number; storage_path: string; created_at: string }
 export type IncidentPage = { rows: IncidentRow[]; totalCount: number }
 export type IncidentSummary = { openCount: number; urgentOpenCount: number; myOpenCount: number; assignedToMeCount: number }
+export type CaptainLguIncidentFollowUpSummary = { awaiting_lgu_response: number; being_handled_by_lgu: number }
+export type CaptainLguIncidentFollowUpRow = { incident_id: string; summary: string; severity: string; report_status: string; escalation_status: 'pending' | 'acknowledged'; response_note: string | null; escalation_updated_at: string }
+export type CaptainLguIncidentFollowUpPage = { rows: CaptainLguIncidentFollowUpRow[]; totalCount: number }
 export type IncidentBreakdownRow = { metric_type: 'status' | 'category' | 'assignment'; metric_value: string; report_count: number }
 export const INCIDENT_PAGE_SIZE = 20
 export const INCIDENT_HISTORY_PAGE_SIZE = 50
@@ -121,6 +124,56 @@ export async function escalateIncident(incidentId: string, destination: string, 
     p_incident_id: incidentId, p_escalated_to: destination, p_note: note, p_handoff_confirmed: true,
   })
   if (error) throw new Error(error.message)
+}
+
+export async function escalateIncidentToLgu(incidentId: string, note: string) {
+  const { error } = await client().rpc('escalate_incident_to_lgu', { p_incident_id: incidentId, p_note: note.trim() })
+  if (error) throw new Error(error.message)
+}
+
+export async function listLguEscalatedIncidentIds(tenantId: string, incidentIds: string[]) {
+  if (!incidentIds.length) return [] as string[]
+  const { data, error } = await client().rpc('list_lgu_escalated_incident_ids', {
+    p_barangay_id: tenantId, p_incident_ids: incidentIds,
+  })
+  if (error) throw new Error(error.message)
+  return ((data ?? []) as Array<{ incident_id: string }>).map((row) => row.incident_id)
+}
+
+export type CaptainLguIncidentUpdate = { incident_id: string; status: 'pending' | 'acknowledged' | 'resolved'; response_note: string | null; updated_at: string }
+
+export async function listCaptainLguIncidentUpdates(tenantId: string, incidentIds: string[]) {
+  if (!incidentIds.length) return [] as CaptainLguIncidentUpdate[]
+  const { data, error } = await client().rpc('list_captain_lgu_incident_updates', {
+    p_barangay_id: tenantId, p_incident_ids: incidentIds,
+  })
+  if (error) throw new Error(error.message)
+  return (data ?? []) as CaptainLguIncidentUpdate[]
+}
+
+export async function getCaptainLguIncidentFollowUpSummary(tenantId: string) {
+  const { data, error } = await client().rpc('get_captain_lgu_incident_follow_up_summary', { p_barangay_id: tenantId })
+  if (error) throw new Error(error.message)
+  return (data?.[0] ?? { awaiting_lgu_response: 0, being_handled_by_lgu: 0 }) as CaptainLguIncidentFollowUpSummary
+}
+
+export async function listCaptainLguIncidentFollowUpPage(tenantId: string, status: 'all' | 'pending' | 'acknowledged', page: number): Promise<CaptainLguIncidentFollowUpPage> {
+  const { data, error } = await client().rpc('list_captain_lgu_incident_follow_up_page', {
+    p_barangay_id: tenantId, p_status: status, p_page: page, p_page_size: 10,
+  })
+  if (error) throw new Error(error.message)
+  const result = (data ?? {}) as { rows?: CaptainLguIncidentFollowUpRow[]; total_count?: number }
+  return { rows: result.rows ?? [], totalCount: Number(result.total_count ?? 0) }
+}
+
+export type CaptainLguIncidentHistoryRow = { id: string; action: 'escalated' | 'acknowledged' | 'resolved'; note: string; actor_name: string; created_at: string }
+
+export async function listCaptainLguIncidentHistory(tenantId: string, incidentId: string) {
+  const { data, error } = await client().rpc('list_captain_lgu_incident_history', {
+    p_barangay_id: tenantId, p_incident_id: incidentId,
+  })
+  if (error) throw new Error(error.message)
+  return (data ?? []) as CaptainLguIncidentHistoryRow[]
 }
 
 export async function assignIncident(incidentId: string, tanodId: string) {

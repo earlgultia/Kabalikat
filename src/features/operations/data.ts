@@ -1417,19 +1417,6 @@ export async function createFinancialReceiptDownloadUrl(path: string) {
   return data.signedUrl
 }
 
-export async function onboardBarangay(input: {
-  name: string; municipality: string; province: string; code: string; captainEmail: string
-}) {
-  const result = await rpc<Array<{ created_barangay_id: string; invitation_token: string }>>(
-    'create_barangay_onboarding', {
-      p_name: input.name, p_municipality: input.municipality, p_province: input.province,
-      p_code: input.code, p_captain_email: input.captainEmail,
-    },
-  )
-  if (!result?.[0]) throw new Error('Barangay onboarding could not be completed.')
-  return result[0]
-}
-
 export const ARCHIVE_FOLDER_PAGE_SIZE = 50
 
 export async function listArchiveFolderPage(tenantId: string, page: number) {

@@ -6,15 +6,21 @@ import { getPublicSiteVisitorId, getPublicSiteVisitorMetrics, isSiteAnalyticsOpt
 import './landing.css'
 
 const features = [
-  { icon: Bell, title: 'Community updates', text: 'Share barangay announcements and keep residents informed about services and activities.' },
-  { icon: ClipboardList, title: 'Resident services', text: 'Organize service requests, meetings, attendance, and incident reports in one workspace.' },
-  { icon: FileText, title: 'Records and finance', text: 'Keep authorized records, documents, budgets, and financial activity easier to review.' },
-  { icon: UsersRound, title: 'Clear responsibilities', text: 'Give residents, staff, and officials tools that match their role and barangay.' },
+  { icon: Bell, title: 'Community updates', text: 'Share announcements and keep residents informed about services, meetings, and activities.' },
+  { icon: ClipboardList, title: 'Incident response', text: 'Tanods can report incidents to the Captain, who decides whether the barangay can respond or the LGU should be notified.' },
+  { icon: Building2, title: 'Municipal oversight', text: 'LGU teams can review reports escalated by barangays across their own municipality.' },
+  { icon: UsersRound, title: 'Connected workspaces', text: 'Super Admins set up LGUs, and each LGU can invite Captains to create their barangay workspaces.' },
 ]
 
 export function LandingPage() {
   const [analyticsOptedOut, setAnalyticsOptedOut] = useState(isSiteAnalyticsOptedOut)
   const [visitorMetrics, setVisitorMetrics] = useState<PublicVisitorMetrics | null>(null)
+
+  useEffect(() => {
+    if (window.location.pathname !== '/privacy') return
+    const frame = window.requestAnimationFrame(() => document.getElementById('privacy')?.scrollIntoView())
+    return () => window.cancelAnimationFrame(frame)
+  }, [])
 
   useEffect(() => {
     const syncAnalyticsPreference = (event: StorageEvent) => {
@@ -84,7 +90,7 @@ export function LandingPage() {
     <a className="skip-link" href="#landing-main">Skip to main content</a>
     <header className="landing-nav">
       <a className="landing-brand" href="#home" aria-label="KABALIKAT home"><span className="landing-brand-mark"><HeartHandshake size={21} /></span><span><strong>KABALIKAT</strong><small>BY ARKBYTE TECHNOLOGIES</small></span></a>
-      <nav aria-label="Main navigation"><a href="#features">What it does</a><a href="#plans">Plans</a><a href="#how-it-works">Getting started</a><a href="#privacy">Data privacy</a></nav>
+      <nav aria-label="Main navigation"><a href="#features">What it does</a><a href="#plans">Plans</a><a href="#how-it-works">Getting started</a></nav>
       <Link className="landing-nav-cta" to="/sign-in">Sign in <ArrowRight size={16} /></Link>
     </header>
 
@@ -96,7 +102,7 @@ export function LandingPage() {
             <span className="landing-eyebrow"><Building2 size={15} /> A connected workspace for barangays</span>
           </div>
           <h1>Stronger barangays start with <em>working together.</em></h1>
-          <p>KABALIKAT brings community updates, resident services, records, and day-to-day operations into one organized digital workspace.</p>
+          <p>KABALIKAT connects residents, barangay teams, and municipal LGUs so local services and incident reports can move to the right people.</p>
           <div className="landing-actions"><Link className="landing-primary" to="/sign-in">Open your workspace <ArrowRight size={17} /></Link><a className="landing-secondary" href="#features">Explore the platform</a></div>
           <div className="landing-trust"><span><CheckCircle2 size={16} /> Barangay-specific workspaces</span><span><CheckCircle2 size={16} /> Access based on assigned roles</span></div>
         </div>
@@ -134,16 +140,16 @@ export function LandingPage() {
       </section>
 
       <section className="landing-plans" id="plans">
-        <div className="landing-section-heading"><span className="landing-eyebrow">Plans for every community</span><h2>Choose the right fit for your barangay.</h2><p>Captains can request a plan from their workspace.</p></div>
+        <div className="landing-section-heading"><span className="landing-eyebrow">Plans for every community</span><h2>Choose the right fit for your workspace.</h2><p>LGUs and barangays each request their own monthly subscription.</p></div>
         <div className="landing-plan-grid">
           <article className="landing-plan"><span className="plan-label">GET STARTED</span><h3>Free</h3><div className="landing-plan-price">₱0 <span>for 7 days</span></div><p>Try KABALIKAT with a 7-day free trial for your barangay workspace.</p><Link to="/sign-in">Sign in <ArrowRight size={15} /></Link></article>
           <article className="landing-plan landing-plan-featured"><span className="plan-label">GROWING COMMUNITIES</span><h3>Pro</h3><div className="landing-plan-price">₱1,000 <span>per month</span></div><p>For barangays that need a plan suited to their growing operations.</p><Link to="/sign-in">Request Pro <ArrowRight size={15} /></Link></article>
           <article className="landing-plan"><span className="plan-label">LOCAL GOVERNMENT</span><h3>LGU</h3><div className="landing-plan-price">₱2,500 <span>per month</span></div><p>For local government units and larger community operations.</p><Link to="/sign-in">Request LGU <ArrowRight size={15} /></Link></article>
         </div>
-        <p className="landing-plan-note">Pro and LGU prices are monthly and shown in Philippine pesos. Payment arrangement and activation are handled directly with ArkByte. There is no online checkout: Captains submit a plan request, and the Super Admin activates the plan after confirming payment.</p>
+        <p className="landing-plan-note">Prices are monthly and shown in Philippine pesos. LGUs request a subscription for their municipality, and Captains request a separate subscription for each barangay workspace. The Super Admin reviews requests and activates approved plans.</p>
       </section>
 
-      <section className="landing-how" id="how-it-works"><div className="landing-section-heading"><span className="landing-eyebrow">Getting started</span><h2>Your barangay workspace is ready when you are.</h2><p>Access is provided by invitation so each account can be connected to the right community and responsibilities.</p></div><div className="landing-steps"><article><span>01</span><div><h3>Receive an invitation</h3><p>Ask your barangay office or administrator how to get access.</p></div></article><article><span>02</span><div><h3>Sign in securely</h3><p>Use the account linked to your invitation to open your workspace.</p></div></article><article><span>03</span><div><h3>Use your assigned tools</h3><p>Your role determines which records and actions are available to you.</p></div></article></div></section>
+      <section className="landing-how" id="how-it-works"><div className="landing-section-heading"><span className="landing-eyebrow">How KABALIKAT is organized</span><h2>From the municipality to every barangay.</h2><p>Each workspace has its own subscription, members, and role-based access.</p></div><div className="landing-steps"><article><span>01</span><div><h3>Super Admin creates an LGU</h3><p>The municipal LGU receives an invitation to its own workspace.</p></div></article><article><span>02</span><div><h3>LGU invites Captains</h3><p>Each Captain is connected to a barangay in that municipality.</p></div></article><article><span>03</span><div><h3>Request subscriptions</h3><p>The LGU and each barangay request their own monthly plan.</p></div></article><article><span>04</span><div><h3>Route incident reports</h3><p>Tanods report to the Captain, who can escalate incidents to the LGU when needed.</p></div></article></div></section>
 
       <section className="landing-privacy" id="privacy"><div className="privacy-heading"><span className="privacy-shield"><LockKeyhole size={23} /></span><span className="landing-eyebrow">Your information matters</span><h2>Data privacy, in plain language.</h2><p>Read the KABALIKAT privacy notice and learn which organization is responsible for each type of information.</p></div>
         <div className="privacy-grid">

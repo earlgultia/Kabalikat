@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { z } from 'zod'
 import { CheckCircle2, Eye, EyeOff, KeyRound } from 'lucide-react'
@@ -21,12 +21,26 @@ export function AcceptInvitationPage() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [accepted, setAccepted] = useState(false)
+  const [invitationKind, setInvitationKind] = useState<'barangay' | 'lgu' | ''>('')
+  const [invitationTarget, setInvitationTarget] = useState('')
   const [mode, setMode] = useState<'sign-in' | 'create-account'>('create-account')
   const [accountMessage, setAccountMessage] = useState('')
   const [confirmationEmail, setConfirmationEmail] = useState('')
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmation, setShowConfirmation] = useState(false)
+
+  useEffect(() => {
+    if (!supabase || token.length !== 64) return
+    let active = true
+    void supabase.rpc('get_public_invitation_kind', { p_token: token }).then(({ data }) => {
+      if (!active) return
+      const result = (data ?? [])[0] as { invitation_kind?: string; target_label?: string } | undefined
+      if (result?.invitation_kind === 'barangay' || result?.invitation_kind === 'lgu') setInvitationKind(result.invitation_kind)
+      setInvitationTarget(result?.target_label ?? '')
+    })
+    return () => { active = false }
+  }, [token])
 
   async function handleDifferentAccount() {
     setLogoutConfirmOpen(false)
@@ -37,6 +51,7 @@ export function AcceptInvitationPage() {
   async function authenticate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setError(''); setAccountMessage(''); setConfirmationEmail('')
     if (!supabase || token.length !== 64) { setError('This invitation link is invalid. Request a fresh link from your barangay administrator.'); return }
+    if (!invitationKind) { setError('This invitation could not be verified. Refresh the page or request a new invitation link.'); return }
     const form = event.currentTarget
     const formValues = Object.fromEntries(new FormData(form).entries())
     const parsed = mode === 'sign-in' ? signInSchema.safeParse(formValues) : createAccountSchema.safeParse(formValues)
@@ -67,7 +82,9 @@ export function AcceptInvitationPage() {
 
   async function acceptInvitation() {
     if (!supabase) throw new Error('Supabase is not configured.')
-    const { error: rpcError } = await supabase.rpc('accept_membership_invitation', { p_token: token })
+    const { error: rpcError } = invitationKind === 'lgu'
+      ? await supabase.rpc('accept_lgu_administrator_invitation', { p_token: token })
+      : await supabase.rpc('accept_membership_invitation', { p_token: token })
     if (rpcError) throw rpcError
     setAccepted(true)
     window.setTimeout(() => { window.location.assign('/') }, 800)
@@ -91,6 +108,7 @@ export function AcceptInvitationPage() {
 
   async function accept() {
     if (!supabase || token.length !== 64) { setError('This invitation link is invalid. Request a fresh link from your barangay administrator.'); return }
+    if (!invitationKind) { setError('This invitation could not be verified. Refresh the page or request a new invitation link.'); return }
     setBusy(true); setError('')
     try {
       await acceptInvitation()
@@ -100,15 +118,15 @@ export function AcceptInvitationPage() {
 
   return <main className="auth-page"><section className="auth-card">
     <div className="auth-brand"><div className="brand-mark"><KeyRound size={22} /></div><span>KABALIKAT</span></div>
-    <div className="eyebrow">BARANGAY MEMBERSHIP</div>
+    <div className="eyebrow">{invitationKind === 'lgu' ? 'MUNICIPAL LGU ADMINISTRATOR' : 'BARANGAY MEMBERSHIP'}</div>
     <h1>{accepted ? 'Invitation accepted' : user ? 'Accept your invitation' : mode === 'create-account' ? 'Create your account' : 'Sign in to continue'}</h1>
-    <p className="muted">{user ? <>Signed in as <strong>{user.email}</strong>. Membership is granted only when the invitation email matches.</> : 'Use the email address that received this invitation. Your account gets no barangay access unless the invitation is valid.'}</p>
+    <p className="muted">{invitationTarget && <>Invitation for <strong>{invitationTarget}</strong>. </>}{user ? <>Signed in as <strong>{user.email}</strong>. Access is granted only when the invitation email matches.</> : `Use the email address that received this invitation. ${invitationKind === 'lgu' ? 'LGU administrator access' : 'Barangay access'} is granted only after the invitation is accepted.`}</p>
     {error && <ErrorNotice message={error} />}
     {accountMessage && <div className="notice"><CheckCircle2 size={17} />{accountMessage}</div>}
     {confirmationEmail && !user && !accepted && <button type="button" className="button outline full" style={{ marginTop: 10 }} onClick={() => void resendConfirmation()} disabled={busy}>{busy ? 'Sending...' : 'Resend confirmation email'}</button>}
-    {!user && !accepted && <div className="notice"><CheckCircle2 size={17} />Sign in or create an account with the invited email. Once authentication succeeds, this link accepts the invitation and activates your barangay membership. If email confirmation is required, return to this link and sign in after confirming.</div>}
-    {accepted ? <div className="ops-success"><CheckCircle2 size={16} />Your membership is active. Opening your workspace...</div> : user ? <>
-      <button className="button primary full" onClick={() => void accept()} disabled={busy || token.length !== 64}>{busy ? 'Checking invitation...' : 'Accept invitation'}</button>
+    {!user && !accepted && <div className="notice"><CheckCircle2 size={17} />Sign in or create an account with the invited email. Once authentication succeeds, this link accepts the invitation and activates your {invitationKind === 'lgu' ? 'municipal LGU' : 'barangay'} access. If email confirmation is required, return to this link and sign in after confirming.</div>}
+    {accepted ? <div className="ops-success"><CheckCircle2 size={16} />Your {invitationKind === 'lgu' ? 'LGU administrator access' : 'barangay membership'} is active. Opening your workspace...</div> : user ? <>
+      <button className="button primary full" onClick={() => void accept()} disabled={busy || token.length !== 64 || !invitationKind}>{busy ? 'Checking invitation...' : 'Accept invitation'}</button>
       {user.email_confirmed_at == null && <p className="field-hint" style={{ marginTop: 12 }}>Confirm your email before accepting this invitation.</p>}
       <button className="button outline full" style={{ marginTop: 10 }} onClick={() => setLogoutConfirmOpen(true)}>Use a different account</button>
       <p className="field-hint" style={{ marginTop: 16 }}>The invitation can only be accepted by its addressed email.</p>
@@ -118,7 +136,7 @@ export function AcceptInvitationPage() {
         <label>Email address<input name="email" type="email" required autoComplete="email" /></label>
         <label>Password<div className="auth-password-field"><input name="password" type={showPassword ? 'text' : 'password'} required minLength={mode === 'create-account' ? 12 : 8} maxLength={128} autoComplete={mode === 'sign-in' ? 'current-password' : 'new-password'} /><button type="button" className="auth-password-toggle" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></div></label>
         {mode === 'create-account' && <><span className="field-hint">New passwords need at least 12 characters, including uppercase, lowercase, and a number.</span><label>Confirm password<div className="auth-password-field"><input name="confirmation" type={showConfirmation ? 'text' : 'password'} required minLength={12} maxLength={128} autoComplete="new-password" /><button type="button" className="auth-password-toggle" onClick={() => setShowConfirmation((visible) => !visible)} aria-label={showConfirmation ? 'Hide password confirmation' : 'Show password confirmation'} aria-pressed={showConfirmation}>{showConfirmation ? <EyeOff size={18} /> : <Eye size={18} />}</button></div></label></>}
-        <button className="button primary full" disabled={busy || token.length !== 64}>{busy ? 'Please wait...' : mode === 'sign-in' ? 'Sign in and accept invitation' : 'Create account and join barangay'}</button>
+        <button className="button primary full" disabled={busy || token.length !== 64 || !invitationKind}>{busy ? 'Please wait...' : mode === 'sign-in' ? 'Sign in and accept invitation' : invitationKind === 'lgu' ? 'Create account and join LGU' : 'Create account and join barangay'}</button>
       </form>
       <button className="button outline full" style={{ marginTop: 10 }} onClick={() => { setMode(mode === 'sign-in' ? 'create-account' : 'sign-in'); setError(''); setAccountMessage(''); setConfirmationEmail('') }}>
         {mode === 'sign-in' ? 'New to KABALIKAT? Create an account' : 'Already have an account? Sign in'}

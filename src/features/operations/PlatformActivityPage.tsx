@@ -140,6 +140,6 @@ export function PlatformActivityPage() {
       </article>
       })}</div>
       {totalPages > 1 && <nav className="ops-panel ops-form-actions platform-activity-pagination" aria-label="Platform activity pages"><span className="muted">Page {page + 1} of {totalPages} · {activity.data.totalCount.toLocaleString()} events</span><div className="finance-review-actions"><button className="button outline" disabled={page === 0 || activity.isFetching} onClick={() => setPage((current) => current - 1)}><ChevronLeft size={16} />Previous</button><button className="button outline" disabled={page + 1 >= totalPages || activity.isFetching} onClick={() => setPage((current) => current + 1)}>Next<ChevronRight size={16} /></button></div></nav>}
-    </> : <div className="ops-empty"><Activity size={22} /><strong>{hasActiveFilters ? 'No matching activity' : 'No platform activity yet'}</strong><p>{hasActiveFilters ? 'Try different search, action, or date filters.' : 'Barangay onboarding, subscription, and plan catalog changes will appear here.'}</p></div>}
+    </> : <div className="ops-empty"><Activity size={22} /><strong>{hasActiveFilters ? 'No matching activity' : 'No platform activity yet'}</strong><p>{hasActiveFilters ? 'Try different search, action, or date filters.' : 'Municipality and barangay onboarding, subscription, and plan catalog changes will appear here.'}</p></div>}
   </section>
 }

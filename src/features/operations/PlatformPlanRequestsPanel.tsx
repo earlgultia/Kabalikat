@@ -30,7 +30,7 @@ export function PlatformPlanRequestsPanel() {
     setError('')
     setMessage('')
     try {
-      if (decision === 'activate') await activatePlanRequest(requestId)
+      if (decision === 'activate') await activatePlanRequest(requestId, note)
       else await declinePlanRequest(requestId, note)
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['platform-plan-requests'] }),
@@ -78,12 +78,12 @@ export function PlatformPlanRequestsPanel() {
       {request.request_note && <p className="platform-plan-request-note"><strong>Captain's note:</strong> {request.request_note}</p>}
       {request.admin_note && <p className="platform-plan-request-note"><strong>Admin note:</strong> {request.admin_note}</p>}
       {request.status === 'pending' && <div className="platform-plan-request-review">
-        <label>Decline reason<span className="field-hint">Required only when declining. Activation requires no note.</span><textarea maxLength={950} value={notes[request.request_id] ?? ''} onChange={(event) => setNotes((existing) => ({ ...existing, [request.request_id]: event.target.value }))} placeholder="Reason for declining this request" /></label>
-        <div className="finance-review-actions"><button type="button" className="button outline danger-action" disabled={Boolean(busyId)} onClick={() => prepareDecline(request)}><XCircle size={15} />Decline request</button><button type="button" className="button primary" disabled={Boolean(busyId)} onClick={() => { setError(''); setActivationTarget(request) }}><BadgeCheck size={15} />Activate plan</button></div>
+        <label>Payment confirmation or decline reason<span className="field-hint">Required for activation and decline. An activated barangay plan covers one month.</span><textarea maxLength={950} value={notes[request.request_id] ?? ''} onChange={(event) => setNotes((existing) => ({ ...existing, [request.request_id]: event.target.value }))} placeholder="Record how monthly payment was confirmed, or why the request is declined" /></label>
+        <div className="finance-review-actions"><button type="button" className="button outline danger-action" disabled={Boolean(busyId)} onClick={() => prepareDecline(request)}><XCircle size={15} />Decline request</button><button type="button" className="button primary" disabled={Boolean(busyId)} onClick={() => { const note = notes[request.request_id]?.trim() ?? ''; if (note.length < 3 || note.length > 950) { setError('Record how monthly payment was confirmed (3 to 950 characters).'); return } setError(''); setActivationTarget(request) }}><BadgeCheck size={15} />Activate one month</button></div>
       </div>}
     </article>)}</div>
     {requests.data && totalPages > 1 && <nav className="directory-pagination" aria-label="Plan request pages"><button type="button" className="button outline" disabled={page === 0 || requests.isFetching} onClick={() => setPage((value) => Math.max(0, value - 1))}><ChevronLeft size={15} />Previous</button><span>Page {page + 1} of {totalPages}</span><button type="button" className="button outline" disabled={page + 1 >= totalPages || requests.isFetching} onClick={() => setPage((value) => value + 1)}>Next<ChevronRight size={15} /></button></nav>}
-    {activationTarget && <ActionConfirmationDialog title={`Activate ${activationTarget.plan_name} for ${activationTarget.barangay_name}?`} description="This updates the barangay subscription and records the request as Activated. It will no longer appear in Awaiting review and will remain available in Activated history." confirmLabel={busyId === activationTarget.request_id ? 'Activating…' : 'Activate plan'} busy={busyId === activationTarget.request_id} onCancel={() => setActivationTarget(null)} onConfirm={() => void review(activationTarget.request_id, 'activate')} />}
+    {activationTarget && <ActionConfirmationDialog title={`Activate one month of ${activationTarget.plan_name} for ${activationTarget.barangay_name}?`} description="This records your payment confirmation, starts a one-month subscription period, and marks the request Activated. KABALIKAT will not collect or renew payments automatically." confirmLabel={busyId === activationTarget.request_id ? 'Activating…' : 'Activate one month'} busy={busyId === activationTarget.request_id} onCancel={() => setActivationTarget(null)} onConfirm={() => void review(activationTarget.request_id, 'activate')} />}
     {declineTarget && <ActionConfirmationDialog title={`Decline ${declineTarget.plan_name} request for ${declineTarget.barangay_name}?`} description="This records the request as Declined with the reason you entered. It will leave Awaiting review and remain available in Declined history." confirmLabel="Decline request" busy={busyId === declineTarget.request_id} onCancel={() => setDeclineTarget(null)} onConfirm={() => void review(declineTarget.request_id, 'decline')} />}
   </section>
 }

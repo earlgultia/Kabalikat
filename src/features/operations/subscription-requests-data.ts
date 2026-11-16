@@ -1,4 +1,5 @@
 import { supabase } from '../../lib/supabase'
+import { listPlatformLguSubscriptionRequests } from './lgu-subscription-data'
 
 export type AvailableSubscriptionPlan = { plan_key: string; plan_name: string; plan_description: string }
 export type TenantSubscriptionStatus = { plan_key: string; plan_name: string; subscription_status: string; updated_at: string }
@@ -57,13 +58,16 @@ export async function listPlatformPlanRequests(page: number, status: string) {
 }
 
 export async function getPendingPlatformPlanRequestCount() {
-  const result = await listPlatformPlanRequests(0, 'pending')
-  return result.total
+  const [barangayRequests, lguRequests] = await Promise.all([
+    listPlatformPlanRequests(0, 'pending'),
+    listPlatformLguSubscriptionRequests(0, 'pending'),
+  ])
+  return barangayRequests.total + lguRequests.total
 }
 
-export async function activatePlanRequest(requestId: string) {
+export async function activatePlanRequest(requestId: string, paymentConfirmationNote: string) {
   const { error } = await client().rpc('activate_subscription_plan_request', {
-    p_request_id: requestId,
+    p_request_id: requestId, p_payment_confirmation_note: paymentConfirmationNote.trim(),
   })
   if (error) throw new Error(error.message)
   await verifyPlanRequestStatus(requestId, 'activated')

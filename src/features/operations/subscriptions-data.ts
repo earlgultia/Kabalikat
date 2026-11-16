@@ -4,7 +4,8 @@ export type SubscriptionPlan = { id: string; key: string; name: string; descript
 export type PlanFeatures = { plan_name: string; subscription_status: string; core_services: boolean; finance: boolean; community_programs: boolean; public_safety: boolean }
 export type SubscriptionOverviewRow = {
   barangay_id: string; barangay_name: string; barangay_code: string; plan_key: string; plan_name: string; plan_entitlements: Record<string, unknown>
-  status: string; started_at: string; trial_ends_at: string | null; grace_ends_at: string | null; admin_note: string; updated_at: string
+  status: string; started_at: string; trial_ends_at: string | null; grace_ends_at: string | null
+  billing_period_ends_at: string | null; admin_note: string; updated_at: string
 }
 export type SubscriptionEvent = {
   id: string; action: 'subscription_created' | 'subscription_updated'; from_plan: string | null; to_plan: string
@@ -36,6 +37,17 @@ export async function getBarangayPlanFeatures(barangayId: string): Promise<PlanF
   const { data, error } = await client().rpc('get_barangay_plan_features', { p_barangay_id: barangayId })
   if (error) throw new Error(error.message)
   return ((data ?? [])[0] ?? null) as PlanFeatures | null
+}
+
+export type BarangayMonthlySubscriptionPeriod = {
+  plan_key: string; plan_name: string; status: string
+  billing_period_started_at: string | null; billing_period_ends_at: string | null; updated_at: string
+}
+
+export async function getBarangayMonthlySubscriptionPeriod(barangayId: string): Promise<BarangayMonthlySubscriptionPeriod | null> {
+  const { data, error } = await client().rpc('get_barangay_monthly_subscription_period', { p_barangay_id: barangayId })
+  if (error) throw new Error(error.message)
+  return ((data ?? [])[0] ?? null) as BarangayMonthlySubscriptionPeriod | null
 }
 
 export async function listSubscriptionPage(input: { page: number; search: string; status: string }) {

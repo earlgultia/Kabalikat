@@ -35,8 +35,8 @@ export function PlatformCaptainAccountsPanel() {
     try {
       const result = await removePlatformCaptainAccount(pendingRemoval.user_id, reasons[pendingRemoval.user_id] ?? '')
       setSuccess(result.alreadyRemoved
-        ? `The Auth login for ${pendingRemoval.display_name} was already disabled. The removal audit has now been completed; historical records are retained.`
-        : `The Auth login for ${pendingRemoval.display_name} was soft-deleted, disabling sign-in. Its barangay access is suspended and historical records are retained.`)
+        ? `The Auth login for ${pendingRemoval.display_name} was already deleted. Personal account data was erased, access was revoked, and shared history remains anonymized.`
+        : `The Auth login for ${pendingRemoval.display_name} was deleted. Personal account data was erased, access was revoked, and shared history remains anonymized.`)
       setReasons((current) => ({ ...current, [pendingRemoval.user_id]: '' }))
       setPendingRemoval(null)
       await Promise.all([
@@ -60,8 +60,8 @@ export function PlatformCaptainAccountsPanel() {
   }
 
   return <section className="panel platform-captain-management" aria-labelledby="platform-captain-accounts-title">
-    <div className="panel-head"><div><h2 id="platform-captain-accounts-title">Captain accounts</h2><p>Remove a Captain login and suspend every barangay membership tied to that account.</p></div><UserRoundX size={19} /></div>
-    <div className="platform-captain-warning"><AlertTriangle size={17} /><p>This action cannot be undone. The Auth account is soft-deleted; memberships, profiles, and barangay records remain so existing audit and ownership links stay intact. Other roles on the same account will also lose access.</p></div>
+    <div className="panel-head"><div><h2 id="platform-captain-accounts-title">Captain accounts</h2><p>Delete a Captain login, revoke its access, and anonymize retained barangay history.</p></div><UserRoundX size={19} /></div>
+    <div className="platform-captain-warning"><AlertTriangle size={17} /><p>This action cannot be undone. It deletes the Auth login, removes personal account data, revokes access and invitations, and redacts private account content. Shared barangay records and audit history remain with the account identity anonymized. Other roles on the same account will also lose access. Deleting a barangay's last Captain leaves that barangay without an active Captain until one is assigned.</p></div>
     {success && <div className="ops-success" role="status">{success}</div>}
     {error && <div className="platform-captain-error"><ErrorNotice message={error} /><details><summary>Removal details</summary><p>{error}</p></details></div>}
     <label className="archive-search platform-captain-search"><Search size={16} /><input type="search" maxLength={100} aria-label="Search Captain accounts" placeholder="Search Captain, email, or barangay" value={search} onChange={(event) => { setSearch(event.target.value); setPage(0) }} /></label>
@@ -83,9 +83,9 @@ export function PlatformCaptainAccountsPanel() {
       })}
     </div> : <p className="field-hint">No Captain accounts match this search.</p>}
     {accounts.data && totalPages > 1 && <nav className="directory-pagination" aria-label="Captain account pages"><button type="button" className="button outline" disabled={page === 0 || accounts.isFetching} onClick={() => setPage((current) => Math.max(0, current - 1))}><ChevronLeft size={15} />Previous</button><span>Page {page + 1} of {totalPages}</span><button type="button" className="button outline" disabled={page + 1 >= totalPages || accounts.isFetching} onClick={() => setPage((current) => current + 1)}>Next<ChevronRight size={15} /></button></nav>}
-    {pendingRemoval && <ActionConfirmationDialog title={`${pendingRemoval.removal_started_at && !pendingRemoval.removal_completed_at ? 'Retry removal for' : 'Remove'} ${pendingRemoval.display_name}'s Captain account?`} description={pendingRemoval.removal_started_at && !pendingRemoval.removal_completed_at
-      ? `This retries Auth login deletion for ${pendingRemoval.email}. The original reason remains in the audit record: ${pendingRemoval.removal_reason || 'unavailable'}. Barangay access is already suspended.`
-      : `This soft-deletes the Auth login and disables sign-in, suspends all ${pendingRemoval.membership_count} barangay memberships for ${pendingRemoval.email}, and revokes pending invitations to that email. Existing profile and barangay records are retained for audit history. Reason: ${reasons[pendingRemoval.user_id]?.trim()}`} confirmLabel="Remove account" busy={busy} onCancel={() => setPendingRemoval(null)} onConfirm={() => void removeAccount()} />}
-    <p className="platform-directory-privacy">Account removal history is visible only to platform administrators. Previous operational records remain attributed to their saved profile.</p>
+    {pendingRemoval && <ActionConfirmationDialog title={`${pendingRemoval.removal_started_at && !pendingRemoval.removal_completed_at ? 'Retry removal for' : 'Delete'} ${pendingRemoval.display_name}'s Captain account?`} description={pendingRemoval.removal_started_at && !pendingRemoval.removal_completed_at
+      ? `This retries Auth login deletion for ${pendingRemoval.email}. The original reason remains in the audit record: ${pendingRemoval.removal_reason || 'unavailable'}. Access is already revoked; personal data cleanup runs when deletion completes.`
+      : `This permanently deletes the Auth login, removes personal account data, revokes all ${pendingRemoval.membership_count} barangay memberships and invitations, and redacts private account content. Shared barangay records and audit history remain with anonymized attribution. Reason: ${reasons[pendingRemoval.user_id]?.trim()}`} confirmLabel="Delete account" busy={busy} onCancel={() => setPendingRemoval(null)} onConfirm={() => void removeAccount()} />}
+    <p className="platform-directory-privacy">Removal audit history is visible only to platform administrators. Shared operational records remain available with deleted account identities anonymized.</p>
   </section>
 }
