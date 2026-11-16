@@ -8,8 +8,7 @@ import { ActionConfirmationDialog } from '../../components/ActionConfirmationDia
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 import { formatDateTime, formatManilaCalendarDate } from './format'
 
-const allowedRoles = ['secretary', 'treasurer', 'kagawad', 'sk_chairperson', 'bhw', 'tanod', 'resident'] as const
-const accessChangeSchema = z.object({ role: z.enum(allowedRoles), status: z.enum(['active', 'suspended']) })
+const accessChangeSchema = z.object({ status: z.enum(['active', 'suspended']) })
 type MemberRow = { id: string; user_id: string; role_id: string; status: string; created_at: string; role: { key: string; label: string } | null; profile: { display_name: string } | null }
 type MemberAccessEvent = { id: string; membership_id: string; action: string; from_role: string; to_role: string; from_status: string; to_status: string; reason: string | null; created_at: string }
 type RolePermission = { role_id: string; permission_id: string; permission: { id: string; key: string; description: string } | null }
@@ -97,7 +96,7 @@ export function MembersPage({ onOpenInvitations }: { onOpenInvitations?: () => v
     queryFn: () => listRolePermissionAssignments(members.data?.rows ?? []),
     enabled: Boolean(tenantId && accessPermission.data && members.data?.rows.length),
   })
-  const [drafts, setDrafts] = useState<Record<string, { role: string; status: 'active' | 'suspended' }>>({})
+  const [drafts, setDrafts] = useState<Record<string, { status: 'active' | 'suspended' }>>({})
   const [busyId, setBusyId] = useState('')
   const [busyPermissionId, setBusyPermissionId] = useState('')
   const [revokeReasons, setRevokeReasons] = useState<Record<string, string>>({})
@@ -112,17 +111,16 @@ export function MembersPage({ onOpenInvitations }: { onOpenInvitations?: () => v
   }, [members.error, members.isPending, page, totalPages])
 
   async function save(member: MemberRow) {
-    const currentRole = member.role?.key ?? ''
-    const draft = drafts[member.id] ?? { role: currentRole, status: member.status as 'active' | 'suspended' }
+    const draft = drafts[member.id] ?? { status: member.status as 'active' | 'suspended' }
     const parsed = accessChangeSchema.safeParse(draft)
     if (!parsed.success) { setError(parsed.error.issues[0]?.message ?? 'Review the access changes.'); return }
-    if (parsed.data.role === currentRole && parsed.data.status === member.status) return
+    if (parsed.data.status === member.status) return
     setBusyId(member.id); setError(''); setSuccess('')
     try {
       const { error: rpcError } = await client().rpc('manage_barangay_member_access', {
         p_barangay_id: tenantId, p_membership_id: member.id,
-        p_role_key: parsed.data.role === currentRole ? null : parsed.data.role,
-        p_status: parsed.data.status === member.status ? null : parsed.data.status,
+        p_role_key: null,
+        p_status: parsed.data.status,
       })
       if (rpcError) throw new Error(rpcError.message)
       await Promise.all([
@@ -181,14 +179,14 @@ export function MembersPage({ onOpenInvitations }: { onOpenInvitations?: () => v
   }
 
   function draftFor(member: MemberRow) {
-    return drafts[member.id] ?? { role: member.role?.key ?? 'resident', status: member.status as 'active' | 'suspended' }
+    return drafts[member.id] ?? { status: member.status as 'active' | 'suspended' }
   }
 
   return <section className="operation-page">
-    <PageHeading title="Staff & access" description="Review memberships, adjust non-Captain roles, and tailor permissions within each role.">
+    <PageHeading title="Staff & access" description="Review memberships, suspend access, and tailor the permissions included in each role.">
       {onOpenInvitations && <button type="button" className="button primary" onClick={onOpenInvitations}><UserPlus size={16} />Invite an official</button>}
     </PageHeading>
-    <div className="ops-panel member-access-guidance"><ShieldCheck size={18} /><p>Captain access cannot be changed here. Changes apply only to this barangay and are recorded in history. Fine-grained controls can remove permissions included in a role, but cannot add access beyond that role.</p></div>
+    <div className="ops-panel member-access-guidance"><ShieldCheck size={18} /><p>Role assignments follow the invitation hierarchy: Captains invite Secretaries, and Secretaries invite their barangay teams. This page can suspend or revoke access, and fine-grained controls can remove permissions included in a role.</p></div>
     {!tenantId && <EmptyNotice title="Choose a barangay workspace" detail="Select an active Captain membership to manage staff access." />}
     {accessPermission.isPending && tenantId && <LoadingNotice compact />}
     {accessPermission.error && <ErrorNotice message="Staff access could not be checked. Refresh the page and try again." onRetry={() => void accessPermission.refetch()} retrying={accessPermission.isFetching} />}
@@ -199,7 +197,7 @@ export function MembersPage({ onOpenInvitations }: { onOpenInvitations?: () => v
       <div className="member-access-filters"><label className="archive-search"><Search size={16} /><input type="search" maxLength={100} placeholder="Search member or role" aria-label="Search members by name or role" value={search} onChange={(event) => { setSearch(event.target.value); setPage(0) }} /></label><label>Access status<select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setPage(0) }}><option value="all">All statuses</option><option value="active">Active</option><option value="suspended">Suspended</option><option value="revoked">Revoked</option></select></label></div>
       {members.isPending ? <LoadingNotice /> : members.error ? <ErrorNotice message="Barangay memberships could not be loaded." onRetry={() => void members.refetch()} retrying={members.isFetching} /> : rows.length === 0 ? <EmptyNotice title="No memberships found" detail="Try a different name or status. Accepted staff invitations will appear here." /> : <div className="member-access-list">{rows.map((member) => {
         const draft = draftFor(member)
-        const changed = draft.role !== member.role?.key || draft.status !== member.status
+        const changed = draft.status !== member.status
         const captainRecord = member.role?.key === 'captain'
         const ownRecord = member.user_id === user?.id
         const revokedRecord = member.status === 'revoked'
@@ -210,8 +208,7 @@ export function MembersPage({ onOpenInvitations }: { onOpenInvitations?: () => v
           <header><div><h2>{name}</h2><p>{member.role?.label ?? 'Unknown role'} · Joined {formatManilaCalendarDate(member.created_at)}</p></div><StatusPill status={member.status} /></header>
           {revokedRecord ? <div className="member-access-revoked"><p>Access to this barangay was revoked. To restore access, create and send this person a new invitation.</p>{onOpenInvitations && <button type="button" className="button outline" onClick={onOpenInvitations}><UserPlus size={15} />Open invitations</button>}</div> : captainRecord || ownRecord ? <p className="member-access-protected">{captainRecord ? 'Captain role is protected from changes in this workspace.' : 'You cannot change your own access from this page.'}</p> : <>
             <div className="member-access-controls">
-              <label>Workspace role<select value={draft.role} disabled={busyId === member.id} onChange={(event) => setDrafts((current) => ({ ...current, [member.id]: { ...draft, role: event.target.value } }))}>{allowedRoles.map((role) => <option key={role} value={role}>{role === 'sk_chairperson' ? 'SK Chairperson' : role === 'bhw' ? 'Barangay Health Worker' : role === 'tanod' ? 'Barangay Tanod' : role === 'kagawad' ? 'Barangay Kagawad' : role === 'secretary' ? 'Barangay Secretary' : role === 'treasurer' ? 'Barangay Treasurer' : 'Resident'}</option>)}</select></label>
-              <label>Access status<select value={draft.status} disabled={busyId === member.id} onChange={(event) => setDrafts((current) => ({ ...current, [member.id]: { ...draft, status: event.target.value as 'active' | 'suspended' } }))}><option value="active">Active</option><option value="suspended">Suspended</option></select></label>
+              <label>Access status<select value={draft.status} disabled={busyId === member.id} onChange={(event) => setDrafts((current) => ({ ...current, [member.id]: { status: event.target.value as 'active' | 'suspended' } }))}><option value="active">Active</option><option value="suspended">Suspended</option></select></label>
               <button type="button" className="button primary" disabled={!changed || busyId === member.id} onClick={() => void save(member)}>{busyId === member.id ? 'Saving…' : 'Save access'}</button>
             </div>
             <p className="field-hint">Suspending removes access to this barangay but keeps the membership and history.</p>

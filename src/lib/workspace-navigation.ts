@@ -16,7 +16,7 @@ export const workspaceNavigation: WorkspaceNavigationItem[] = [
   { label: 'Barangay settings', section: 'barangay-settings', icon: Settings2, roles: ['captain'] },
   { label: 'Plans & subscription', section: 'tenant-subscription', icon: CircleDollarSign, roles: ['captain'] },
   { label: 'Residents & households', section: 'residents', icon: Users, roles: ['captain', 'secretary', 'resident'], feature: 'core_services' },
-  { label: 'Official invitations', section: 'invitations', icon: UserPlus, roles: ['captain'] },
+  { label: 'Official invitations', section: 'invitations', icon: UserPlus, roles: ['captain', 'secretary'] },
   { label: 'Document services', section: 'documents', icon: FileText, roles: ['captain', 'secretary', 'resident'], feature: 'core_services' },
   { label: 'Meetings & attendance', section: 'meetings', icon: CalendarDays, roles: ['captain', 'secretary', 'kagawad', 'resident'], feature: 'core_services' },
   { label: 'Announcements', section: 'announcements', icon: Bell, roles: ['captain', 'secretary', 'resident'], feature: 'core_services' },

@@ -289,3 +289,10 @@
   .landing-page .privacy-contact-links { grid-template-columns: minmax(0, 1fr); }
   .landing-page .privacy-contact-links > a { min-height: 58px; padding: 12px; }
 }
+.landing-page .landing-steps { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media(max-width:900px) {
+  .landing-page .landing-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media(max-width:650px) {
+  .landing-page .landing-steps { grid-template-columns: minmax(0, 1fr); }
+}

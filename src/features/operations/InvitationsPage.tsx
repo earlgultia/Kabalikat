@@ -9,12 +9,25 @@ import { formatDateTime } from './format'
 
 const invitationSchema = z.object({
   email: z.email(),
-  role: z.enum(['secretary','treasurer','kagawad','sk_chairperson','bhw','tanod','resident']),
+  role: z.string().min(1),
 })
+
+const secretaryRoles = [
+  { key: 'treasurer', label: 'Barangay Treasurer' },
+  { key: 'kagawad', label: 'Barangay Kagawad' },
+  { key: 'sk_chairperson', label: 'SK Chairperson' },
+  { key: 'bhw', label: 'Barangay Health Worker' },
+  { key: 'tanod', label: 'Barangay Tanod' },
+  { key: 'resident', label: 'Resident' },
+]
 
 export function InvitationsPage({ focusPending, onFocusHandled }: { focusPending?: boolean; onFocusHandled?: () => void } = {}) {
   const { membership } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
+  const inviterRole = membership?.role?.key
+  const assignableRoles = inviterRole === 'captain'
+    ? [{ key: 'secretary', label: 'Barangay Secretary' }]
+    : inviterRole === 'secretary' ? secretaryRoles : []
   const queryClient = useQueryClient()
   const [page, setPage] = useState(0)
   const [pendingUnexpiredOnly, setPendingUnexpiredOnly] = useState(false)
@@ -42,6 +55,10 @@ export function InvitationsPage({ focusPending, onFocusHandled }: { focusPending
     const fields = Object.fromEntries(new FormData(form).entries())
     const parsed = invitationSchema.safeParse(fields)
     if (!parsed.success) { setError(parsed.error.issues[0]?.message ?? 'Check the invitation details.'); return }
+    if (!assignableRoles.some((role) => role.key === parsed.data.role)) {
+      setError('Your role cannot invite that account type.')
+      return
+    }
     setBusy(true)
     try {
       const created = await createInvitation(tenantId, parsed.data.email, parsed.data.role)
@@ -84,9 +101,9 @@ export function InvitationsPage({ focusPending, onFocusHandled }: { focusPending
     {canInvite.error && <ErrorNotice message="Invitation permission could not be checked. Refresh the page or contact your barangay administrator." onRetry={() => void canInvite.refetch()} retrying={canInvite.isFetching} />}
     {Boolean(tenantId) && !canInvite.isPending && !canInvite.error && !canInvite.data && <div className="ops-panel"><strong>Invitation access is restricted</strong><p>Your current role cannot invite members to this barangay.</p></div>}
     {canInvite.data && <form className="ops-panel ops-form" onSubmit={(event) => void submit(event)}>
-      <div className="ops-panel-heading"><div><h2>Create an invitation</h2><p>No email is sent by this app. Deliver the generated link through your approved channel.</p></div><UserPlus size={18} /></div>
+      <div className="ops-panel-heading"><div><h2>Create an invitation</h2><p>{inviterRole === 'captain' ? 'Invite the Barangay Secretary for this workspace.' : 'Invite Treasurer, Kagawad, SK Chairperson, Health Worker, Tanod, or Resident accounts for this workspace.'} No email is sent by this app; deliver the generated link through your approved channel.</p></div><UserPlus size={18} /></div>
       <div className="ops-form-grid"><label>Email address<input type="email" name="email" autoComplete="email" required /></label>
-        <label>Assigned role<select name="role" defaultValue=""><option value="" disabled>Select a role</option><option value="secretary">Barangay Secretary</option><option value="treasurer">Barangay Treasurer</option><option value="kagawad">Barangay Kagawad</option><option value="sk_chairperson">SK Chairperson</option><option value="bhw">Barangay Health Worker</option><option value="tanod">Barangay Tanod</option><option value="resident">Resident</option></select></label></div>
+        <label>Assigned role<select name="role" defaultValue=""><option value="" disabled>Select a role</option>{assignableRoles.map((role) => <option key={role.key} value={role.key}>{role.label}</option>)}</select></label></div>
       <div className="ops-form-actions"><span className="field-hint">The invited person must sign in using this email address.</span><button className="button primary" disabled={busy}>{busy ? 'Creating…' : 'Create invite'}</button></div>
       {error && <ErrorNotice message={error} />}{success && <div className="ops-success">{success}</div>}
       {inviteUrl && <div className="invite-link-box"><label>One-time invitation link<input readOnly value={inviteUrl} /></label><button type="button" className="button outline" onClick={() => void copyLink()}><Clipboard size={15} />Copy link</button></div>}
