@@ -76,7 +76,7 @@ export type MeetingRow = {
   id: string; title: string; location: string; starts_at: string; ends_at: string | null
   agenda: string; status: 'draft' | 'scheduled' | 'completed' | 'cancelled'
 }
-export type AttendanceRow = { user_id: string; status: string; source: string; recorded_at: string }
+export type AttendanceRow = { user_id: string; status: string; source: string; recorded_at: string; signature_path?: string | null }
 export type MeetingAttendeeRow = { user_id: string }
 export type MeetingStatusEventRow = {
   id: string; from_status: string | null; to_status: string; reason: string | null; actor_id: string | null; created_at: string
@@ -1047,9 +1047,14 @@ export async function updateMeetingDetails(meetingId: string, input: {
   if (error) throw new Error(error.message)
 }
 
-export function listAttendance(meetingId: string) {
-  return rows<AttendanceRow>(client().from('attendance_records')
+export async function listAttendance(meetingId: string, includeSignatures = false) {
+  const attendance = await rows<AttendanceRow>(client().from('attendance_records')
     .select('user_id,status,source,recorded_at').eq('meeting_id', meetingId).order('recorded_at'))
+  if (!includeSignatures || !attendance.length) return attendance
+  const signatures = await rows<{ user_id: string; signature_path: string }>(client().from('meeting_attendance_signatures')
+    .select('user_id,signature_path').eq('meeting_id', meetingId))
+  const signaturesByUser = new Map(signatures.map((signature) => [signature.user_id, signature.signature_path]))
+  return attendance.map((record) => ({ ...record, signature_path: signaturesByUser.get(record.user_id) ?? null }))
 }
 
 export function listMeetingAttendees(meetingId: string) {
@@ -1089,8 +1094,8 @@ export function createMeetingAttendanceToken(meetingId: string) {
   return rpc<{ token: string; expires_at: string }>('create_meeting_attendance_token', { p_meeting_id: meetingId })
 }
 
-export function checkInWithMeetingQr(meetingId: string, token: string) {
-  return rpc<void>('check_in_with_meeting_qr', { p_meeting_id: meetingId, p_token: token })
+export function checkInWithMeetingQr(meetingId: string, token: string, signaturePath: string) {
+  return rpc<void>('check_in_with_meeting_qr_signed', { p_meeting_id: meetingId, p_token: token, p_signature_path: signaturePath })
 }
 
 export function recordAttendance(meetingId: string, userId: string, status: 'present' | 'absent' | 'excused', reason: string) {
@@ -1357,36 +1362,6 @@ export async function listFinanceReportExportPage(tenantId: string, page: number
     .range(from, from + FINANCE_REPORT_EXPORT_PAGE_SIZE - 1)
   if (error) throw new Error(error.message)
   return { exports: data ?? [], total: count ?? 0 }
-}
-
-export async function uploadFinancialReceipt(transactionId: string, file: File) {
-  const safeName = file.name.replaceAll('\\', '_').replaceAll('/', '_')
-    .split('').map((character) => character.charCodeAt(0) < 32 ? '_' : character).join('').trim()
-  if (!safeName || safeName === '.' || safeName === '..' || safeName.length > 180) throw new Error('The receipt file name is invalid or too long.')
-  try { await cleanupExpiredFinancialReceiptUploads() }
-  catch { /* Expired uploads must not block a new receipt upload. */ }
-  const receiptId = window.crypto.randomUUID()
-  const path = await rpc<string>('create_financial_receipt_upload_intent', {
-    p_transaction_id: transactionId, p_receipt_id: receiptId, p_file_name: safeName,
-    p_mime_type: file.type, p_file_size: file.size,
-  })
-  try {
-    const { error } = await client().storage.from('financial-receipts').upload(path, file, {
-      cacheControl: '3600', contentType: file.type, upsert: false,
-    })
-    if (error) throw new Error(error.message)
-    await rpc<string>('register_financial_receipt', { p_receipt_id: receiptId })
-  } catch (error) {
-    try {
-      const { error: cleanupError } = await client().storage.from('financial-receipts').remove([path])
-      if (!cleanupError) {
-        await rpc<boolean>('discard_financial_receipt_upload_intent', { p_receipt_id: receiptId })
-      }
-    } catch {
-      // Preserve the primary upload error if cleanup is also unavailable.
-    }
-    throw error
-  }
 }
 
 export async function cleanupExpiredFinancialReceiptUploads() {

@@ -199,8 +199,8 @@ export function MeetingRecordsPanel({ tenantId, meetingId, meetingTitle, locatio
       <section><h3>Status history</h3>{(printStatusHistory ?? []).length ? <table><thead><tr><th>Change</th><th>When</th><th>Reason</th></tr></thead><tbody>{(printStatusHistory ?? []).map((entry) => <tr key={entry.id}>
         <td>{entry.from_status ? `${entry.from_status.replaceAll('_', ' ')} → ` : ''}{entry.to_status.replaceAll('_', ' ')}</td><td>{formatDateTime(entry.created_at)}</td><td>{entry.reason || '—'}</td>
       </tr>)}</tbody></table> : <p>No status changes have been recorded.</p>}</section>
-      <section><h3>Attendance</h3>{attendance.length ? <table><thead><tr><th>Attendee</th><th>Status</th><th>Recorded</th></tr></thead><tbody>{attendance.map((item) => <tr key={item.user_id}>
-        <td>{members.find((member) => member.user_id === item.user_id)?.profile?.display_name || 'Attendee'}</td><td>{item.status}</td><td>{formatDateTime(item.recorded_at)}</td>
+      <section><h3>Attendance</h3>{attendance.length ? <table><thead><tr><th>Attendee</th><th>Status</th><th>Recorded</th><th>Signature</th></tr></thead><tbody>{attendance.map((item) => <tr key={item.user_id}>
+        <td>{members.find((member) => member.user_id === item.user_id)?.profile?.display_name || 'Attendee'}</td><td>{item.status}</td><td>{formatDateTime(item.recorded_at)}</td><td>{item.signature_path ? <svg className="meeting-attendance-signature" viewBox="0 0 400 140" aria-label="Attendee signature"><path d={item.signature_path} fill="none" stroke="#111" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" /></svg> : '—'}</td>
       </tr>)}</tbody></table> : <p>No attendance has been recorded.</p>}</section>
       <footer>Generated {formatDateTime(new Date().toISOString())} · Prepared from the meeting records available to this account.</footer>
     </article>

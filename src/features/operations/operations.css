@@ -257,10 +257,20 @@
 .archive-text-actions .button { min-height: 39px; font-size: 13px; }
 .archive-limit-note { color: #596a6d; font-size: 12px; margin: 12px 0 0; }
 .finance-receipt-link { color: #1d625a; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
-.finance-receipt-upload { display: grid; gap: 8px; margin-top: 10px; max-width: 360px; }
-.finance-receipt-upload label { color: #354f4c; font-size: 12px; font-weight: 700; }
-.finance-receipt-upload input[type="file"] { max-width: 100%; color: #455b5b; font: inherit; font-size: 12px; }
-.finance-receipt-upload .button { justify-self: start; min-height: 38px; }
+.resident-identity-panel, .public-finance-updates { margin-block: 18px; }
+.resident-identity-privacy { align-items: flex-start; background: #eff6f2; border-radius: 10px; color: #27554c; display: flex; gap: 9px; padding: 11px 13px; }
+.resident-identity-privacy svg { flex: 0 0 auto; margin-top: 3px; }
+.resident-identity-upload { display: grid; gap: 14px; max-width: 680px; }
+.resident-identity-status { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; margin-block: 12px; }
+.public-finance-update-list { display: grid; gap: 12px; list-style: none; margin: 16px 0 0; padding: 0; }
+.public-finance-update-list article { border-left: 3px solid #63a08c; padding: 8px 14px; }
+.public-finance-update-list h3 { margin: 0; }
+.public-finance-update-list p { margin: 5px 0; white-space: pre-wrap; }
+.public-finance-update-list time { color: #627571; font-size: 12px; }
+.public-update-actions { display: flex; justify-content: flex-end; margin-top: 10px; }
+.attendance-signature-label { display: block; font-weight: 700; margin: 16px 0 6px; }
+.attendance-signature-pad { border: 1px solid #bacbc4; border-radius: 12px; cursor: crosshair; display: block; max-width: 100%; touch-action: none; width: 100%; }
+.meeting-attendance-signature { display: block; height: 46px; max-width: 160px; width: 100%; }
 .finance-report { align-items: end; display: grid; gap: 12px; grid-template-columns: minmax(220px,1fr) minmax(140px,180px) minmax(140px,180px) auto; margin-bottom: 22px; }
 .finance-report h2 { color: #293f40; font-size: 17px; margin: 0; }
 .finance-report p { color: #53696a; font-size: 13px; line-height: 1.5; margin: 5px 0 0; }

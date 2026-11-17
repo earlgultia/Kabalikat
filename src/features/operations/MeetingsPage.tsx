@@ -326,7 +326,7 @@ export function MeetingsPage({ focusId, focusPage, focusCorrectionRequestId, foc
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const attendance = useQuery({
-    queryKey: ['attendance', selectedMeeting], queryFn: () => listAttendance(selectedMeeting), enabled: Boolean(selectedMeeting),
+    queryKey: ['attendance', selectedMeeting, canManage.data], queryFn: () => listAttendance(selectedMeeting, Boolean(canManage.data)), enabled: Boolean(selectedMeeting),
   })
   const attendees = useQuery({
     queryKey: ['meeting-attendees', selectedMeeting], queryFn: () => listMeetingAttendees(selectedMeeting),

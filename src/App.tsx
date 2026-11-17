@@ -27,6 +27,8 @@ import { listUpcomingCommunityEvents } from './features/operations/community-cal
 import { countOwnOpenSupportTickets, getPlatformSupportAttentionCount } from './features/operations/support-data'
 import { getPendingPlatformPlanRequestCount } from './features/operations/subscription-requests-data'
 import { LandingPage } from './features/landing/LandingPage'
+import { PublicFinanceUpdates } from './features/operations/PublicFinanceUpdates'
+import { BarangayOfficialUpdates } from './features/operations/BarangayOfficialUpdates'
 import { TermsPage } from './features/landing/TermsPage'
 import { PrivacyPolicyPage } from './features/landing/PrivacyPolicyPage'
 
@@ -630,6 +632,8 @@ function Workspace() {
             {dashboard.data.sk_projects != null && <button className="dashboard-metric" onClick={() => { setFocusedCommunityUpdate({ section: 'sk-projects', id: '', skProjectStatus: 'open' }); setActiveSection('sk-projects') }}><span className="dashboard-metric-icon blue"><FolderKanban size={19} /></span><span><small>Open SK projects</small><strong>{dashboard.data.sk_projects.toLocaleString()}</strong></span><ArrowRight size={16} /></button>}
             {dashboard.data.upcoming_sk_events != null && <button className="dashboard-metric" onClick={() => { setFocusedCommunityUpdate({ section: 'sk-events', id: '', focusUpcomingSkEvents: true }); setActiveSection('sk-events') }}><span className="dashboard-metric-icon violet"><CalendarDays size={19} /></span><span><small>Upcoming SK events</small><strong>{dashboard.data.upcoming_sk_events.toLocaleString()}</strong></span><ArrowRight size={16} /></button>}
           </div>}
+          <BarangayOfficialUpdates key={`${user?.id ?? 'signed-out'}:${membership?.id ?? 'no-membership'}`} />
+          <PublicFinanceUpdates key={`${user?.id ?? 'signed-out'}:${membership?.id ?? 'no-membership'}`} />
           {membership.role?.key === 'resident' && <section className="captain-review-queue" aria-labelledby="resident-follow-up-title">
             <div className="section-heading"><div><h2 id="resident-follow-up-title">Your resident services</h2><p>Private status for your linked profile and requests.</p></div><span className="role-pill">Your account</span></div>
             {residentFollowUp.isPending && <div className="dashboard-metrics-loading" role="status">Loading your resident services...</div>}

@@ -9,6 +9,7 @@ import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from
 import { formatDateTime, formatManilaDate, getManilaDateInputValue } from './format'
 import { BarangayProjectUpdateResponseThread, ProjectProgressHistory } from './ProjectHistory'
 import { encodeCsv } from './csv'
+import { BarangayOfficialUpdates } from './BarangayOfficialUpdates'
 
 const projectSchema = z.object({ title: z.string().trim().min(3).max(180), description: z.string().trim().max(4000), start: z.string(), end: z.string() })
 const updateSchema = z.object({ type: z.enum(['milestone', 'progress']), title: z.string().trim().min(3).max(180), details: z.string().trim().max(3000) })
@@ -127,6 +128,7 @@ export function ProjectsPage({ focusProjectId, focusProjectPage, focusUpdateId, 
     <PageHeading title="Barangay projects" description="Track community projects, planned dates, status, and progress updates.">
       {canManage.data && <button className="button primary" onClick={() => setShowForm((visible) => !visible)}><Plus size={15} />New project</button>}
     </PageHeading>
+    <BarangayOfficialUpdates key={`${membership?.id ?? 'no-membership'}`} />
     {!tenantId && <EmptyNotice title="Choose a barangay workspace" detail="Select an active barangay membership to view project status and progress." />}
     {Boolean(tenantId) && canManage.isPending && <LoadingNotice compact />}
     {canManage.error && <ErrorNotice message="Project management access could not be checked. Project records remain available under your current access; management controls are unavailable until permissions can be verified." onRetry={() => void canManage.refetch()} retrying={canManage.isFetching} />}

@@ -6,6 +6,7 @@ import { useAuth } from '../../auth/AuthProvider'
 import { cancelResidentProfileChange, findResidentProfileChangePage, getOwnResidentDataExport, hasPermission, listHouseholdsPage, listResidents, listResidentsPage, listResidentRecordsCreatedByMe, listResidencyVerifications, listResidentProfileChangeRequests, registerResident, reviewResidentProfileChange, submitResidentProfileChange, verifyResident, HOUSEHOLD_PAGE_SIZE, RESIDENT_CORRECTION_PAGE_SIZE, RESIDENT_PAGE_SIZE, type HouseholdRow } from './data'
 import { ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 import { formatManilaDate, formatManilaCalendarDate, getManilaDateInputValue } from './format'
+import { ResidentIdentityDocuments, ResidentIdentityReviewQueue } from './ResidentIdentityDocuments'
 
 const residentSchema = z.object({
   firstName: z.string().trim().min(1).max(100),
@@ -143,6 +144,7 @@ export function ResidentsPage({ focusId, focusOwnCorrections, focusResidentProfi
     enabled: Boolean(tenantId && canVerify.data && user?.id && residentRows.length),
   })
   const canReviewChanges = useQuery({ queryKey: ['permission', tenantId, 'resident.update'], queryFn: () => hasPermission(tenantId, 'resident.update'), enabled: Boolean(tenantId) })
+  const canReviewIdentity = useQuery({ queryKey: ['permission', user?.id ?? 'signed-out', tenantId, 'resident.identity.review'], queryFn: () => hasPermission(tenantId, 'resident.identity.review'), enabled: Boolean(tenantId && user?.id) })
   const profileChanges = useQuery({
     queryKey: ['resident-profile-changes', tenantId, role, correctionPage, excludeOwnProfileCorrections],
     queryFn: () => listResidentProfileChangeRequests(tenantId, correctionPage, role !== 'resident', excludeOwnProfileCorrections),
@@ -354,6 +356,9 @@ export function ResidentsPage({ focusId, focusOwnCorrections, focusResidentProfi
     {errorMessage && <ErrorNotice message={errorMessage} userFacingMessage />}
     {residentActionError && <div className="ops-error" role="alert"><span>{residentActionError}</span></div>}
     {focusError && <p className="account-security-error" role="status">{focusError}</p>}
+    {role === 'resident' && ownResident && <ResidentIdentityDocuments barangayId={tenantId} residentId={ownResident.id} />}
+    {canReviewIdentity.data && <ResidentIdentityReviewQueue barangayId={tenantId} />}
+    {canReviewIdentity.error && <ErrorNotice message="Private ID review access could not be checked. The confidential review queue is hidden until access is confirmed." userFacingMessage onRetry={() => void canReviewIdentity.refetch()} retrying={canReviewIdentity.isFetching} />}
     {role === 'resident' && ownResident && <section className="ops-panel resident-correction-panel" id="resident-own-correction-history">
       <div className="ops-panel-heading"><div><h2>Request a profile correction</h2><p>Changes are sent to authorized barangay staff. Your official record changes only after approval.</p></div><UserRoundPen size={19} /></div>
       {ownPendingProfileChanges.isPending ? <LoadingNotice compact /> : ownPendingProfileChanges.error ? <ErrorNotice message="Your pending request status could not be checked. Refresh before submitting another correction." userFacingMessage onRetry={() => void ownPendingProfileChanges.refetch()} retrying={ownPendingProfileChanges.isFetching} /> : (ownPendingProfileChanges.data?.totalCount ?? 0) > 0 ? <p className="field-hint">You already have a pending request. You can submit another after staff review.</p> : <form className="ops-form" onSubmit={(event) => void submitCorrection(event)}>

@@ -6,7 +6,7 @@ import { useAuth } from '../../auth/AuthProvider'
 import {
   approveFinanceBudget, createFinanceBudget, createFinancialTransaction, createFinancialReceiptDownloadUrl, hasPermission,
   FINANCE_BUDGET_AMENDMENT_PAGE_SIZE, FINANCE_BUDGET_PAGE_SIZE, FINANCE_REPORT_EXPORT_PAGE_SIZE, FINANCIAL_TRANSACTION_PAGE_SIZE, listFinanceBudgetAmendmentPage, listFinanceBudgetPage, listFinanceBudgetUsageForPage, listFinanceReportExportPage, listFinancialAdjustmentsForTransactions, listFinancialReceiptsForTransactions, listFinancialReportRows, listFinancialTransactionPage, reviewFinanceBudgetAmendment, reviewFinancialAdjustment, reviewFinancialTransaction,
-  cleanupExpiredFinancialReceiptUploads, listMyPendingFinancialAdjustmentTransactionIds, listOtherPendingFinancialAdjustmentTransactionIds, recordFinanceReportExport, requestFinanceBudgetAmendment, requestFinancialAdjustment, uploadFinancialReceipt, voidFinancialTransaction,
+  cleanupExpiredFinancialReceiptUploads, listMyPendingFinancialAdjustmentTransactionIds, listOtherPendingFinancialAdjustmentTransactionIds, recordFinanceReportExport, requestFinanceBudgetAmendment, requestFinancialAdjustment, voidFinancialTransaction,
 } from './data'
 import { EmptyNotice, ErrorNotice, LoadingNotice, PageHeading, StatusPill } from './shared'
 import { formatDateTime, formatManilaDate, getManilaDateInputValue } from './format'
@@ -27,8 +27,6 @@ const centsToDecimal = (amount: bigint) => {
   const absolute = amount < 0n ? -amount : amount
   return `${sign}${absolute / 100n}.${String(absolute % 100n).padStart(2, '0')}`
 }
-const allowedReceiptTypes = new Set(['application/pdf', 'image/jpeg', 'image/png'])
-const receiptLimitBytes = 10 * 1024 * 1024
 const manilaDate = getManilaDateInputValue()
 
 export function FinancePage({ focusQueue, onFocusHandled }: { focusQueue?: 'budgets' | 'transactions' | 'budget_changes' | 'transaction_changes' | 'captain_review'; onFocusHandled?: () => void }) {
@@ -214,22 +212,6 @@ export function FinancePage({ focusQueue, onFocusHandled }: { focusQueue?: 'budg
     finally { setBusy(false) }
   }
 
-  async function attachReceipt(transactionId: string, event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const form = event.currentTarget
-    const file = (form.elements.namedItem('receipt') as HTMLInputElement | null)?.files?.[0]
-    if (!file || !allowedReceiptTypes.has(file.type) || file.size < 1 || file.size > receiptLimitBytes) {
-      setError('Choose a PDF, JPEG, or PNG receipt up to 10 MB.')
-      return
-    }
-    setBusy(true); setError(''); setMessage('')
-    try {
-      await uploadFinancialReceipt(transactionId, file)
-      await refresh(); form.reset(); setMessage('Receipt uploaded to private financial records.')
-    } catch (err) { setError(err instanceof Error ? err.message : 'Unable to upload this receipt.') }
-    finally { setBusy(false) }
-  }
-
   async function openReceipt(path: string) {
     setError('')
     const receiptWindow = window.open('about:blank', '_blank')
@@ -383,10 +365,6 @@ export function FinancePage({ focusQueue, onFocusHandled }: { focusQueue?: 'budg
         {canManage.data && item.status === 'posted' && !adjustments.data?.some((adjustment) => adjustment.transaction_id === item.id && adjustment.status === 'pending') && <button className="button outline finance-adjustment-toggle" disabled={busy} onClick={() => setAdjustmentTransaction(adjustmentTransaction === item.id ? '' : item.id)}>Request correction</button>}
         {adjustmentTransaction === item.id && <form className="finance-amendment-form" onSubmit={(event) => void submitAdjustment(item.id, event)}><label>Amount change (PHP)<input name="amountChange" type="number" min="-999999999999.99" max="999999999999.99" step="0.01" required /><span className="field-hint">Positive increases the entry; negative reduces it.</span></label><label>Reason<textarea name="reason" minLength={3} maxLength={1000} required /></label><button className="button primary" disabled={busy}>Submit correction for approval</button></form>}
         {receipts.data?.filter((receipt) => receipt.transaction_id === item.id).map((receipt) => <button className="finance-receipt-link" key={receipt.id} onClick={() => void openReceipt(receipt.storage_path)}><ReceiptText size={14} />{receipt.file_name}<small>{(Number(receipt.file_size) / 1024).toFixed(0)} KB</small></button>)}
-        {canManage.data && ['submitted', 'posted'].includes(item.status) && <form className="finance-receipt-upload" onSubmit={(event) => void attachReceipt(item.id, event)}>
-          <label>Attach receipt <span className="field-hint">Optional · PDF, JPEG, PNG up to 10 MB</span><input name="receipt" type="file" accept="application/pdf,image/jpeg,image/png" required /></label>
-          <button className="button outline" disabled={busy}><ReceiptText size={14} />Upload</button>
-        </form>}
         {canApprove.data && item.status === 'submitted' && item.submitted_by !== user?.id && <div className="finance-review-actions"><button className="button outline" disabled={busy} onClick={() => void reviewTransaction(item.id, false)}>Reject</button><button className="button primary" disabled={busy} onClick={() => void reviewTransaction(item.id, true)}>Approve & post</button></div>}
         {canApprove.data && item.status === 'posted' && item.submitted_by !== user?.id && <div className="finance-review-actions"><button className="button outline danger-action" disabled={busy} onClick={() => void voidTransaction(item.id)}>Void with reason</button></div>}
       </article>)}</div> : <EmptyNotice title="No financial entries" detail="Entries submitted against approved budgets will appear here." />}
