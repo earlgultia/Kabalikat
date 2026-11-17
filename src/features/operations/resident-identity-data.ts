@@ -38,8 +38,17 @@ export async function listPendingResidentIdentitySubmissions(barangayId: string,
     .order('id', { ascending: true })
     .range(start, start + pageSize)
   if (error) throw new Error(error.message)
-  const rows = (data ?? []) as ResidentIdentitySubmission[]
-  return { items: rows.slice(0, pageSize), hasNextPage: rows.length > pageSize }
+  type QueryRow = Omit<ResidentIdentitySubmission, 'resident'> & {
+    resident: NonNullable<ResidentIdentitySubmission['resident']> | NonNullable<ResidentIdentitySubmission['resident']>[] | null
+  }
+  const rows = (data ?? []) as unknown as QueryRow[]
+  return {
+    items: rows.slice(0, pageSize).map((row): ResidentIdentitySubmission => ({
+      ...row,
+      resident: Array.isArray(row.resident) ? row.resident[0] ?? null : row.resident,
+    })),
+    hasNextPage: rows.length > pageSize,
+  }
 }
 
 export async function submitResidentIdentityDocuments(input: {
