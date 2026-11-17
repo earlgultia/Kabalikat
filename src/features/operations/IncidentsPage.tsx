@@ -233,7 +233,12 @@ export function IncidentsPage({ focusId, focusAssignedActive, focusOpenReports, 
       setLguEscalationNote(''); setLguEscalationId('')
       await refresh()
       setMessage('Incident escalated to the LGU. The municipality can now acknowledge and follow up on it.')
-    } catch (err) { setError(err instanceof Error ? err.message : 'Unable to escalate this report to the LGU.') }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : ''
+      setError(message.toLowerCase().includes('active monthly lgu subscription')
+        ? 'This municipality’s LGU subscription is inactive or expired. Ask the LGU administrator to renew it before escalating this report.'
+        : message || 'Unable to escalate this report to the LGU.')
+    }
     finally { setBusy(false) }
   }
 
