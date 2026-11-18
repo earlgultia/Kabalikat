@@ -6,6 +6,25 @@ import { ErrorNotice, LoadingNotice, StatusPill } from './shared'
 import { formatDateTime } from './format'
 import { activateLguMonthlySubscriptionRequest, declineLguMonthlySubscriptionRequest, getPlatformLguSubscriptionSummary, LGU_SUBSCRIPTION_REQUEST_PAGE_SIZE, listPlatformLguSubscriptionRequests, listPlatformLguSubscriptions, listPlatformLguWorkspaceStatusHistory, PLATFORM_LGU_SUBSCRIPTION_PAGE_SIZE, setPlatformLguWorkspaceStatus, type LguSubscriptionRequest } from './lgu-subscription-data'
 
+function getSubscriptionReviewError(error: unknown) {
+  const detail = error instanceof Error ? error.message : 'Unable to process this LGU subscription request.'
+  const normalized = detail.toLowerCase()
+
+  if (normalized.includes('not authorized') || normalized.includes('permission')) {
+    return { message: 'Your current session is not authorized to review subscription requests. Sign out and back in, then confirm the account has Super Admin access.', detail }
+  }
+  if (normalized.includes('not found') || normalized.includes('already declined') || normalized.includes('no longer pending')) {
+    return { message: 'This request has changed since it was loaded. Refresh the request list and review its current status.', detail }
+  }
+  if (normalized.includes('plan is invalid') || normalized.includes('plan is no longer available')) {
+    return { message: 'The plan attached to this request could not be activated. Apply the latest LGU subscription migration and retry.', detail }
+  }
+  if (normalized.includes('network') || normalized.includes('fetch')) {
+    return { message: 'The service could not be reached. Refresh the request list before retrying in case the action already completed.', detail }
+  }
+  return { message: detail, detail }
+}
+
 function PlatformLguWorkspaceStatusHistory({ lguId }: { lguId: string }) {
   const [open, setOpen] = useState(false)
   const history = useQuery({ queryKey: ['platform-lgu-workspace-status-history', lguId], queryFn: () => listPlatformLguWorkspaceStatusHistory(lguId), enabled: open })
@@ -76,18 +95,20 @@ export function PlatformLguSubscriptionStatusPanel() {
   </section>
 }
 
-export function PlatformLguSubscriptionRequestsPanel() {
+export function PlatformLguSubscriptionRequestsPanel({ status, onStatusChange }: { status: string; onStatusChange: (status: string) => void }) {
   const queryClient = useQueryClient()
   const [page, setPage] = useState(0)
-  const [status, setStatus] = useState('pending')
   const [notes, setNotes] = useState<Record<string, string>>({})
   const [activationTarget, setActivationTarget] = useState<LguSubscriptionRequest | null>(null)
   const [declineTarget, setDeclineTarget] = useState<LguSubscriptionRequest | null>(null)
   const [busyId, setBusyId] = useState('')
   const [error, setError] = useState('')
+  const [errorDetail, setErrorDetail] = useState('')
   const [message, setMessage] = useState('')
   const requests = useQuery({ queryKey: ['platform-lgu-subscription-requests', page, status], queryFn: () => listPlatformLguSubscriptionRequests(page, status), refetchInterval: 60_000, refetchIntervalInBackground: false })
   const totalPages = Math.max(1, Math.ceil((requests.data?.total ?? 0) / LGU_SUBSCRIPTION_REQUEST_PAGE_SIZE))
+
+  useEffect(() => { setPage(0) }, [status])
 
   async function review(requestId: string, decision: 'activate' | 'decline') {
     const note = notes[requestId]?.trim() ?? ''
@@ -95,7 +116,7 @@ export function PlatformLguSubscriptionRequestsPanel() {
       setError(decision === 'activate' ? 'Record how the monthly payment was confirmed (3 to 950 characters).' : 'Add a decline reason between 3 and 950 characters.')
       return
     }
-    setBusyId(requestId); setError(''); setMessage('')
+    setBusyId(requestId); setError(''); setErrorDetail(''); setMessage('')
     try {
       if (decision === 'activate') await activateLguMonthlySubscriptionRequest(requestId, note)
       else await declineLguMonthlySubscriptionRequest(requestId, note)
@@ -109,18 +130,20 @@ export function PlatformLguSubscriptionRequestsPanel() {
         queryClient.invalidateQueries({ queryKey: ['platform-activity'] }),
       ])
       setNotes((current) => ({ ...current, [requestId]: '' }))
-      setActivationTarget(null); setDeclineTarget(null); setStatus(decision === 'activate' ? 'activated' : 'declined'); setPage(0)
+      setActivationTarget(null); setDeclineTarget(null); onStatusChange(decision === 'activate' ? 'activated' : 'declined'); setPage(0)
       setMessage(decision === 'activate' ? 'Monthly LGU subscription activated for one month.' : 'LGU subscription request declined and the reason recorded.')
     } catch (reviewError) {
-      setError(reviewError instanceof Error ? reviewError.message : 'Unable to process this LGU subscription request.')
+      const reviewFailure = getSubscriptionReviewError(reviewError)
+      setError(reviewFailure.message)
+      setErrorDetail(reviewFailure.detail)
     } finally { setBusyId('') }
   }
 
   return <section className="platform-plan-requests" aria-labelledby="platform-lgu-subscription-requests-title">
     <div className="ops-panel-heading"><div><h2 id="platform-lgu-subscription-requests-title">LGU monthly subscription requests</h2><p>Review municipality plan requests. Confirm payment manually before activating each one-month period.</p></div><CircleDollarSign size={19} /></div>
     {message && <div className="ops-success" role="status"><CheckCircle2 size={16} />{message}</div>}
-    {error && <div className="platform-plan-request-error"><ErrorNotice message={error} /><details><summary>Action details</summary><p>{error}</p></details></div>}
-    <div className="platform-plan-request-filters"><label>Request status<select value={status} onChange={(event) => { setStatus(event.target.value); setPage(0) }}><option value="pending">Awaiting review</option><option value="activated">Activated</option><option value="declined">Declined</option><option value="all">All requests</option></select></label><span className="field-hint">{requests.data?.total ?? 0} requests</span></div>
+    {error && <div className="platform-plan-request-error"><ErrorNotice message={error} userFacingMessage /><details><summary>Action details</summary><p>{errorDetail || error}</p></details></div>}
+    <p className="field-hint">{requests.data?.total ?? 0} LGU requests in this status.</p>
     {requests.isPending && <LoadingNotice compact />}
     {requests.error && <ErrorNotice message="LGU subscription requests could not be loaded." onRetry={() => void requests.refetch()} retrying={requests.isFetching} />}
     {requests.data?.total === 0 && !requests.isPending && <p className="field-hint">No {status === 'pending' ? 'LGU subscription requests are awaiting review' : 'matching LGU subscription requests'}.</p>}
