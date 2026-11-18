@@ -45,6 +45,7 @@ export function LguMunicipalIncidentReports({ lguId, onOpenPendingEscalations }:
     if (target) {
       target.scrollIntoView({ behavior: 'smooth', block: 'center' })
       target.focus({ preventScroll: true })
+      setSelectedReportId(null)
     }
   }, [selectedReportId, reports.data, reports.isFetching])
 
@@ -61,8 +62,10 @@ export function LguMunicipalIncidentReports({ lguId, onOpenPendingEscalations }:
 
   return <section className="ops-panel" aria-labelledby="lgu-all-incidents-title">
     <div className="ops-panel-heading"><div><h2 id="lgu-all-incidents-title"><AlertTriangle size={19} /> All barangay incident reports</h2><p>Read-only municipal view of reports from every linked barangay. Only Captain-escalated reports can be acknowledged by the LGU.</p></div><button type="button" className="button outline" disabled={reports.isFetching || summary.isFetching} onClick={() => void Promise.all([reports.refetch(),summary.refetch()])}><RefreshCw size={15} />Refresh</button></div>
+    {summary.isPending && <p className="field-hint" role="status" aria-live="polite">Loading municipal incident totals…</p>}
     {summary.data && <div className="incident-summary" aria-label="Municipal incident workload"><div><strong>{Number(summary.data.open_reports).toLocaleString()}</strong><span>Open reports</span></div><div><strong>{Number(summary.data.urgent_open_reports).toLocaleString()}</strong><span>High or urgent open</span></div><div><strong>{Number(summary.data.reported_today).toLocaleString()}</strong><span>Reported today</span></div><button type="button" className="incident-summary-link" onClick={onOpenPendingEscalations} aria-label={`${Number(summary.data.pending_escalations)} pending escalations. Open LGU response queue.`}><strong>{Number(summary.data.pending_escalations).toLocaleString()}</strong><span>Awaiting LGU response · Open queue</span></button></div>}
     {summary.error && <ErrorNotice message="Incident workload totals could not be refreshed." onRetry={() => void summary.refetch()} retrying={summary.isFetching} />}
+    {priorityFollowUp.isPending && <p className="field-hint" role="status" aria-live="polite">Loading high-priority barangay follow-ups…</p>}
     {priorityFollowUp.error && <ErrorNotice message="High-priority barangay follow-up reports could not be loaded." onRetry={() => void priorityFollowUp.refetch()} retrying={priorityFollowUp.isFetching} />}
     {priorityFollowUp.data && priorityFollowUp.data.total_count > 0 && <div className="lgu-priority-follow-up" aria-labelledby="lgu-priority-follow-up-title">
       <div><h3 id="lgu-priority-follow-up-title"><AlertTriangle size={17} /> High-priority reports still with barangays</h3><p>These high or urgent reports have not been escalated. Contact the listed barangay if municipal coordination may help; the report remains under the Captain’s response.</p></div>
