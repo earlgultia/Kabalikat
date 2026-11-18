@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
 import { AlertTriangle, ArrowRight, Building2, ChevronLeft, ChevronRight, ClipboardCheck, RefreshCw, ShieldCheck } from 'lucide-react'
 import { useAuth } from '../../auth/AuthProvider'
+import { LogoutConfirmationDialog } from '../../components/LogoutConfirmationDialog'
 import { ErrorNotice, LoadingNotice, StatusPill } from './shared'
 import { formatDateTime } from './format'
 import { LguSubscriptionPanel } from './LguSubscriptionPanel'
@@ -49,6 +50,7 @@ export function LguWorkspace() {
   const [needsCaptainOnly, setNeedsCaptainOnly] = useState(false)
   const [barangayPage, setBarangayPage] = useState(0)
   const [busy, setBusy] = useState(false)
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [inviteUrl, setInviteUrl] = useState('')
@@ -131,6 +133,11 @@ export function LguWorkspace() {
     catch { setError('Clipboard access is unavailable. Select and copy the invitation link.') }
   }
 
+  async function confirmSignOut() {
+    setLogoutConfirmOpen(false)
+    await signOut()
+  }
+
   async function issueCaptainInvite(barangayId: string, event: FormEvent<HTMLFormElement>, replacingPending = false) {
     event.preventDefault()
     setError(''); setMessage(''); setInviteUrl('')
@@ -152,7 +159,8 @@ export function LguWorkspace() {
   }
 
   return <main className="lgu-workspace">
-    <header className="lgu-workspace-header"><div><div className="eyebrow">MUNICIPALITY WORKSPACE</div><h1>{lgu?.municipality ?? 'LGU'} LGU</h1><p>{lgu?.province} · Manage barangay onboarding and reports escalated by Captains.</p></div><div className="lgu-workspace-actions"><span className="role-pill"><ShieldCheck size={15} /> LGU administrator</span><button type="button" className="button outline" onClick={() => void signOut()}>Sign out</button></div></header>
+    <header className="lgu-workspace-header"><div><div className="eyebrow">MUNICIPALITY WORKSPACE</div><h1>{lgu?.municipality ?? 'LGU'} LGU</h1><p>{lgu?.province} · Manage barangay onboarding and reports escalated by Captains.</p></div><div className="lgu-workspace-actions"><span className="role-pill"><ShieldCheck size={15} /> LGU administrator</span><button type="button" className="button outline" aria-haspopup="dialog" aria-label="Sign out of LGU workspace" onClick={() => setLogoutConfirmOpen(true)}>Sign out</button></div></header>
+    {logoutConfirmOpen && <LogoutConfirmationDialog onCancel={() => setLogoutConfirmOpen(false)} onConfirm={() => void confirmSignOut()} />}
     {error && <ErrorNotice message={error} />}{message && <div className="ops-success" role="status"><ClipboardCheck size={16} />{message}</div>}
 
     <LguSubscriptionPanel />
@@ -179,13 +187,24 @@ export function LguWorkspace() {
       {barangayPages > 1 && <nav className="directory-pagination" aria-label="Barangay workspace pages"><button type="button" className="button outline" disabled={barangayPage === 0 || barangays.isFetching} onClick={() => setBarangayPage((value) => Math.max(0, value - 1))}><ChevronLeft size={15} />Previous</button><span>Page {barangayPage + 1} of {barangayPages}</span><button type="button" className="button outline" disabled={barangayPage + 1 >= barangayPages || barangays.isFetching} onClick={() => setBarangayPage((value) => value + 1)}>Next<ChevronRight size={15} /></button></nav>}
     </section>
 
-    {lguSubscriptionActive ? <LguMunicipalIncidentReports lguId={lguMembership?.lgu_id ?? ''} onOpenPendingEscalations={openPendingEscalations} /> : <section className="ops-panel"><h2>Municipality incident reports</h2><p>Activate the LGU monthly subscription to view reports from barangays in this municipality.</p></section>}
+    {lguSubscriptionActive ? <LguMunicipalIncidentReports lguId={lguMembership?.lgu_id ?? ''} onOpenPendingEscalations={openPendingEscalations} /> : <section className="ops-panel"><h2 id="lgu-all-incidents-title">Municipality incident reports</h2><p>Activate the LGU monthly subscription to view reports from barangays in this municipality.</p></section>}
 
     <section className="ops-panel" aria-labelledby="lgu-escalations-title"><div className="ops-panel-heading"><div><h2 id="lgu-escalations-title"><AlertTriangle size={19} /> Incident reports escalated by Captains</h2><p>Only reports a Captain explicitly escalates to this municipality appear here. Tanod reports remain in their barangay until escalated.</p></div><div className="lgu-queue-filters"><label>Search reports<input type="search" value={searchInput} maxLength={160} onChange={(event) => setSearchInput(event.target.value)} placeholder="Summary, barangay, category, or location" /></label><label className="lgu-status-filter">Status<select value={status} onChange={(event) => { setStatus(event.target.value); setPage(0) }}><option value="all">All</option><option value="pending">Needs acknowledgment</option><option value="acknowledged">Being handled</option><option value="resolved">Completed</option></select></label><label className="lgu-status-filter">Severity<select value={severity} onChange={(event) => { setSeverity(event.target.value); setPage(0) }}><option value="all">All severities</option><option value="urgent">Urgent</option><option value="high">High</option><option value="moderate">Moderate</option><option value="low">Low</option></select></label><label className="lgu-status-filter">Escalated on or after<input type="date" value={createdAfter} max={createdBefore || undefined} onChange={(event) => { setCreatedAfter(event.target.value); setPage(0) }} /></label><label className="lgu-status-filter">Escalated on or before<input type="date" value={createdBefore} min={createdAfter || undefined} onChange={(event) => { setCreatedBefore(event.target.value); setPage(0) }} /></label>{(createdAfter || createdBefore) && <button type="button" className="button outline" onClick={() => { setCreatedAfter(''); setCreatedBefore(''); setPage(0) }}>Clear dates</button>}<button type="button" className="button outline" disabled={escalations.isFetching || incidentResponseWorkload.isFetching || !lguSubscriptionActive} onClick={() => void Promise.all([escalations.refetch(),incidentResponseWorkload.refetch()])}><RefreshCw size={15} />{escalations.isFetching || incidentResponseWorkload.isFetching ? 'Refreshing…' : 'Refresh queue'}</button></div></div>
       {lguSubscriptionActive && incidentResponseWorkload.data && <div className="incident-summary lgu-incident-response-summary" aria-label="Municipal response workload"><button type="button" className="incident-summary-link" aria-pressed={status === 'pending' && severity === 'all'} onClick={() => { setStatus('pending'); setSeverity('all'); setPage(0) }}><strong>{incidentResponseWorkload.data.pending_escalations.toLocaleString()}</strong><span>Awaiting acknowledgment</span></button><button type="button" className="incident-summary-link" aria-pressed={status === 'acknowledged' && severity === 'all'} onClick={() => { setStatus('acknowledged'); setSeverity('all'); setPage(0) }}><strong>{incidentResponseWorkload.data.acknowledged_escalations.toLocaleString()}</strong><span>Being handled</span></button><div><strong>{incidentResponseWorkload.data.high_priority_pending.toLocaleString()}</strong><span>High or urgent awaiting response</span></div><div><strong title={incidentResponseWorkload.data.oldest_pending_at ? formatDateTime(incidentResponseWorkload.data.oldest_pending_at) : undefined}>{incidentResponseWorkload.data.oldest_pending_at ? formatElapsedTime(incidentResponseWorkload.data.oldest_pending_at) : '—'}</strong><span>Oldest pending age</span></div></div>}
       {!lguSubscriptionActive ? <div className="ops-empty"><strong>LGU subscription required</strong><p>Activate a current monthly LGU plan to view and respond to escalated incidents.</p></div> : escalations.isPending ? <LoadingNotice /> : escalations.error ? <ErrorNotice message="Escalated incident reports could not be loaded." onRetry={() => void escalations.refetch()} retrying={escalations.isFetching} /> : escalations.data?.rows.length ? <div className="lgu-escalation-list">{escalations.data.rows.map((item) => <article className="lgu-escalation-card" key={item.id}><header><div><span className={`incident-severity severity-${item.severity}`}>{item.severity}</span><h3>{item.summary}</h3></div><StatusPill status={item.status} /></header><div className="incident-meta"><span>{item.barangay_name}</span><span>{item.category}</span><span>{item.location}</span><span>Barangay report: {item.incident_status.replaceAll('_', ' ')}</span><span>Escalated {formatDateTime(item.created_at)}</span></div><p>{item.details || 'No additional incident details were provided.'}</p><div className="lgu-escalation-reason"><strong>Captain’s reason for escalation</strong><p>{item.escalation_note}</p></div>{item.lgu_response_note && <div className="lgu-escalation-reason"><strong>Latest LGU response</strong><p>{item.lgu_response_note}</p></div>}<EscalationHistory escalationId={item.id} />{item.status !== 'resolved' && <div className="lgu-response-actions"><label>Response note<textarea rows={2} maxLength={1000} value={responseDrafts[item.id] ?? ''} onChange={(event) => setResponseDrafts((current) => ({ ...current, [item.id]: event.target.value }))} placeholder="Record who is responding, what support is planned, or what follow-up is needed." /></label><div className="finance-review-actions">{item.status === 'pending' ? <button type="button" className="button primary" disabled={busy} onClick={() => void updateEscalation(item.id, 'acknowledged')}>Acknowledge report</button> : <button type="button" className="button outline" disabled={busy} onClick={() => void updateEscalation(item.id, 'resolved')}>Mark LGU response complete</button>}</div></div>}</article>)}</div> : <div className="ops-empty"><AlertTriangle size={22} /><strong>{search || status !== 'all' || severity !== 'all' || createdAfter || createdBefore ? 'No matching incident reports' : 'No escalated incident reports'}</strong><p>{search || status !== 'all' || severity !== 'all' || createdAfter || createdBefore ? 'Try another search or change the status, severity, or date filters.' : 'Captain-escalated incidents for this municipality will appear here.'}</p></div>}
-      {escalationPages > 1 && <div className="ops-panel ops-form-actions"><span className="muted">Page {page + 1} of {escalationPages} · {escalationTotal.toLocaleString()} escalated reports</span><div className="finance-review-actions"><button type="button" className="button outline" disabled={page === 0 || escalations.isFetching} onClick={() => setPage((current) => current - 1)}><ChevronLeft size={16} />Previous</button><button type="button" className="button outline" disabled={page + 1 >= escalationPages || escalations.isFetching} onClick={() => setPage((current) => current + 1)}>Next<ChevronRight size={16} /></button></div></div>}
+      {escalationPages > 1 && <nav className="directory-pagination" aria-label="Escalated incident report pages"><span>Page {page + 1} of {escalationPages} · {escalationTotal.toLocaleString()} escalated reports</span><div className="finance-review-actions"><button type="button" className="button outline" disabled={page === 0 || escalations.isFetching} onClick={() => setPage((current) => current - 1)}><ChevronLeft size={16} />Previous</button><button type="button" className="button outline" disabled={page + 1 >= escalationPages || escalations.isFetching} onClick={() => setPage((current) => current + 1)}>Next<ChevronRight size={16} /></button></div></nav>}
     </section>
+    <nav className="lgu-footer-navigation" aria-label="LGU dashboard sections">
+      <strong>Jump to a section</strong>
+      <div>
+        <a href="#lgu-subscription-title">Subscription</a>
+        <a href="#lgu-overview-title">Municipal overview</a>
+        <a href="#lgu-new-barangay-title">Create barangay</a>
+        <a href="#lgu-barangays-title">Barangay directory</a>
+        <a href="#lgu-all-incidents-title">Municipal reports</a>
+        <a href="#lgu-escalations-title">Escalated incidents</a>
+      </div>
+    </nav>
     <footer className="footer"><span>Private municipal workspace</span><span>Access is limited to authorized LGU administrators</span></footer>
   </main>
 }
