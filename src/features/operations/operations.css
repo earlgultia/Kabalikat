@@ -261,6 +261,8 @@
 .resident-identity-privacy { align-items: flex-start; background: #eff6f2; border-radius: 10px; color: #27554c; display: flex; gap: 9px; padding: 11px 13px; }
 .resident-identity-privacy svg { flex: 0 0 auto; margin-top: 3px; }
 .resident-identity-upload { display: grid; gap: 14px; max-width: 680px; }
+.resident-identity-reject-form { display: grid; gap: 8px; min-width: 220px; }
+.resident-identity-reject-form .row-actions { flex-wrap: wrap; }
 .resident-identity-status { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; margin-block: 12px; }
 .public-finance-update-list { display: grid; gap: 12px; list-style: none; margin: 16px 0 0; padding: 0; }
 .public-finance-update-list article { border-left: 3px solid #63a08c; padding: 8px 14px; }

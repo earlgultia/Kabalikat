@@ -43,13 +43,14 @@ export function ResidentIdentityDocuments({ barangayId, residentId }: { barangay
     finally { uploadInFlight.current = false; setBusy(false) }
   }
 
-  return <section className="ops-panel resident-identity-panel">
+  return <section id="resident-identity-panel" tabIndex={-1} className="ops-panel resident-identity-panel">
     <div className="ops-panel-heading"><div><h2>Identity verification</h2><p>Upload the front and back of your National ID or another valid ID for important barangay services.</p></div><FileLock2 size={19} /></div>
     <p className="resident-identity-privacy"><ShieldCheck size={16} />Only you and authorized Captain or Secretary reviewers can access these private files. They are not shown to other residents.</p>
     {submissions.isPending ? <LoadingNotice compact /> : submissions.error ? <ErrorNotice message="Your ID submission status could not be loaded." userFacingMessage onRetry={() => void submissions.refetch()} retrying={submissions.isFetching} /> : <>
       {latest && <div className="resident-identity-status"><StatusPill status={latest.status} />{latest.created_at && <small>Submitted {formatDateTime(latest.created_at)}</small>}{latest.status === 'rejected' && latest.review_note && <p>Reviewer note: {latest.review_note}</p>}</div>}
       {latest?.status === 'pending' && <p className="field-hint">Your files are waiting for an authorized reviewer.</p>}
       {latest?.status === 'verified' && <p className="field-hint">Your identity documents have been verified.</p>}
+      {latest?.status === 'rejected' && <p className="field-hint">New access to these scans is blocked, and they are queued for deletion. A link opened before rejection may work for up to 60 seconds. You can upload a corrected copy below.</p>}
       {latest?.status !== 'verified' && latest?.status !== 'pending' && <form className="ops-form resident-identity-upload" onSubmit={(event) => void submit(event)}>
         <label>Front of ID<input name="front" type="file" accept="application/pdf,image/jpeg,image/png" required /></label>
         <label>Back of ID<input name="back" type="file" accept="application/pdf,image/jpeg,image/png" required /></label>
@@ -72,6 +73,8 @@ export function ResidentIdentityReviewQueue({ barangayId }: { barangayId: string
   })
   const [busyId, setBusyId] = useState('')
   const [error, setError] = useState('')
+  const [rejectingId, setRejectingId] = useState('')
+  const [rejectionNote, setRejectionNote] = useState('')
 
   async function openDocument(path: string) {
     setError('')
@@ -82,16 +85,19 @@ export function ResidentIdentityReviewQueue({ barangayId }: { barangayId: string
     catch (err) { preview.close(); setError(err instanceof Error ? err.message : 'The private ID file could not be opened.') }
   }
 
-  async function decide(id: string, decision: 'verified' | 'rejected') {
-    const note = decision === 'rejected' ? window.prompt('Explain what the resident needs to correct:')?.trim() ?? '' : ''
-    if (decision === 'rejected' && note.length < 3) return
+  async function decide(id: string, decision: 'verified' | 'rejected', note = '') {
     setBusyId(id); setError('')
     try {
       await reviewResidentIdentity(id, decision, note)
       setPage(0)
+      setRejectingId('')
+      setRejectionNote('')
       await queryClient.invalidateQueries({ queryKey: ['resident-identity-review-queue', user?.id ?? 'signed-out', barangayId] })
       await queryClient.invalidateQueries({ queryKey: ['resident-identity-own'] })
-    } catch (err) { setError(err instanceof Error ? err.message : 'The ID review could not be saved.') }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'The ID review could not be saved.')
+      await queryClient.invalidateQueries({ queryKey: ['resident-identity-review-queue', user?.id ?? 'signed-out', barangayId] })
+    }
     finally { setBusyId('') }
   }
 
@@ -103,7 +109,12 @@ export function ResidentIdentityReviewQueue({ barangayId }: { barangayId: string
         <td>{submission.resident ? `${submission.resident.first_name} ${submission.resident.last_name}` : 'Resident'}<small>Identity documents are confidential.</small></td>
         <td>{formatDateTime(submission.created_at)}</td>
         <td><div className="row-actions"><button type="button" onClick={() => void openDocument(submission.front_storage_path)}>View front</button><button type="button" onClick={() => void openDocument(submission.back_storage_path)}>View back</button></div></td>
-        <td><div className="row-actions"><button disabled={busyId === submission.id} onClick={() => void decide(submission.id, 'verified')}>Verify</button><button className="danger-action" disabled={busyId === submission.id} onClick={() => void decide(submission.id, 'rejected')}>Reject</button></div></td>
+        <td>{rejectingId === submission.id ? <form className="ops-form resident-identity-reject-form" onSubmit={(event) => { event.preventDefault(); void decide(submission.id, 'rejected', rejectionNote.trim()) }}>
+          <label htmlFor={`identity-rejection-note-${submission.id}`}>What should the resident correct?
+            <textarea id={`identity-rejection-note-${submission.id}`} rows={3} minLength={3} maxLength={500} required value={rejectionNote} onChange={(event) => setRejectionNote(event.target.value)} />
+          </label>
+          <div className="row-actions"><button className="danger-action" disabled={busyId === submission.id || rejectionNote.trim().length < 3}>{busyId === submission.id ? 'Saving…' : 'Confirm rejection'}</button><button type="button" disabled={busyId === submission.id} onClick={() => { setRejectingId(''); setRejectionNote('') }}>Cancel</button></div>
+        </form> : <div className="row-actions"><button disabled={busyId === submission.id} onClick={() => void decide(submission.id, 'verified')}>Verify</button><button className="danger-action" disabled={busyId === submission.id} onClick={() => { setError(''); setRejectingId(submission.id); setRejectionNote('') }}>Reject</button></div>}</td>
       </tr>)}
     </tbody></table></div>}
     <div className="row-actions resident-identity-pagination">

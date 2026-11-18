@@ -82,9 +82,14 @@ export async function submitResidentIdentityDocuments(input: {
   }
 
   const storage = client().storage.from('resident-identity-documents')
-  for (const [path, file] of [[upload.front_storage_path, input.front], [upload.back_storage_path, input.back]] as const) {
-    const { error: uploadError } = await storage.upload(path, file, { upsert: true, contentType: file.type })
-    if (uploadError) throw new Error(uploadError.message)
+  try {
+    for (const [path, file] of [[upload.front_storage_path, input.front], [upload.back_storage_path, input.back]] as const) {
+      const { error: uploadError } = await storage.upload(path, file, { upsert: true, contentType: file.type })
+      if (uploadError) throw new Error(uploadError.message)
+    }
+  } catch (uploadError) {
+    await cancelResidentIdentityUpload(upload.submission_id)
+    throw uploadError
   }
 
   const { error: completeError } = await client().rpc('complete_resident_identity_upload', {
@@ -102,7 +107,19 @@ export async function submitResidentIdentityDocuments(input: {
     } catch {
       completed = false
     }
-    if (!completed) throw new Error(completeError.message)
+    if (!completed) {
+      await cancelResidentIdentityUpload(upload.submission_id)
+      throw new Error(completeError.message)
+    }
+  }
+}
+
+async function cancelResidentIdentityUpload(submissionId: string) {
+  try {
+    await client().rpc('cancel_resident_identity_upload', { p_submission_id: submissionId })
+  } catch {
+    // The periodic stale-upload cleanup remains the fallback if cancellation
+    // cannot reach Supabase during a connection failure.
   }
 }
 

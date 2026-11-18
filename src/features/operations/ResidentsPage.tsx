@@ -39,7 +39,7 @@ function residentRequestFailure(error: unknown, fallback: string) {
   return fallback
 }
 
-export function ResidentsPage({ focusId, focusOwnCorrections, focusResidentProfile, focusActiveResidents, focusReviewQueue, onFocusHandled }: { focusId?: string; focusOwnCorrections?: boolean; focusResidentProfile?: boolean; focusActiveResidents?: boolean; focusReviewQueue?: 'residency' | 'profile-corrections'; onFocusHandled?: () => void } = {}) {
+export function ResidentsPage({ focusId, focusOwnCorrections, focusResidentProfile, focusIdentityReview, focusActiveResidents, focusReviewQueue, onFocusHandled }: { focusId?: string; focusOwnCorrections?: boolean; focusResidentProfile?: boolean; focusIdentityReview?: boolean; focusActiveResidents?: boolean; focusReviewQueue?: 'residency' | 'profile-corrections'; onFocusHandled?: () => void } = {}) {
   const { membership, user } = useAuth()
   const tenantId = membership?.barangay_id ?? ''
   const role = membership?.role?.key
@@ -107,6 +107,21 @@ export function ResidentsPage({ focusId, focusOwnCorrections, focusResidentProfi
     enabled: Boolean(tenantId),
   })
   const residentRows = useMemo(() => residents.data?.rows ?? [], [residents.data?.rows])
+  useEffect(() => {
+    if (!focusIdentityReview || role !== 'resident' || residents.isPending || residents.isError) return
+    const ownResident = residentRows[0]
+    if (!ownResident) return
+    void queryClient.invalidateQueries({
+      queryKey: ['resident-identity-own', user?.id ?? 'signed-out', ownResident.id],
+    })
+    const frame = window.requestAnimationFrame(() => {
+      const target = document.getElementById('resident-identity-panel')
+      target?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      target?.focus({ preventScroll: true })
+      onFocusHandled?.()
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [focusIdentityReview, onFocusHandled, queryClient, residentRows, residents.isError, residents.isPending, role, user?.id])
   useEffect(() => {
     if (!focusResidentProfile || role !== 'resident' || residents.isPending || residents.isError) return
     if (!residentRows.length) setFormOpen(true)
